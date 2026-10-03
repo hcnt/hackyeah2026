@@ -86,6 +86,19 @@ def test_event_maps_chain_fields():
     assert (info.start_ts, info.end_ts, info.min_seen_secs) == (1_000, 2_000, 3)
     assert (info.reward_lamports, info.max_payouts) == (10_000_000, 3)
     assert info.name is None and info.venue is None
+    assert (info.oracles, info.threshold) == ([str(ORACLE_PK)], 1)
+
+
+def test_event_maps_all_oracles_and_threshold():
+    two = Keypair().pubkey()
+    ev = chain_event(oracles=[ORACLE_PK, two])
+    ev.threshold = 2
+    info = asyncio.run(ChainEventSource(FakeChain(events={EVENT: ev})).get(str(EVENT)))
+    assert (info.oracles, info.threshold) == ([str(ORACLE_PK), str(two)], 2)
+
+
+def test_sink_exposes_its_oracle_key():
+    assert SolanaSightingSink(FakeChain(), ORACLE).oracle_pubkey == str(ORACLE_PK)
 
 
 @pytest.mark.parametrize("event_id", ["not-base58-0OIl", "", str(Keypair().pubkey())])

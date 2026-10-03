@@ -17,15 +17,20 @@ from solders.pubkey import Pubkey
 from app.chain.presence_chain import (
     SIGHTING_GAP_SECS,
     Event,
+    OracleInfo,
     Sighting,
     _program_error,
     attendee_paid,
+    close_oracle_ix,
     close_sighting_ix,
     create_event_ix,
     event_pda,
     init_config_ix,
+    oracle_info_pda,
+    register_oracle_ix,
     report_sighting_ix,
     sighting_pda,
+    update_oracle_ix,
     withdraw_remaining_ix,
 )
 
@@ -291,3 +296,77 @@ def test_withdraw_remaining_after_end_returns_the_rest(chain):
     chain.ok(chain.send([withdraw], chain.organizer))
     assert chain.balance(chain.organizer.pubkey()) == before + left - TX_FEE
     assert chain.balance(ev_addr) == 0
+
+
+# Oracle registry ------------------------------------------------------------------------------------
+
+
+def oracle_info(chain: Chain, oracle: Pubkey) -> OracleInfo | None:
+    acc = chain.svm.get_account(oracle_info_pda(oracle, chain.pid))
+    return OracleInfo.decode(bytes(acc.data)) if acc is not None and acc.lamports > 0 else None
+
+
+def test_register_oracle_publishes_name_and_url_paid_by_the_oracle(chain):
+    me = chain.oracle
+    before = chain.balance(me.pubkey())
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://hackyeah.kindhome.io", chain.pid)], me))
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://hackyeah.kindhome.io")
+    info_addr = oracle_info_pda(me.pubkey(), chain.pid)
+    assert chain.balance(me.pubkey()) == before - rent(chain, info_addr) - TX_FEE
+    # Once per key: a second register fails (the account exists), and the entry is unchanged.
+    res = chain.send([register_oracle_ix(me.pubkey(), "Other", "https://other.example", chain.pid)], me)
+    assert chain.code(res) == "TransactionFailed"
+    assert oracle_info(chain, me.pubkey()).name == "OnSight"
+
+
+def test_update_oracle_only_by_its_owner(chain):
+    me, other = chain.oracle, chain.outsider
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
+    chain.ok(chain.send([update_oracle_ix(me.pubkey(), "OnSight 2", "http://b.example:8000", chain.pid)], me))
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight 2", "http://b.example:8000")
+
+    mine = oracle_info_pda(me.pubkey(), chain.pid)
+    hijack = update_oracle_ix(other.pubkey(), "Evil", "https://evil.example", chain.pid, info=mine)
+    assert chain.code(chain.send([hijack], other)) == "Unauthorized"  # has_one = oracle
+    steal = close_oracle_ix(other.pubkey(), chain.pid, info=mine)
+    assert chain.code(chain.send([steal], other)) == "Unauthorized"
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight 2", "http://b.example:8000")
+
+
+@pytest.mark.parametrize(
+    ("name", "url", "code"),
+    [
+        ("", "https://a.example", "BadName"),
+        ("x" * 33, "https://a.example", "BadName"),
+        ("On\nSight", "https://a.example", "BadName"),
+        ("OnSight", "ftp://a.example", "BadUrl"),
+        ("OnSight", "a.example", "BadUrl"),
+        ("OnSight", "https://", "BadUrl"),
+        ("OnSight", "https://a b.example", "BadUrl"),
+        ("OnSight", "https://" + "a" * 121, "BadUrl"),  # 129 bytes
+    ],
+)
+def test_register_and_update_validate_name_and_url(chain, name, url, code):
+    me = chain.oracle
+    assert chain.code(chain.send([register_oracle_ix(me.pubkey(), name, url, chain.pid)], me)) == code
+    assert oracle_info(chain, me.pubkey()) is None
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
+    assert chain.code(chain.send([update_oracle_ix(me.pubkey(), name, url, chain.pid)], me)) == code
+
+
+def test_limits_are_inclusive(chain):
+    me = chain.oracle
+    url = "https://" + "a" * 120  # exactly 128 bytes
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "x" * 32, url, chain.pid)], me))
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "x" * 32, url)
+
+
+def test_close_oracle_returns_rent(chain):
+    me = chain.oracle
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
+    info_rent = chain.balance(oracle_info_pda(me.pubkey(), chain.pid))
+    assert info_rent > 0
+    before = chain.balance(me.pubkey())
+    chain.ok(chain.send([close_oracle_ix(me.pubkey(), chain.pid)], me))
+    assert chain.balance(me.pubkey()) == before + info_rent - TX_FEE
+    assert oracle_info(chain, me.pubkey()) is None

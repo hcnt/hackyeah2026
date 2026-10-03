@@ -35,6 +35,10 @@ class EventInfo(BaseModel):
     venue: str | None = Field(default=None, max_length=120)
     reward_lamports: int | None = Field(default=None, ge=0)
     max_payouts: int | None = Field(default=None, ge=1)
+    # The event's oracle keys (base58) and how many of them must see a wallet before the program pays. Empty list =
+    # unknown (the dev stand-in), which also turns off the "is this oracle one of the event's?" check on joins.
+    oracles: list[str] = Field(default_factory=list, max_length=3)
+    threshold: int = Field(default=1, ge=1)
 
 
 class EventSource(Protocol):
@@ -75,6 +79,9 @@ class SightingResult:
 
 
 class SightingSink(Protocol):
+    """A sink may also carry `oracle_pubkey: str | None`, the base58 key it reports with. The join endpoint uses it
+    to refuse joins for events that list other oracles; a sink without it (the dev stand-in) skips that check."""
+
     async def report(self, event_id: str, wallet: str) -> SightingResult:
         """Report that `wallet` is seen now. Idempotent: a wallet already paid returns paid=True with that payout's
         tx. Raise SightingRejected when reporting again cannot help; any other exception means "retry later"."""

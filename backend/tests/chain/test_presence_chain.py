@@ -16,17 +16,22 @@ from app.chain.presence_chain import (
     PROGRAM_ID,
     Config,
     Event,
+    OracleInfo,
     PresenceChain,
     PresenceError,
     Sighting,
     _program_error,
     attendee_paid,
+    close_oracle_ix,
     close_sighting_ix,
     config_pda,
     create_event_ix,
     event_pda,
+    oracle_info_pda,
+    register_oracle_ix,
     report_sighting_ix,
     sighting_pda,
+    update_oracle_ix,
 )
 
 ADDRESS = Keypair().pubkey()
@@ -130,7 +135,9 @@ def test_create_event_ix_borsh_layout():
 
 
 def test_program_error_codes_are_appended():
-    assert PROGRAM_ERRORS[6] == "CapReached" and PROGRAM_ERRORS[8:] == ["BadOracles", "BadThreshold", "NotOracle"]
+    assert PROGRAM_ERRORS[6] == "CapReached"
+    assert PROGRAM_ERRORS[8:] == ["BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl"]
+    assert _program_error("Custom(6012)").code == "BadUrl"
     assert _program_error("custom program error: 0x1776").code == "CapReached"  # 0x1776 = 6006
     assert _program_error("Custom(6010)").code == "NotOracle"
     assert _program_error("Error Code: ConstraintHasOne").code == "Unauthorized"
@@ -182,3 +189,95 @@ def test_report_sighting_from_any_listed_oracle_uses_the_events_treasury():
     asyncio.run(chain.report_sighting(oracle, ADDRESS, ATTENDEE))
     (ixs,) = chain.sent
     assert ixs[0].accounts[0].pubkey == oracle.pubkey() and ixs[0].accounts[4].pubkey == TREASURY
+
+
+# Oracle registry ----------------------------------------------------------------------------------
+
+
+def oracle_info_bytes(oracle: Pubkey, name: str, url: str, pad_to: int = 8 + 32 + 4 + 32 + 4 + 128 + 1) -> bytes:
+    # lib.rs: oracle, name (Borsh String), url (Borsh String), bump; the account is sized for the max lengths and the
+    # tail is zero padding.
+    raw = (
+        disc("account", "OracleInfo") + bytes(oracle)
+        + struct.pack("<I", len(name.encode())) + name.encode()
+        + struct.pack("<I", len(url.encode())) + url.encode() + bytes([253])
+    )
+    return raw + bytes(pad_to - len(raw))
+
+
+def test_oracle_info_decode_reads_padded_account_and_round_trips():
+    data = oracle_info_bytes(ORACLE, "OnSight", "https://hackyeah.kindhome.io")
+    info = OracleInfo.decode(data)
+    assert info == OracleInfo(ORACLE, "OnSight", "https://hackyeah.kindhome.io")
+    assert OracleInfo.decode(info.encode()) == info
+    assert data.startswith(info.encode(bump=253))
+    utf8 = OracleInfo(ORACLE, "Óracle łódź", "https://example.com/ścieżka")
+    assert OracleInfo.decode(utf8.encode()) == utf8
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        b"",
+        disc("account", "Sighting") + bytes(200),  # another account type
+        disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 33) + b"x" * 33 + bytes(200),  # name > 32
+        disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 7) + b"OnSight",  # truncated before url
+        disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 2) + b"\xff\xfe" + bytes(200),  # bad UTF-8
+    ],
+)
+def test_oracle_info_decode_rejects_bad_data(data):
+    with pytest.raises(ValueError):
+        OracleInfo.decode(data)
+
+
+def test_oracle_registry_instructions():
+    info = oracle_info_pda(ORACLE)
+    assert info == Pubkey.find_program_address([b"oracle", bytes(ORACLE)], PROGRAM_ID)[0]
+    reg = register_oracle_ix(ORACLE, "OnSight", "https://a.example")
+    assert reg.data == (
+        disc("global", "register_oracle") + struct.pack("<I", 7) + b"OnSight" + struct.pack("<I", 17)
+        + b"https://a.example"
+    )
+    assert [(m.pubkey, m.is_signer, m.is_writable) for m in reg.accounts] == [
+        (ORACLE, True, True), (info, False, True), (SYSTEM_PROGRAM_ID, False, False)]
+    upd = update_oracle_ix(ORACLE, "OnSight", "https://a.example")
+    assert upd.data[:8] == disc("global", "update_oracle") and upd.data[8:] == reg.data[8:]
+    assert [(m.pubkey, m.is_signer, m.is_writable) for m in upd.accounts] == [(ORACLE, True, False), (info, False, True)]
+    close = close_oracle_ix(ORACLE)
+    assert close.data == disc("global", "close_oracle")
+    assert [(m.pubkey, m.is_signer, m.is_writable) for m in close.accounts] == [(ORACLE, True, True), (info, False, True)]
+
+
+class _Acc:
+    def __init__(self, data: bytes, owner: Pubkey = PROGRAM_ID) -> None:
+        self.data, self.owner = data, owner
+
+
+class _Resp:
+    def __init__(self, value) -> None:
+        self.value = value
+
+
+class FakeRpc:
+    def __init__(self, accounts: dict[Pubkey, _Acc]) -> None:
+        self.accounts = accounts
+        self.calls: list[list[Pubkey]] = []
+
+    async def get_multiple_accounts(self, keys):
+        self.calls.append(list(keys))
+        return _Resp([self.accounts.get(k) for k in keys])
+
+
+def test_get_oracle_infos_one_call_in_order_with_none_for_missing_or_foreign():
+    a, b, c, d = (Keypair().pubkey() for _ in range(4))
+    rpc = FakeRpc({
+        oracle_info_pda(a): _Acc(oracle_info_bytes(a, "A", "https://a.example")),
+        oracle_info_pda(c): _Acc(oracle_info_bytes(c, "C", "https://c.example"), owner=Keypair().pubkey()),
+        oracle_info_pda(d): _Acc(oracle_info_bytes(a, "D", "https://d.example")),  # data claims another oracle
+    })
+    chain = PresenceChain.__new__(PresenceChain)
+    chain.client = rpc
+    infos = asyncio.run(chain.get_oracle_infos([a, b, c, d]))
+    assert infos == [OracleInfo(a, "A", "https://a.example"), None, None, None]
+    assert rpc.calls == [[oracle_info_pda(k) for k in (a, b, c, d)]]
+    assert asyncio.run(chain.get_oracle_infos([])) == [] and len(rpc.calls) == 1

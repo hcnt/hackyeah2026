@@ -58,6 +58,8 @@ class ChainEventSource:
             min_seen_secs=ev.min_seen_secs,
             reward_lamports=ev.reward,
             max_payouts=ev.max_paid,
+            oracles=[str(o) for o in ev.oracles],
+            threshold=ev.threshold,
         )
         self._cache[event_id] = (self.clock(), info)
         return info
@@ -70,6 +72,7 @@ class SolanaSightingSink:
     def __init__(self, chain: PresenceChain, oracle: Keypair) -> None:
         self.chain = chain
         self.oracle = oracle
+        self.oracle_pubkey = str(oracle.pubkey())  # read by the join endpoint (see SightingSink)
 
     async def report(self, event_id: str, wallet: str) -> SightingResult:
         event, attendee = _pubkey(event_id), _pubkey(wallet)

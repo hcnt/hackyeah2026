@@ -42,6 +42,7 @@ Files: `lib.rs` (the program), `idl.json` (interface for clients), `anchor.test.
 | `Config` | `["config"]` | `admin`, `treasury`, `fee` (lamports), `bump`: defaults for events created later |
 | `Event` | `["event", organizer, event_id as u64 LE]` | `organizer`, `oracles` (`[Pubkey; 3]`, unused slots = default key), `oracle_count`, `threshold`, `treasury`, `event_id`, `start`, `end` (unix s), `reward`, `fee` (lamports), `max_paid`, `paid_count`, `min_seen_secs`, `bump` |
 | `Sighting` | `["sighting", event, attendee]` | `first_seen`, `last_seen` (chain clock), `reporters` (bitmask over oracle slots), `paid`, `payer` (the oracle that paid its rent), `event_end`, `bump` |
+| `OracleInfo` | `["oracle", oracle]` | `oracle`, `name` (String, ≤ 32 bytes), `url` (String, ≤ 128 bytes), `bump`: the oracle registry, see below |
 
 The `Event` account is also the vault: it holds the event's budget as lamports. A wallet's `Sighting` is created by
 the first report (rent ≈ 0.00136 SOL, paid by the reporting oracle, reclaimable after the end with `close_sighting`);
@@ -65,6 +66,9 @@ Name and venue are not on-chain.
 | `report_sighting()` | one of the event's oracles | `start ≤ now ≤ end` | records the sighting (creates the `Sighting` on first report); **pays** `reward` to the attendee and `fee` to the event's treasury when ≥ `threshold` oracles reported, `last_seen − first_seen ≥ min_seen_secs` and the wallet is unpaid; fails with `CapReached` if those hold but `max_paid` is reached; a no-op once paid |
 | `withdraw_remaining()` | organizer | before start (cancel) or after end | closes `Event`, returns everything left to the organizer |
 | `close_sighting()` | the sighting's payer | after the event's end | closes a `Sighting`, returns its rent to the oracle that paid it |
+| `register_oracle(name, url)` | the oracle | once per key | creates its `OracleInfo` (the oracle pays the rent) |
+| `update_oracle(name, url)` | the oracle (`has_one = oracle`) | any time | changes its name / url |
+| `close_oracle()` | the oracle (`has_one = oracle`) | any time | deletes its `OracleInfo`, rent back to the oracle |
 
 `report_sighting` rules, with `now` = the chain clock: if the wallet was already paid, return Ok (no change). On the
 first report, or when `now − last_seen > SIGHTING_GAP_SECS` (60), the run restarts: `first_seen = now`,
@@ -75,8 +79,27 @@ with `threshold = 1` pays on the first sighting.
 `event.oracles`), `event` (w), `sighting` (w), `attendee` (w), `treasury` (w; must equal `event.treasury`),
 `system_program`. `close_sighting` accounts: `payer` (signer, w; must equal `sighting.payer`), `sighting` (w).
 
+`register_oracle` accounts: `oracle` (signer, w), `oracle_info` (w), `system_program`. `update_oracle`: `oracle`
+(signer), `oracle_info` (w). `close_oracle`: `oracle` (signer, w), `oracle_info` (w). Strings are Borsh (u32 LE
+length + UTF-8 bytes).
+
 Instruction data = Anchor discriminator `sha256("global:<snake_case_name>")[:8]` + Borsh args (little-endian).
 Account data starts with `sha256("account:<Name>")[:8]`.
+
+## Oracle registry
+
+Each event lists up to 3 oracle keys, and with `threshold ≥ 2` a wallet is paid only when several oracles have seen
+it, so every one of them needs the attendee's join (selfie + signed join message). The attendee's widget therefore
+reads the event's `oracles` **from the chain**, derives each oracle's `OracleInfo` PDA (`["oracle", oracle_key]`) and
+sends the same signed join to every oracle's `url` (`POST {url}/api/v1/events/{event}/attendance`). Our API is not
+asked which oracles exist, so we do not decide whom an attendee talks to; and the consent screen names every oracle
+(`name` and the host of `url`) that will process the face signature.
+
+The entry is written by the oracle's own key (`register_oracle`, rent ≈ 0.0023 SOL) and only that key can change or
+delete it. It is informational: payouts never read it. Validation: `name` 1–32 bytes without control characters
+(`BadName`); `url` starts with `https://` or `http://`, has something after the scheme, at most 128 bytes, no spaces or
+control characters (`BadUrl`). The url is the oracle's base origin, without `/api/v1` and without a trailing slash.
+An oracle without an entry cannot receive joins from the widget.
 
 ## Errors
 
@@ -93,7 +116,9 @@ Account data starts with `sha256("account:<Name>")[:8]`.
 | 6008 | `BadOracles` | not 1–3 oracles, a duplicate, or the default key |
 | 6009 | `BadThreshold` | threshold is 0 or more than the number of oracles |
 | 6010 | `NotOracle` | `report_sighting` signer is not one of the event's oracles |
-| 2001 | `ConstraintHasOne` | treasury is not the one stored in the `Event`, close_sighting signer is not the `Sighting`'s payer, or admin is not the one in `Config` |
+| 6011 | `BadName` | oracle name empty, over 32 bytes or with a control character |
+| 6012 | `BadUrl` | oracle url not `http(s)://…`, over 128 bytes, or with spaces / control characters |
+| 2001 | `ConstraintHasOne` | treasury is not the one stored in the `Event`, close_sighting signer is not the `Sighting`'s payer, admin is not the one in `Config`, or update/close_oracle signer is not the entry's oracle |
 
 ## Build, deploy, test (Solana Playground)
 
@@ -107,6 +132,10 @@ anchor-lang = { version = "0.31.2", features = ["init-if-needed"] }
    feature of `anchor-lang` in the project's `Cargo.toml` (above); without it the build fails.
 2. Wallet on **devnet** with ~3 SOL (https://faucet.solana.com), then `build` and `deploy` in the terminal.
 3. Paste `anchor.test.ts` into `tests/` and run `test`.
+4. **Each oracle registers once** under the new program id, signed by its own key, so widgets can find it:
+   `cd backend && ORACLE_KEYPAIR=… uv run python ../scripts/register_oracle.py --program <PROGRAM_ID> --name OnSight
+   --url https://hackyeah.kindhome.io` (it calls `update_oracle` instead when the entry already exists). Other
+   oracles run the same with their own key, name and url.
 
 Locally: `cargo build-sbf` in an Anchor project with this `lib.rs` (and a `declare_id!` matching the deploy keypair),
 then `cd backend && PRESENCE_SO=<path>/presence_pay.so uv run pytest tests/chain/test_program_litesvm.py` runs the
@@ -116,5 +145,5 @@ program in LiteSVM with the chain clock warped (the program id is read from `pre
 **Running the test changes `Config`**: it sets a random treasury (its events use the Playground wallet as oracle).
 After running it, call `update_config` again with the treasury and fee above.
 
-Changing the fields of `Config`, `Event` or `Sighting` after deploy breaks existing accounts: deploy a new program
+Changing the fields of `Config`, `Event`, `Sighting` or `OracleInfo` after deploy breaks existing accounts: deploy a new program
 ID instead, then update this README and `idl.json`.

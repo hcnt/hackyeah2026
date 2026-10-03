@@ -12,6 +12,9 @@ pub const MAX_ORACLES: usize = 3;
 /// Przerwa (w sekundach czasu łańcucha) między dwoma kolejnymi zgłoszeniami tego samego portfela,
 /// po której liczenie obecności zaczyna się od nowa (osoba wyszła i wróciła).
 pub const SIGHTING_GAP_SECS: i64 = 60;
+/// Rejestr oracli: maksymalna długość nazwy i adresu API (w bajtach UTF-8).
+pub const MAX_ORACLE_NAME: usize = 32;
+pub const MAX_ORACLE_URL: usize = 128;
 
 #[program]
 pub mod presence_pay {
@@ -197,6 +200,49 @@ pub mod presence_pay {
         require!(now > ctx.accounts.sighting.event_end, PresenceError::EventRunning);
         Ok(())
     }
+
+    // ---------- Rejestr oracli ----------
+    // Każdy oracle publikuje na łańcuchu swoją nazwę i adres API (konto OracleInfo, PDA ["oracle", klucz]).
+    // Widget uczestnika czyta stąd adresy WSZYSTKICH oracli eventu i wysyła zgłoszenie (selfie) do każdego z nich,
+    // więc to nie nasze API decyduje, z którymi oraclami rozmawia uczestnik. Rejestr nie wpływa na wypłaty.
+
+    /// Oracle rejestruje się raz (sam płaci rent): nazwa 1..=32 bajtów, url do 128 bajtów, http(s)://.
+    pub fn register_oracle(ctx: Context<RegisterOracle>, name: String, url: String) -> Result<()> {
+        check_oracle_info(&name, &url)?;
+        let info = &mut ctx.accounts.oracle_info;
+        info.oracle = ctx.accounts.oracle.key();
+        info.name = name;
+        info.url = url;
+        info.bump = ctx.bumps.oracle_info;
+        Ok(())
+    }
+
+    /// Tylko sam oracle może zmienić swoją nazwę i adres.
+    pub fn update_oracle(ctx: Context<UpdateOracle>, name: String, url: String) -> Result<()> {
+        check_oracle_info(&name, &url)?;
+        let info = &mut ctx.accounts.oracle_info;
+        info.name = name;
+        info.url = url;
+        Ok(())
+    }
+
+    /// Oracle usuwa swój wpis; rent wraca do niego.
+    pub fn close_oracle(_ctx: Context<CloseOracle>) -> Result<()> {
+        Ok(())
+    }
+}
+
+fn check_oracle_info(name: &str, url: &str) -> Result<()> {
+    require!(!name.is_empty() && name.len() <= MAX_ORACLE_NAME, PresenceError::BadName);
+    require!(!name.chars().any(char::is_control), PresenceError::BadName);
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .ok_or(PresenceError::BadUrl)?;
+    require!(url.len() <= MAX_ORACLE_URL, PresenceError::BadUrl);
+    // Coś po schemacie, bez spacji i znaków sterujących (adres trafia wprost do fetch() w widgecie).
+    require!(!rest.is_empty() && !rest.chars().any(|c| c.is_whitespace() || c.is_control()), PresenceError::BadUrl);
+    Ok(())
 }
 
 // ---------- Konta (dane) ----------
@@ -239,6 +285,18 @@ pub struct Sighting {
     pub paid: bool,
     pub payer: Pubkey, // oracle, który zapłacił rent; tylko on może zamknąć konto
     pub event_end: i64, // kopia event.end, żeby close_sighting działał po zamknięciu eventu
+    pub bump: u8,
+}
+
+/// Wpis oracla w rejestrze: gdzie widget ma wysłać zgłoszenie uczestnika. PDA ["oracle", oracle].
+#[account]
+#[derive(InitSpace)]
+pub struct OracleInfo {
+    pub oracle: Pubkey,
+    #[max_len(32)]
+    pub name: String, // nazwa pokazywana uczestnikowi w zgodzie, np. "OnSight"
+    #[max_len(128)]
+    pub url: String, // bazowy adres API oracla, np. "https://hackyeah.kindhome.io"
     pub bump: u8,
 }
 
@@ -327,6 +385,36 @@ pub struct CloseSighting<'info> {
     pub sighting: Account<'info, Sighting>,
 }
 
+#[derive(Accounts)]
+pub struct RegisterOracle<'info> {
+    #[account(mut)]
+    pub oracle: Signer<'info>,
+    #[account(
+        init,
+        payer = oracle,
+        space = 8 + OracleInfo::INIT_SPACE,
+        seeds = [b"oracle", oracle.key().as_ref()],
+        bump
+    )]
+    pub oracle_info: Account<'info, OracleInfo>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct UpdateOracle<'info> {
+    pub oracle: Signer<'info>,
+    #[account(mut, has_one = oracle)]
+    pub oracle_info: Account<'info, OracleInfo>,
+}
+
+#[derive(Accounts)]
+pub struct CloseOracle<'info> {
+    #[account(mut)]
+    pub oracle: Signer<'info>,
+    #[account(mut, has_one = oracle, close = oracle)]
+    pub oracle_info: Account<'info, OracleInfo>,
+}
+
 // ---------- Eventy i błędy ----------
 
 #[event]
@@ -361,4 +449,8 @@ pub enum PresenceError {
     BadThreshold,
     #[msg("Signer is not one of this event's oracles")]
     NotOracle,
+    #[msg("Oracle name must be 1 to 32 bytes, no control characters")]
+    BadName,
+    #[msg("Oracle url must start with https:// or http://, be at most 128 bytes, no spaces")]
+    BadUrl,
 }

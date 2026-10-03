@@ -15,6 +15,8 @@ describe("presence_pay", () => {
   const sightingPda = (event: web3.PublicKey, attendee: web3.PublicKey) =>
     pda([Buffer.from("sighting"), event.toBuffer(), attendee.toBuffer()]);
 
+  const oracleInfoPda = (oracle: web3.PublicKey) => pda([Buffer.from("oracle"), oracle.toBuffer()]);
+
   const configPda = pda([Buffer.from("config")]);
   const treasury = web3.Keypair.generate().publicKey;
   const attendee = web3.Keypair.generate().publicKey;
@@ -173,6 +175,31 @@ describe("presence_pay", () => {
       send(program.methods.closeSighting().accounts({ payer: me, sighting: sightingPda(event, attendee) } as any)),
       "EventRunning"
     );
+  });
+
+  it("rejestr oracli: rejestracja / zmiana / walidacja / zamknięcie", async () => {
+    const info = oracleInfoPda(me);
+    const accs = { oracle: me, oracleInfo: info } as any;
+    // Po przerwanym poprzednim uruchomieniu wpis może już istnieć: wtedy go aktualizujemy.
+    const existing = await program.account.oracleInfo.fetchNullable(info);
+    await send(
+      existing
+        ? program.methods.updateOracle("Playground", "https://example.com").accounts(accs)
+        : program.methods
+            .registerOracle("Playground", "https://example.com")
+            .accounts({ ...accs, systemProgram: sys } as any)
+    );
+    await send(program.methods.updateOracle("Playground 2", "http://example.org:8000").accounts(accs));
+    await eventually(async () => {
+      const o = await program.account.oracleInfo.fetch(info, "confirmed");
+      assert.ok(o.oracle.equals(me));
+      assert.equal(o.name, "Playground 2");
+      assert.equal(o.url, "http://example.org:8000");
+    });
+    await expectFail(send(program.methods.updateOracle("Playground", "ftp://example.com").accounts(accs)), "BadUrl");
+    await expectFail(send(program.methods.updateOracle("", "https://example.com").accounts(accs)), "BadName");
+    await send(program.methods.closeOracle().accounts(accs));
+    await eventually(async () => assert.equal(await program.account.oracleInfo.fetchNullable(info, "confirmed"), null));
   });
 
   it("anulowanie eventu przed startem zwraca cały budżet", async () => {
