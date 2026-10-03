@@ -54,3 +54,5 @@ cd frontend && npm run dev                     # :5173, proxies /api -> :8000
 ```
 
 Add shadcn components: `cd frontend && npx shadcn@latest add <component>`.
+
+<!-- preview pipeline test -->
