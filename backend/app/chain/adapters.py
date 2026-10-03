@@ -1,4 +1,4 @@
-"""The oracle's EventSource and PayoutSink backed by the presence_pay program on Solana.
+"""The oracle's EventSource and SightingSink backed by the presence_pay program on Solana.
 
 Installed from main.py when ORACLE_KEYPAIR is set; otherwise the oracle keeps its in-memory dev stubs.
 """
@@ -9,16 +9,16 @@ from collections.abc import Callable
 
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 
 from app.chain.presence_chain import PresenceChain, PresenceError
-from app.oracle.interfaces import EventInfo, PayoutRejected
+from app.oracle.interfaces import EventInfo, SightingRejected, SightingResult
 
 log = logging.getLogger("app.chain")
 
 EVENT_CACHE_SECS = 5.0
-# Program errors that no retry can fix. NotStarted, Unauthorized (a misconfigured oracle key) and transport
-# errors stay retryable.
-PERMANENT_ERRORS = {"CapReached", "Ended"}
+# Errors that no retry can fix. NotStarted, Unauthorized and transport errors stay retryable.
+PERMANENT_ERRORS = {"CapReached", "Ended", "NotOracle", "NoEvent"}
 
 
 def _pubkey(value: str) -> Pubkey | None:
@@ -63,33 +63,45 @@ class ChainEventSource:
         return info
 
 
-class SolanaPayoutSink:
-    """Sends pay_attendee signed by the oracle key, only for events whose on-chain oracle is that key."""
+class SolanaSightingSink:
+    """Sends report_sighting signed by the oracle key, only for events that list that key among their oracles.
+    The program decides whether a report pays; this only relays its verdict."""
 
     def __init__(self, chain: PresenceChain, oracle: Keypair) -> None:
         self.chain = chain
         self.oracle = oracle
 
-    async def pay(self, event_id: str, wallet: str) -> str:
+    async def report(self, event_id: str, wallet: str) -> SightingResult:
         event, attendee = _pubkey(event_id), _pubkey(wallet)
         if event is None or attendee is None:
-            raise PayoutRejected("event_id or wallet is not a valid address")
+            raise SightingRejected("event_id or wallet is not a valid address")
+        if await self.chain.is_paid(event, attendee):
+            # Idempotent, and free: e.g. an earlier report paid but its confirmation timed out, or another oracle's
+            # report paid. No transaction is sent.
+            return await self._paid(event, attendee, None)
         ev = await self.chain.get_event(event)
         if ev is None:
             # No account (never created, or closed by withdraw_remaining) or not an Event of this program.
-            raise PayoutRejected("no presence_pay Event at this address")
-        if ev.oracle != self.oracle.pubkey():
-            # The organizer chose another oracle for this event: the program would reject our signature anyway.
-            raise PayoutRejected(f"event oracle {ev.oracle} is not this oracle's key {self.oracle.pubkey()}")
+            raise SightingRejected("no presence_pay Event at this address")
+        if self.oracle.pubkey() not in ev.oracles:
+            # The organizer chose other oracles for this event: the program would reject our signature anyway.
+            raise SightingRejected(f"this oracle's key {self.oracle.pubkey()} is not one of the event's oracles")
         try:
-            return str(await self.chain.pay_attendee(self.oracle, event, attendee, ev))
+            sig = await self.chain.report_sighting(self.oracle, event, attendee, ev)
         except PresenceError as e:
-            if e.code == "AlreadyPaid":
-                # Idempotent: e.g. an earlier attempt landed but its confirmation timed out.
-                tx = await self.chain.payout_tx(event, attendee)
-                if tx is None:
-                    raise  # the receipt exists but its tx is not visible yet: retry later
-                return str(tx)
             if e.code in PERMANENT_ERRORS:
-                raise PayoutRejected(e.code) from e
+                raise SightingRejected(e.code) from e
             raise
+        if not await self.chain.is_paid(event, attendee):
+            return SightingResult(paid=False)
+        return await self._paid(event, attendee, sig)
+
+    async def _paid(self, event: Pubkey, attendee: Pubkey, ours: Signature | None) -> SightingResult:
+        """The payout tx: ours when its logs carry AttendeePaid, else found on the Sighting's history."""
+        if ours is not None and await self.chain.tx_paid(ours, event, attendee):
+            return SightingResult(paid=True, tx=str(ours))
+        tx = await self.chain.payout_tx(event, attendee)
+        if tx is None:
+            # Paid, but the paying transaction is not visible to this RPC yet: retry later (a read, no tx sent).
+            raise PresenceError("PayoutTxNotVisible")
+        return SightingResult(paid=True, tx=str(tx))

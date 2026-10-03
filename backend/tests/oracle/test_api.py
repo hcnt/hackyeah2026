@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.config import Settings, get_settings
 from app.main import app
 from app.oracle import interfaces
-from app.oracle.interfaces import DevEventSource, DevPayoutSink
+from app.oracle.interfaces import DevEventSource, DevSightingSink
 from app.oracle.runtime import OracleState, set_state, short_wallet
 from app.oracle.signatures import build_message
 
@@ -45,9 +45,9 @@ def env():
     rng = np.random.default_rng(7)
     engine = FakeEngine()
     set_state(OracleState(engine=engine))
-    old = interfaces.providers.event_source, interfaces.providers.payout_sink
+    old = interfaces.providers.event_source, interfaces.providers.sighting_sink
     interfaces.providers.event_source = DevEventSource()
-    interfaces.providers.payout_sink = DevPayoutSink()
+    interfaces.providers.sighting_sink = DevSightingSink()
     org = Keypair()
     event = {"event_id": "ev1", "organizer": str(org.pubkey()), "start_ts": 0, "end_ts": 4_000_000_000,
              "min_seen_secs": 0}
@@ -55,7 +55,7 @@ def env():
         assert client.post("/api/oracle/dev/events", json=event).status_code == 200
         yield client, engine, rng, org, event
     app.dependency_overrides.clear()
-    interfaces.providers.event_source, interfaces.providers.payout_sink = old
+    interfaces.providers.event_source, interfaces.providers.sighting_sink = old
     set_state(None)
 
 

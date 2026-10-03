@@ -1,12 +1,14 @@
 """Create a test event on the presence_pay program (devnet) and print its address, the oracle's `event_id`.
 
     cd backend && uv run python ../scripts/devnet_event.py [--reward 0.01] [--max 3] [--hours 2] [--min-seen 3]
-        [--oracle <pubkey>] [--program <program id>]
+        [--oracle <pubkey> [--oracle <pubkey> ...]] [--threshold 1] [--program <program id>]
 
-The organizer chooses the event's oracle (default: our backend's oracle key); only that key can pay out for it.
+The organizer chooses the event's oracles (1-3, default: our backend's oracle key) and how many of them must report a
+wallet (--threshold). Oracles only report sightings; the program pays once `threshold` of them saw the wallet for
+`--min-seen` seconds.
 
 A test organizer keypair is kept at ~/.config/attend-now/organizer-devnet.json (created on first run, never in the
-repo) and topped up from the devnet faucet when it runs low. The event starts now, so payouts are possible at once.
+repo) and topped up from the devnet faucet when it runs low. The event starts now, so sightings count at once.
 """
 
 import argparse
@@ -28,8 +30,8 @@ from solders.system_program import ID as SYSTEM_PROGRAM
 from solders.transaction import Transaction
 
 RPC = "https://api.devnet.solana.com"
-# OLD program id (global oracle in Config, superseded). Its accounts do NOT match the per-event-oracle layout this
-# script builds: replace with the new id after the redeploy, or pass --program <new id>.
+# OLD program id (global oracle in Config, superseded). Its accounts do NOT match the sightings layout this script
+# builds: replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
 # Our backend's oracle (public key, see contracts/presence_pay/README.md).
 DEFAULT_ORACLE = "5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt"
@@ -89,13 +91,20 @@ def main() -> None:
     ap.add_argument("--reward", type=float, default=0.01, help="SOL per attendee")
     ap.add_argument("--max", type=int, default=3, help="max attendees paid")
     ap.add_argument("--hours", type=float, default=2.0, help="event length from now")
-    ap.add_argument("--min-seen", type=int, default=3, help="seconds on camera before payout")
-    ap.add_argument("--oracle", type=Pubkey.from_string, default=Pubkey.from_string(DEFAULT_ORACLE),
-                    help="the only key allowed to pay out for this event (default: our backend's oracle)")
+    ap.add_argument("--min-seen", type=int, default=3, help="seconds on camera (chain clock) before payout")
+    ap.add_argument("--oracle", type=Pubkey.from_string, action="append", dest="oracles",
+                    help="a key allowed to report sightings for this event; repeat for up to 3 "
+                    "(default: our backend's oracle)")
+    ap.add_argument("--threshold", type=int, default=1, help="how many different oracles must report a wallet")
     ap.add_argument("--program", type=Pubkey.from_string, default=Pubkey.from_string(DEFAULT_PROGRAM),
                     help="presence_pay program id (default: the OLD id until the new deploy)")
     args = ap.parse_args()
     program: Pubkey = args.program
+    oracles: list[Pubkey] = args.oracles or [Pubkey.from_string(DEFAULT_ORACLE)]
+    if not 1 <= len(oracles) <= 3 or len(set(oracles)) != len(oracles):
+        sys.exit("--oracle: give 1 to 3 distinct keys")
+    if not 1 <= args.threshold <= len(oracles):
+        sys.exit(f"--threshold must be between 1 and {len(oracles)} (the number of oracles)")
 
     org = organizer()
     config, _ = Pubkey.find_program_address([b"config"], program)
@@ -106,7 +115,7 @@ def main() -> None:
     if len(cfg) != CONFIG_LEN:
         # The old program's Config (with a global oracle) is 113 bytes; sending it this layout would misread the fee
         # and create a garbled event.
-        sys.exit(f"Config of {program} is {len(cfg)} bytes, expected {CONFIG_LEN}: not the per-event-oracle program.")
+        sys.exit(f"Config of {program} is {len(cfg)} bytes, expected {CONFIG_LEN}: not a per-event-oracle program.")
     fee = struct.unpack_from("<Q", cfg, 8 + 64)[0]  # Config: admin, treasury, fee, bump
 
     reward = round(args.reward * LAMPORTS)
@@ -117,12 +126,13 @@ def main() -> None:
     event, _ = Pubkey.find_program_address([b"event", bytes(org.pubkey()), struct.pack("<Q", event_id)], program)
     start = int(time.time()) - 60
     end = start + 60 + int(args.hours * 3600)
-    # create_event(event_id u64, oracle Pubkey, start i64, end i64, reward u64, max_paid u32, min_seen_secs u32)
+    # create_event(event_id u64, oracles Vec<Pubkey>, threshold u8, start i64, end i64, reward u64, max_paid u32,
+    # min_seen_secs u32); a Borsh Vec is a u32 length followed by the items.
     data = (
         hashlib.sha256(b"global:create_event").digest()[:8]
-        + struct.pack("<Q", event_id)
-        + bytes(args.oracle)
-        + struct.pack("<qqQII", start, end, reward, args.max, args.min_seen)
+        + struct.pack("<QI", event_id, len(oracles))
+        + b"".join(bytes(o) for o in oracles)
+        + struct.pack("<BqqQII", args.threshold, start, end, reward, args.max, args.min_seen)
     )
     ix = Instruction(
         program,
@@ -141,7 +151,7 @@ def main() -> None:
 
     print(f"Event created: {event}")
     print(f"  reward {reward / LAMPORTS} SOL × {args.max}, fee {fee / LAMPORTS} SOL, min seen {args.min_seen} s")
-    print(f"  oracle {args.oracle} (program {program})")
+    print(f"  oracles {', '.join(map(str, oracles))}, threshold {args.threshold} (program {program})")
     print(f"  ends {time.strftime('%H:%M', time.localtime(end))}; budget {budget / LAMPORTS:.4f} SOL in escrow")
     print(f"  tx https://explorer.solana.com/tx/{sig}?cluster=devnet")
     print(f"  event https://explorer.solana.com/address/{event}?cluster=devnet")

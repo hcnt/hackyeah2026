@@ -1,6 +1,18 @@
 {
   "version": "0.1.0",
   "name": "presence_pay",
+  "constants": [
+    {
+      "name": "MAX_ORACLES",
+      "type": "u64",
+      "value": "3"
+    },
+    {
+      "name": "SIGHTING_GAP_SECS",
+      "type": "i64",
+      "value": "60"
+    }
+  ],
   "instructions": [
     {
       "name": "initConfig",
@@ -87,8 +99,14 @@
           "type": "u64"
         },
         {
-          "name": "oracle",
-          "type": "publicKey"
+          "name": "oracles",
+          "type": {
+            "vec": "publicKey"
+          }
+        },
+        {
+          "name": "threshold",
+          "type": "u8"
         },
         {
           "name": "start",
@@ -138,7 +156,7 @@
       ]
     },
     {
-      "name": "payAttendee",
+      "name": "reportSighting",
       "accounts": [
         {
           "name": "oracle",
@@ -151,7 +169,7 @@
           "isSigner": false
         },
         {
-          "name": "receipt",
+          "name": "sighting",
           "isMut": true,
           "isSigner": false
         },
@@ -190,15 +208,15 @@
       "args": []
     },
     {
-      "name": "closeReceipt",
+      "name": "closeSighting",
       "accounts": [
         {
-          "name": "oracle",
+          "name": "payer",
           "isMut": true,
           "isSigner": true
         },
         {
-          "name": "receipt",
+          "name": "sighting",
           "isMut": true,
           "isSigner": false
         }
@@ -241,8 +259,21 @@
             "type": "publicKey"
           },
           {
-            "name": "oracle",
-            "type": "publicKey"
+            "name": "oracles",
+            "type": {
+              "array": [
+                "publicKey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "oracleCount",
+            "type": "u8"
+          },
+          {
+            "name": "threshold",
+            "type": "u8"
           },
           {
             "name": "treasury",
@@ -288,17 +319,33 @@
       }
     },
     {
-      "name": "Receipt",
+      "name": "Sighting",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "eventEnd",
+            "name": "firstSeen",
             "type": "i64"
           },
           {
-            "name": "oracle",
+            "name": "lastSeen",
+            "type": "i64"
+          },
+          {
+            "name": "reporters",
+            "type": "u8"
+          },
+          {
+            "name": "paid",
+            "type": "bool"
+          },
+          {
+            "name": "payer",
             "type": "publicKey"
+          },
+          {
+            "name": "eventEnd",
+            "type": "i64"
           },
           {
             "name": "bump",
@@ -370,6 +417,21 @@
       "code": 6007,
       "name": "EventRunning",
       "msg": "Not allowed while the event is running"
+    },
+    {
+      "code": 6008,
+      "name": "BadOracles",
+      "msg": "Oracles must be 1 to 3 distinct, non-default keys"
+    },
+    {
+      "code": 6009,
+      "name": "BadThreshold",
+      "msg": "Threshold must be between 1 and the number of oracles"
+    },
+    {
+      "code": 6010,
+      "name": "NotOracle",
+      "msg": "Signer is not one of this event's oracles"
     }
   ],
   "metadata": {
