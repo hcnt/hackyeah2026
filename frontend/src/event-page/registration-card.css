@@ -1,0 +1,112 @@
+/* Self-contained so the card can be dropped anywhere or replaced wholesale. */
+
+.rc-card {
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 24px;
+  corner-shape: squircle;
+  background-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.1);
+  color: rgb(31, 16, 0);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.rc-header {
+  margin: -11px -15px 12px;
+  padding: 7px 15px;
+  border-radius: 22px 22px 0 0;
+  corner-shape: squircle;
+  background-color: rgba(58, 42, 22, 0.04);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 21px;
+  color: rgba(92, 66, 32, 0.8);
+}
+
+.rc-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rc-approval {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: -8px -16px 4px;
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid rgba(31, 16, 0, 0.08);
+}
+
+.rc-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.rc-info-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 8px 0 0;
+  border-radius: 8px;
+  background-color: rgba(58, 42, 22, 0.04);
+  color: rgba(31, 16, 0, 0.48);
+}
+
+.rc-info-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.rc-info-title {
+  font-weight: 500;
+}
+
+.rc-info-sub {
+  margin: 1px 0 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: rgba(92, 66, 32, 0.8);
+}
+
+.rc-cta {
+  margin: 4px 0 4px;
+}
+
+.rc-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #956f3e;
+  border-radius: 16px;
+  corner-shape: squircle;
+  background-color: #956f3e;
+  color: #fff;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.rc-button:hover {
+  border-color: #7d5c31;
+  background-color: #7d5c31;
+}
+
+.rc-button-label {
+  margin: -4px 0;
+  padding: 4px 0;
+  overflow: hidden;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
