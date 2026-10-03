@@ -1,0 +1,33 @@
+/* Deliberately plain: the real design comes from Penpot later. */
+:host { all: initial; display: block; }
+.an-widget {
+  box-sizing: border-box; width: 100%; max-width: 400px; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  font: 14px/1.4 system-ui, sans-serif; color: #111; background: #fff;
+  border: 1px solid #ccc; border-radius: 8px;
+}
+.an-widget * { box-sizing: border-box; }
+.an-widget p { margin: 0; }
+.an-title { font-size: 18px; font-weight: 600; }
+.an-strong { font-weight: 600; }
+.an-muted { color: #666; }
+.an-small { font-size: 12px; }
+.an-error { color: #b00020; }
+.an-footer { text-align: center; }
+.an-consent { white-space: pre-line; }
+.an-primary {
+  display: block; width: 100%; padding: 10px; border: 0; border-radius: 6px;
+  background: #111; color: #fff; font: inherit; font-weight: 600; text-align: center;
+  text-decoration: none; cursor: pointer;
+}
+.an-primary:disabled { opacity: 0.5; cursor: default; }
+.an-link { padding: 0; border: 0; background: none; color: #0645ad; font: inherit; text-decoration: underline; cursor: pointer; }
+.an-picker { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.an-picker button {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px;
+  border: 1px solid #ccc; border-radius: 6px; background: #fff; font: inherit; cursor: pointer;
+}
+.an-selfie { display: flex; flex-direction: column; gap: 8px; }
+.an-selfie video { width: 100%; border-radius: 6px; background: #000; transform: scaleX(-1); }
+.an-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.an-field input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
