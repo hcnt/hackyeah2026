@@ -2,7 +2,7 @@ import EventPage from '@/event-page/EventPage'
 import { event } from '@/event-page/eventData'
 import Widget from '@/widget/Widget'
 
-// Demo event seeded by the backend stub (backend/app/oracle.py). Override with ?event=<event_id>.
+// Dev event: create it with POST /api/oracle/dev/events (ENV=dev). Override with ?event=<event_id>.
 const DEMO_EVENT_ID = 'AttendNowDemoEvent1111111111111111111111111'
 const eventId = new URLSearchParams(window.location.search).get('event') ?? DEMO_EVENT_ID
 

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oracle Spike</title>
+<style>
+  :root { --bg:#0E1514; --surface:#162120; --ink:#E3EBE9; --muted:#95A6A3; --line:#2A3836; --accent:#45C9B4; --amber:#E8AA52; --bad:#F08A72; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; display:grid; gap:16px; }
+  h1 { margin:0; font-size:1.4rem; }
+  nav { display:flex; gap:8px; }
+  nav button, .btn { font:inherit; font-weight:600; border:1px solid var(--accent); background:transparent; color:var(--accent); padding:8px 14px; border-radius:8px; cursor:pointer; }
+  nav button.on, .btn.primary { background:var(--accent); color:var(--bg); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .stage { position:relative; width:100%; background:#000; border-radius:10px; overflow:hidden; }
+  video { display:block; width:100%; height:auto; }
+  canvas.overlay { position:absolute; inset:0; width:100%; height:100%; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text] { font:inherit; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:8px 10px; min-width:200px; }
+  .muted { color:var(--muted); }
+  .msg { min-height:1.5em; }
+  .msg.err { color:var(--bad); } .msg.ok { color:var(--accent); }
+  .people { display:flex; gap:8px; flex-wrap:wrap; }
+  .chip { background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:4px 6px 4px 12px; display:flex; gap:6px; align-items:center; }
+  .chip button { border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:1rem; }
+  .stats { font-family: ui-monospace, monospace; font-size:.85rem; color:var(--muted); }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Oracle spike</h1>
+  <nav id="tabs">
+    <button id="tab-enroll" class="on">1 · Enroll face</button>
+    <button id="tab-detect">2 · Live detection</button>
+  </nav>
+
+  <div class="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+  </div>
+
+  <section id="enroll">
+    <div class="row">
+      <input id="name" type="text" placeholder="Name, e.g. Jacek" maxlength="40">
+      <button id="capture" class="btn primary">Take photo and enroll</button>
+    </div>
+    <p id="enroll-msg" class="msg muted">Look at the camera, alone in the frame.</p>
+  </section>
+
+  <section id="detect" hidden>
+    <div class="row">
+      <button id="toggle" class="btn primary">Start</button>
+      <span id="stats" class="stats">stopped</span>
+    </div>
+    <p class="muted">Green: recognised (similarity ≥ 0.40). Amber: face found, not enrolled. Numbers are similarity to the closest enrolled person.</p>
+  </section>
+
+  <div>
+    <p class="muted" style="margin:0 0 6px">Enrolled (in memory, gone on server restart):</p>
+    <div id="people" class="people"></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const video = $('video'), overlay = $('overlay'), ctx = overlay.getContext('2d');
+const grab = document.createElement('canvas');
+const API = location.pathname.replace(/\/spike\/?$/, '') + '/spike';
+const CAMERA_MODE = location.hash === '#camera';
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: CAMERA_MODE ? 'environment' : 'user' }, audio: false });
+    video.srcObject = stream;
+  } catch (e) {
+    $('enroll-msg').textContent = 'Camera unavailable: ' + e.message + ' (phones need HTTPS).';
+    $('enroll-msg').className = 'msg err';
+  }
+}
+
+function frameBlob(maxW = 1280, quality = 0.8) {
+  const s = Math.min(1, maxW / video.videoWidth);
+  grab.width = Math.round(video.videoWidth * s);
+  grab.height = Math.round(video.videoHeight * s);
+  grab.getContext('2d').drawImage(video, 0, 0, grab.width, grab.height);
+  return new Promise((r) => grab.toBlob(r, 'image/jpeg', quality));
+}
+
+async function refreshPeople() {
+  const names = await (await fetch(API + '/people')).json();
+  $('people').replaceChildren(...names.map((n) => {
+    const c = document.createElement('span'); c.className = 'chip'; c.textContent = n;
+    const x = document.createElement('button'); x.textContent = '×'; x.title = 'Remove ' + n;
+    x.onclick = async () => { await fetch(API + '/people/' + encodeURIComponent(n), { method: 'DELETE' }); refreshPeople(); };
+    c.append(x); return c;
+  }));
+  if (!names.length) $('people').innerHTML = '<span class="muted">nobody yet</span>';
+}
+
+function drawFaces(result) {
+  overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight;
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  if (!result || !result.faces) return;
+  const sx = overlay.width / result.width, sy = overlay.height / result.height;
+  ctx.lineWidth = 3; ctx.font = '600 14px ui-monospace, monospace';
+  for (const f of result.faces) {
+    const [x1, y1, x2, y2] = f.bbox;
+    const color = f.name ? '#45C9B4' : '#E8AA52';
+    ctx.strokeStyle = color; ctx.strokeRect(x1 * sx, y1 * sy, (x2 - x1) * sx, (y2 - y1) * sy);
+    const label = (f.name || 'unknown') + ' ' + f.score.toFixed(2);
+    const w = ctx.measureText(label).width + 10;
+    ctx.fillStyle = color; ctx.fillRect(x1 * sx - 1.5, y1 * sy - 22, w, 22);
+    ctx.fillStyle = '#0E1514'; ctx.fillText(label, x1 * sx + 4, y1 * sy - 6);
+  }
+}
+
+// Enroll
+$('capture').onclick = async () => {
+  const name = $('name').value.trim();
+  const msg = $('enroll-msg');
+  if (!name) { msg.textContent = 'Type a name first.'; msg.className = 'msg err'; return; }
+  $('capture').disabled = true; msg.textContent = 'Enrolling…'; msg.className = 'msg muted';
+  const fd = new FormData(); fd.append('name', name); fd.append('image', await frameBlob(), 'face.jpg');
+  const res = await fetch(API + '/enroll', { method: 'POST', body: fd });
+  const body = await res.json();
+  $('capture').disabled = false;
+  if (res.ok) { msg.textContent = `Enrolled ${body.name} (detection confidence ${body.det_score}).`; msg.className = 'msg ok'; refreshPeople(); }
+  else { msg.textContent = body.detail?.[0]?.msg || body.detail || 'Enroll failed'; msg.className = 'msg err'; }
+};
+
+// Live detection: send a frame, wait for the answer, send the next (no queue build-up).
+let ws = null, running = false, frames = 0, lastT = 0;
+function start() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}${API}/stream`);
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = async () => { running = true; $('toggle').textContent = 'Stop'; lastT = performance.now(); ws.send(await frameBlob(960, 0.75)); };
+  ws.onmessage = async (ev) => {
+    const r = JSON.parse(ev.data);
+    drawFaces(r);
+    frames++;
+    const now = performance.now();
+    $('stats').textContent = `${r.faces ? r.faces.length : 0} faces · server ${r.ms} ms · round trip ${Math.round(now - lastT)} ms · ${(1000 / (now - lastT)).toFixed(1)} fps`;
+    lastT = now;
+    if (running) ws.send(await frameBlob(960, 0.75));
+  };
+  ws.onclose = () => { running = false; $('toggle').textContent = 'Start'; };
+}
+function stop() { running = false; ws && ws.close(); drawFaces(null); $('stats').textContent = 'stopped'; }
+$('toggle').onclick = () => (running ? stop() : start());
+
+function show(tab) {
+  $('enroll').hidden = tab !== 'enroll'; $('detect').hidden = tab !== 'detect';
+  $('tab-enroll').classList.toggle('on', tab === 'enroll'); $('tab-detect').classList.toggle('on', tab === 'detect');
+  if (tab === 'enroll') stop();
+}
+$('tab-enroll').onclick = () => show('enroll');
+$('tab-detect').onclick = () => show('detect');
+
+if (CAMERA_MODE) {
+  $('tabs').hidden = true; show('detect');
+  document.querySelector('h1').textContent = 'Event camera';
+  video.addEventListener('loadeddata', () => start(), { once: true });
+}
+startCamera(); refreshPeople();
+</script>
+</body>
+</html>

@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presence Pay Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F4;
+    --surface: #FFFFFF;
+    --ink: #14201F;
+    --muted: #586866;
+    --line: #D8DFDD;
+    --accent: #0F7C6E;
+    --accent-soft: #E1F1EE;
+    --money: #A86812;
+    --money-soft: #FBF0DD;
+    --warn: #B4442E;
+    --warn-soft: #FBE6E1;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0E1514; --surface: #162120; --ink: #E3EBE9; --muted: #95A6A3; --line: #2A3836;
+      --accent: #45C9B4; --accent-soft: #15302C; --money: #E8AA52; --money-soft: #33270F;
+      --warn: #F08A72; --warn-soft: #3A1E18;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0E1514; --surface: #162120; --ink: #E3EBE9; --muted: #95A6A3; --line: #2A3836;
+    --accent: #45C9B4; --accent-soft: #15302C; --money: #E8AA52; --money-soft: #33270F;
+    --warn: #F08A72; --warn-soft: #3A1E18;
+  }
+
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--body); }
+  .wrap { max-width: 860px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 96px; display: grid; gap: 56px; }
+  h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.1rem); font-weight: 750; letter-spacing: -0.02em; }
+  h2 { font-size: 1.6rem; font-weight: 750; }
+  h3 { font-size: 1.12rem; font-weight: 600; }
+  p { margin: 0; max-width: 66ch; }
+  section { display: grid; gap: 18px; }
+  .eyebrow { font: 600 0.75rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .lede { font-size: 1.2rem; color: var(--muted); }
+  code, .mono { font-family: var(--mono); font-size: 0.86em; }
+  .muted { color: var(--muted); }
+
+  header { display: grid; gap: 16px; }
+  .moment { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; gap: 6px; }
+  .moment strong { font-family: var(--display); font-size: 1.15rem; }
+
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+  .role { border-top: 3px solid var(--accent); background: var(--surface); padding: 14px 16px 16px; display: grid; gap: 6px; align-content: start; }
+  .role.money { border-top-color: var(--money); }
+  .role p { font-size: 0.95rem; color: var(--muted); }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: grid; gap: 12px; }
+  ol.steps > li { counter-increment: s; display: grid; grid-template-columns: 2.2rem 1fr; gap: 12px; align-items: start; }
+  ol.steps > li::before { content: counter(s); font: 600 0.9rem/2rem var(--mono); text-align: center; width: 2rem; height: 2rem; border-radius: 50%; background: var(--accent-soft); color: var(--accent); }
+  ol.steps .who { font: 600 0.72rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font: 600 0.72rem/1.2 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  tr.total td { font-weight: 600; background: var(--money-soft); }
+
+  .diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  pre.mermaid { margin: 0; background: transparent; }
+
+  .note { border-radius: 12px; padding: 16px 18px; display: grid; gap: 8px; }
+  .note.money { background: var(--money-soft); }
+  .note.warn { background: var(--warn-soft); }
+  .note.ok { background: var(--accent-soft); }
+  .note h3 { font-size: 1rem; }
+  .note ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 4px; }
+
+  .rails { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .rail { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+  .rail p { font-size: 0.95rem; color: var(--muted); }
+
+  .questions { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .questions li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; display: grid; gap: 4px; }
+  .questions .rec { font-size: 0.95rem; color: var(--muted); }
+  .questions .rec b { color: var(--accent); font-weight: 600; }
+
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow">HackYeah 2026 · idea draft · 3 Oct 2026</span>
+    <h1>Tap “I'm going”. Show up. Get paid.</h1>
+    <p class="lede">An organizer funds an event on Solana. A camera recognizes the people who said they are coming, and our oracle sends each recognized attendee their reward in SOL, one payment per person per event. Your face signature lives on your phone, and we hold it only for the events you join.</p>
+    <div class="moment">
+      <span class="eyebrow">The demo moment</span>
+      <strong>Someone walks in front of the camera, a green box appears with their name, and three seconds later their MetaMask balance goes up.</strong>
+      <span class="muted">The transaction is visible on Solana Explorer in real time.</span>
+    </div>
+  </header>
+
+  <section>
+    <span class="eyebrow">Use cases</span>
+    <h2>Paying for verified foot traffic</h2>
+    <p>Whoever wants people to show up somewhere funds the escrow. The camera proves the visit, so nobody can claim from home with a faked location or a shared QR code.</p>
+    <div class="roles">
+      <div class="role money">
+        <h3>Events</h3>
+        <p>Conferences, meetups and sponsor booths pay attendees who actually come. Built for the demo.</p>
+        <p><b>Example:</b> a sponsor pays 0.05 SOL to each of the first 100 people seen at its HackYeah stand.</p>
+      </div>
+      <div class="role money">
+        <h3>Landmarks</h3>
+        <p>Tourism boards and city councils pay visitors to go where they want them: quieter sights, off-peak hours, the low season. Today these rewards rely on phone GPS check-ins, which are easy to fake. A camera at the site can't be fooled from a sofa.</p>
+        <p><b>Example:</b> Kraków pays 0.02 SOL per visit to Kopiec Kraka on weekday mornings in November, to take pressure off Wawel and the Main Square.</p>
+      </div>
+    </div>
+    <div class="note ok">
+      <h3>Same contract, longer window</h3>
+      <ul>
+        <li>A landmark campaign is an event that runs for weeks: the same escrow, reward, time window and cap on payouts.</li>
+        <li>Visitors tap “I'm visiting” for a campaign, the same opt-in as “I'm going” for an event.</li>
+        <li>Optional daily hours, such as weekday mornings only, steer visitors to off-peak times.</li>
+        <li>The site operator or tourism board installs the camera. That is the main cost of the landmark version, and why events come first.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Who is involved</span>
+    <h2>Three parties</h2>
+    <div class="roles">
+      <div class="role money">
+        <h3>Organizer</h3>
+        <p>Creates the event, sets the time window and reward, and puts the whole budget in escrow up front. Gets the unspent part back.</p>
+      </div>
+      <div class="role">
+        <h3>Attendee</h3>
+        <p>Signs up once with a live selfie and a wallet. Their face signature is kept on their phone. Before each event they tap “I'm going”, and then just attend.</p>
+      </div>
+      <div class="role money">
+        <h3>Platform (us)</h3>
+        <p>Runs the camera pipeline (the oracle), decides who was present, and sends the payout transaction. Earns a small fee on every payout. Never holds event money.</p>
+        <p><b>Two wallets:</b> an <i>oracle wallet</i> on the server that signs payouts and holds only fee money, and a <i>treasury</i> kept off the server where platform fees collect. A server breach cannot reach the revenue.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Flow A · before the event</span>
+    <h2>The organizer creates and funds an event</h2>
+    <ol class="steps">
+      <li><div><span class="who">Organizer</span>Connects their wallet and fills in the event form (fields below).</div></li>
+      <li><div><span class="who">App</span>Shows the budget: <span class="mono">max attendees × (reward + platform fee)</span>, with the fee shown as its own line.</div></li>
+      <li><div><span class="who">Organizer</span>Signs one transaction. It creates the event on-chain and moves the budget into the event's escrow vault, which only the program can release.</div></li>
+      <li><div><span class="who">Organizer</span>Can change the times or reward until the event starts. Once it starts, the terms are locked so attendees know what they will get.</div></li>
+    </ol>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Setting</th><th>What it means</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td>Start time</td><td>Payouts are possible from this moment.</td><td class="mono">4 Oct, 10:00</td></tr>
+          <tr><td>End time</td><td>No payouts after this. Leftover budget can be withdrawn.</td><td class="mono">4 Oct, 18:00</td></tr>
+          <tr><td>Minimum time seen</td><td>How long a person must be visible on camera before they count as present.</td><td class="mono">3 s (demo) · 5 min (real)</td></tr>
+          <tr><td>Reward per person</td><td>SOL each attendee receives, once per event.</td><td class="mono">0.05 SOL</td></tr>
+          <tr><td>Max attendees paid</td><td>Caps the budget and the worst-case loss.</td><td class="mono">100</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Flow B · once per person</span>
+    <h2>The attendee signs up</h2>
+    <ol class="steps">
+      <li><div><span class="who">Attendee</span>Connects MetaMask and signs a short message. This proves they own the wallet and costs nothing.</div></li>
+      <li><div><span class="who">Attendee</span>Reads and accepts the consent text: what is kept, where, and for how long.</div></li>
+      <li><div><span class="who">Attendee</span>Takes a live selfie with a quick head turn. Uploaded photos are not accepted, so nobody can register someone else's face.</div></li>
+      <li><div><span class="who">Platform</span>Turns the selfie into a face signature (a list of numbers used for matching) and stamps it with our seal: “made from a live selfie, belongs to this wallet”. The seal lets us recognize it later without keeping a copy.</div></li>
+      <li><div><span class="who">Platform</span>Sends the sealed signature back to the phone and deletes both the selfie and the signature from the server. We keep nothing.</div></li>
+      <li><div><span class="who">Phone</span>Stores the sealed signature in the app. Lose the phone and you simply sign up again.</div></li>
+    </ol>
+    <div class="note ok">
+      <h3>No face database</h3>
+      <p>We never hold a permanent list of faces. A breach of our server outside event hours finds no face data, and a face signature never goes on the blockchain.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Flow C · once per event</span>
+    <h2>The attendee taps “I'm going”</h2>
+    <ol class="steps">
+      <li><div><span class="who">Attendee</span>Opens the event in the app and taps “I'm going”. This works any time until the event ends, including at the door.</div></li>
+      <li><div><span class="who">Phone</span>Sends the sealed signature to the platform, encrypted for this event only.</div></li>
+      <li><div><span class="who">Platform</span>Checks our seal, so a signature made from someone else's photo is rejected. Then compares it with everyone already going to this event. One face can be linked to only one wallet per event.</div></li>
+      <li><div><span class="who">Platform</span>Adds it to this event's guest list. The camera only ever looks for people on this list.</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="eyebrow">Flow D · during the event</span>
+    <h2>Automatic payout</h2>
+    <p>The camera feeds the oracle. Each face is compared only against this event's guest list. A person is paid once they have been tracked for the minimum time with a confident match and a liveness check.</p>
+    <div class="diagram">
+<pre class="mermaid">
+sequenceDiagram
+    participant Cam as Camera
+    participant O as Platform oracle (server)
+    participant P as Solana program
+    participant V as Event vault
+    participant A as Attendee wallet
+    participant T as Platform treasury
+    Cam->>O: video frames
+    O->>O: find faces, match the guest list, track for min time, liveness
+    Note over O: no match: face discarded immediately
+    O->>P: pay_attendee(event, wallet), oracle signs and pays fee
+    P->>P: is signer our oracle? inside time window? not paid yet? under max?
+    P->>V: release reward + platform fee
+    V->>A: 0.05 SOL
+    V->>T: platform fee
+    P->>P: record "wallet paid for this event"
+    O-->>Cam: show "paid ✓" on screen
+</pre>
+    </div>
+    <div class="note ok">
+      <h3>Why nobody gets paid twice</h3>
+      <p>The program writes a small record per wallet per event. A second payout for the same pair fails on-chain, so an oracle crash, a retry, or two cameras seeing the same person are all harmless.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Flow E · after the event</span>
+    <h2>Settling up</h2>
+    <ol class="steps">
+      <li><div><span class="who">Organizer</span>After the end time, withdraws whatever is left in the vault. If 70 of 100 people came, 30 shares come back, fees included, because unpaid people generate no fee.</div></li>
+      <li><div><span class="who">Platform</span>Closes the per-wallet payout records. Each one held a small deposit (rent) that goes back to the oracle wallet, so in the end the oracle's only real cost is the network fees.</div></li>
+      <li><div><span class="who">Platform</span>Deletes the event's guest list at the end time, so we hold no face data for it any more. Payout history stays on-chain as wallet addresses only.</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <span class="eyebrow">Money</span>
+    <h2>Where the SOL goes</h2>
+    <p>Worked example: 100 attendees, 0.05 SOL reward, a flat platform fee of 0.002 SOL per payout. All 100 show up.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Who pays</th><th>Goes to</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>
+          <tr><td>Rewards</td><td>Organizer (escrow)</td><td>Attendees</td><td class="num">5.000 SOL</td></tr>
+          <tr><td>Platform fee</td><td>Organizer (escrow)</td><td>Platform treasury</td><td class="num">0.200 SOL</td></tr>
+          <tr class="total"><td>Organizer funds up front</td><td></td><td></td><td class="num">5.200 SOL</td></tr>
+          <tr><td>Network fees, 100 transactions</td><td>Platform oracle wallet</td><td>Solana validators</td><td class="num">≈ 0.0005 SOL</td></tr>
+          <tr><td>Payout record deposits (returned after the event)</td><td>Platform oracle wallet</td><td>Locked, then refunded</td><td class="num">≈ 0.15 SOL</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note money">
+      <h3>Yes, the oracle wallet is our app cost</h3>
+      <ul>
+        <li>Its permanent cost is the network fee, about 0.000005 SOL per payout.</li>
+        <li>It also needs about 0.0015 SOL per payout as a temporary deposit for the "already paid" record. This comes back when we close the records after the event, so it is working capital rather than spending.</li>
+        <li>The platform fee is taken from the escrow on each payout, so our income scales with real attendance and is paid by the organizer.</li>
+        <li>The fee is fixed when the event is created. If we change our fee later, running events keep the old one.</li>
+      </ul>
+      <p class="muted">Fee and deposit figures are estimates from Solana's standard rates and still need checking on devnet.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Safety</span>
+    <h2>Limits that protect the organizer's money</h2>
+    <p>The oracle can trigger payouts, so the program enforces limits that hold even if our server or key is compromised. In the worst case, one event's budget is lost and nothing else.</p>
+    <div class="rails">
+      <div class="rail"><h3>Fixed amount</h3><p>Each payout is exactly the configured reward and fee. The oracle cannot choose the amount.</p></div>
+      <div class="rail"><h3>Time window</h3><p>The program rejects payouts before the start time or after the end time.</p></div>
+      <div class="rail"><h3>Max attendees</h3><p>Payouts stop at the cap even if the vault still has funds.</p></div>
+      <div class="rail"><h3>Separate vault per event</h3><p>A vault holds only that event's budget. Only the organizer can withdraw leftovers.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Privacy</span>
+    <h2>Face data and the law</h2>
+    <div class="note warn">
+      <h3>Scanning everyone in a room is the legal risk</h3>
+      <ul>
+        <li>Under GDPR a face signature used for recognition is special-category biometric data. Signed-up attendees give explicit consent, which covers them.</li>
+        <li>A face signature is not harmless: research models can generate a realistic face from one. That is why it stays on the phone and reaches us only for the events you join.</li>
+        <li>Everyone else in the frame is also briefly processed, even though their faces are discarded at once. Regulators have fined this kind of passive scanning.</li>
+        <li>For the hackathon: everyone on camera has opted in, unmatched faces are never stored, and no images are logged.</li>
+        <li>For a real product: a "look here to get paid" kiosk at the entrance, where facing the camera is the consent.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <span class="eyebrow">Still open</span>
+    <h2>Decisions to make</h2>
+    <ul class="questions">
+      <li><h3>Platform fee: flat amount or percentage?</h3><span class="rec"><b>Suggested:</b> the higher of a small flat amount and a percentage of the reward. The flat part covers our per-payout cost and the percentage scales with big rewards.</span></li>
+      <li><h3>What if someone attends but signed up only at the door?</h3><span class="rec"><b>Suggested:</b> sign up and tap “I'm going” on their phone at the door, or at a kiosk. They get paid as soon as they are recognized, if the event is still running.</span></li>
+      <li><h3>Can we make the faces safe even from us?</h3><span class="rec"><b>Suggested:</b> roadmap. Matching inside a sealed hardware box (a secure enclave) that even our admins cannot read, with published proof of the code it runs. Later, zero-knowledge proofs that the oracle ran honestly.</span></li>
+      <li><h3>Should organizers see who attended?</h3><span class="rec"><b>Suggested:</b> a count and a list of wallet addresses, both already public on-chain. No names or faces.</span></li>
+      <li><h3>Landmarks: pitch or build?</h3><span class="rec"><b>Suggested:</b> pitch it as the second use case and build events for the demo. A landmark needs a camera installed at the site, and daily hours would add one rule to the contract.</span></li>
+      <li><h3>USDC instead of SOL</h3><span class="rec"><b>Suggested:</b> right after the SOL demo works. Sponsors and tourism boards budget in money, not in SOL. The payout creates the attendee's USDC account if they have none, in the same transaction; the only cost is a one-time deposit of about 0.002 SOL for wallets that never held USDC, which can be folded into the platform fee.</span></li>
+    </ul>
+  </section>
+
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<script>
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'neutral' });
+</script>
+</body>
+</html>

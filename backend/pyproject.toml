@@ -4,7 +4,25 @@ version = "0.1.0"
 description = "hackyeah2026 API"
 requires-python = ">=3.13"
 dependencies = [
+    "cryptography>=50.0.2",
     "fastapi>=0.142.2",
+    "insightface>=2.0",
+    "numpy>=2.5.3",
+    "onnxruntime>=1.30.0",
+    "opencv-python-headless>=5.0.0.93",
     "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "solders>=0.29.0",
     "uvicorn[standard]>=0.54.0",
 ]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+
+[tool.uv]
+# insightface asks for the desktop opencv-python, which needs X11 libraries the slim image lacks; both builds
+# provide the same cv2 module. Drop it so only opencv-python-headless is installed.
+override-dependencies = ["opencv-python; sys_platform == 'never'"]
