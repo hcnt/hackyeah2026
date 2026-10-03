@@ -8,6 +8,10 @@ PROD_HOST=${PROD_HOST:-hackyeah.kindhome.io}
 # Build before touching anything running: a failed build leaves the old version up.
 docker compose -p prod build
 
+# One-time migration from win_hackathon's pre-edge layout, where compose project
+# "win_hackathon" held 127.0.0.1:8080 itself. A no-op once that project is gone.
+docker compose -p win_hackathon down --remove-orphans
+
 docker compose -p edge -f edge/compose.yaml up -d --build
 docker compose -p prod up -d --remove-orphans
 docker image prune -f
