@@ -78,7 +78,7 @@ def err(r):
     return r.json()["error"]["code"]
 
 
-def test_submit_happy_path_status_and_leave(env):
+def test_submit_happy_path_and_status(env):
     client, engine, rng, _, _ = env
     kp = Keypair()
     assert status(client, kp).json() == {"status": "not_joined", "tx": None}
@@ -86,10 +86,8 @@ def test_submit_happy_path_status_and_leave(env):
     assert r.status_code == 201, r.text
     assert r.json() == {"status": "on_list", "event_id": "ev1", "wallet": str(kp.pubkey())}
     assert status(client, kp).json() == {"status": "on_list", "tx": None}
-    r = client.post("/api/v1/events/ev1/attendance/leave", json=signed(kp, "leave"))
-    assert r.status_code == 200
-    assert r.json() == {"status": "not_joined", "event_id": "ev1", "wallet": str(kp.pubkey())}
-    assert status(client, kp).json()["status"] == "not_joined"
+    # There is no way to cancel a join: the entry stays until the event ends.
+    assert client.post("/api/v1/events/ev1/attendance/leave", json=signed(kp, "join")).status_code in (404, 405)
 
 
 def test_malformed_body_400(env):
@@ -170,9 +168,9 @@ def test_camera_token_only_for_organizer_and_fixed_pair(env):
 
 
 def test_signature_action_is_bound(env):
-    """A leave signature cannot be used as a camera-token signature (message differs)."""
+    """A join signature cannot be used as a camera-token signature (message differs)."""
     client, _, _, org, _ = env
-    r = client.post("/api/v1/events/ev1/camera-token", json=signed(org, "leave"))
+    r = client.post("/api/v1/events/ev1/camera-token", json=signed(org, "join"))
     assert r.status_code == 401 and err(r) == "bad_signature"
 
 

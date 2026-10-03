@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OnSight Full Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,750&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+  :root {
+    --bg: #F3F5F4; --surface: #FFFFFF; --ink: #14201F; --muted: #586866; --line: #D8DFDD;
+    --accent: #0F7C6E; --accent-soft: #E1F1EE; --money: #A86812; --money-soft: #FBF0DD;
+    --chain: #4B4FB8; --chain-soft: #E8E9FA; --warn: #B4442E; --warn-soft: #FBE6E1;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0E1514; --surface: #162120; --ink: #E3EBE9; --muted: #95A6A3; --line: #2A3836;
+      --accent: #45C9B4; --accent-soft: #15302C; --money: #E8AA52; --money-soft: #33270F;
+      --chain: #9EA2F5; --chain-soft: #20224A; --warn: #F08A72; --warn-soft: #3A1E18;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0E1514; --surface: #162120; --ink: #E3EBE9; --muted: #95A6A3; --line: #2A3836;
+    --accent: #45C9B4; --accent-soft: #15302C; --money: #E8AA52; --money-soft: #33270F;
+    --chain: #9EA2F5; --chain-soft: #20224A; --warn: #F08A72; --warn-soft: #3A1E18;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--body); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 48px 16px 96px; display: grid; gap: 56px; }
+  h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.1rem); font-weight: 750; letter-spacing: -0.02em; }
+  h2 { font-size: 1.6rem; font-weight: 750; }
+  h3 { font-size: 1.1rem; font-weight: 600; }
+  p { margin: 0; max-width: 68ch; }
+  ul, ol { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+  section { display: grid; gap: 18px; }
+  .eyebrow { font: 600 0.75rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .lede { font-size: 1.2rem; color: var(--muted); }
+  code { font-family: var(--mono); font-size: 0.84em; background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  .muted { color: var(--muted); }
+
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .role { border-top: 3px solid var(--accent); background: var(--surface); padding: 14px 16px 16px; border-radius: 0 0 10px 10px; display: grid; gap: 4px; align-content: start; }
+  .role.chain { border-color: var(--chain); }
+  .role.money { border-color: var(--money); }
+  .role strong { font-family: var(--display); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.9rem; }
+  .tag { font: 600 0.72rem/1 var(--mono); padding: 5px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+  .tag.off { background: var(--accent-soft); color: var(--accent); }
+  .tag.on { background: var(--chain-soft); color: var(--chain); }
+  .tag.sol { background: var(--money-soft); color: var(--money); }
+
+  .phase { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 14px; }
+  .phase-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .num { font: 750 1.6rem/1 var(--display); color: var(--accent); min-width: 1.4em; }
+  .who { font-size: 0.92rem; color: var(--muted); }
+  .steps { list-style: none; padding: 0; display: grid; gap: 10px; counter-reset: s; }
+  .steps li { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; }
+  .steps li > .tag { margin-top: 3px; justify-self: start; }
+  .steps li > div { min-width: 0; }
+  .note { border-left: 3px solid var(--chain); background: var(--chain-soft); padding: 12px 14px; border-radius: 0 8px 8px 0; display: grid; gap: 6px; }
+  .note.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .note.money { border-color: var(--money); background: var(--money-soft); }
+
+  .tx { font: 0.82rem/1.55 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto; white-space: pre; }
+
+  .checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .check { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; }
+  .check b { font-family: var(--display); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: var(--display); font-weight: 600; }
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+  .pipe { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.92rem; }
+  .pipe span.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .pipe span.arrow { color: var(--muted); }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header style="display:grid;gap:16px">
+  <div class="eyebrow">OnSight · end-to-end flow · Solana devnet</div>
+  <h1>From a locked budget to a paid attendee, step by step</h1>
+  <p class="lede">An organizer locks a reward budget in a Solana program. Attendees opt in with their wallet and one selfie. At the venue a phone camera streams to face-recognition oracles. The oracles only report what they see. The program decides who gets paid, and pays each attendee once.</p>
+  <div class="legend">
+    <span class="tag off">off chain</span>
+    <span class="tag on">on chain</span>
+    <span class="tag sol">SOL moves</span>
+  </div>
+</header>
+
+<section>
+  <div class="eyebrow">Who is involved</div>
+  <h2>Four parties and one program</h2>
+  <div class="roles">
+    <div class="role money"><strong>Organizer or sponsor</strong><span class="muted">Creates the event, chooses the oracles and the rules, and locks the budget. Runs the stage screen at the venue.</span></div>
+    <div class="role"><strong>Attendee</strong><span class="muted">Has a MetaMask Solana wallet. Joins through the widget on the organizer's page with one selfie and one signature.</span></div>
+    <div class="role"><strong>Oracles (1 to 3)</strong><span class="muted">Face-recognition services, like ours (OnSight). Each holds its own key and reports sightings to the program. They can't move money; the program pays an oracle 0.002 SOL when its report triggers a payout.</span></div>
+    <div class="role"><strong>Camera phone</strong><span class="muted">Any phone at the pay lane or kiosk. Opens a link from a QR code and streams frames to every oracle.</span></div>
+    <div class="role chain"><strong>presence_pay program</strong><span class="muted">Holds the budget, stores the rules, and makes every payout decision on the chain clock.</span></div>
+  </div>
+</section>
+
+<!-- 0 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">0</span><h2>One-time setup</h2><span class="who">deployer and oracles</span></div>
+  <ol class="steps">
+    <li><span class="tag on">on chain</span><div><b>Deploy the program</b> to devnet. There are no settings to initialise: the fee (0.002 SOL per paid attendee) is a constant in the program, and there is no admin.</div></li>
+    <li><span class="tag on">on chain</span><div><b>Each oracle registers itself</b> with <code>register_oracle(name, url)</code>, for example <code>OnSight</code> at <code>https://hackyeah.kindhome.io</code>. This creates a public directory entry, so a widget can find each oracle's API from the chain instead of trusting our server for it. The entry has no effect on payouts.</div></li>
+  </ol>
+</section>
+
+<!-- 1 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">1</span><h2>Organizer creates the event</h2><span class="who">organizer's wallet</span></div>
+  <ol class="steps">
+    <li><span class="tag on">on chain</span><div><code>create_event(event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs, name, venue)</code> creates an Event account. Its address is the event's ID everywhere else (widget, oracle API, stage).</div></li>
+    <li><span class="tag sol">SOL moves</span><div>The whole budget, <code>max_paid × (reward + fee)</code>, moves from the organizer into the Event account (escrow). From now on the organizer can't take it back while the event runs.</div></li>
+    <li><span class="tag on">on chain</span><div>The rules are frozen: which 1 to 3 oracle keys may report, how many different oracles must agree (<b>threshold</b>, M-of-N), the time window, the reward, the fee, the cap, and how long a person must be seen (<b>min_seen_secs</b>, measured on the chain clock).</div></li>
+  </ol>
+  <p class="muted">Today this is <code>scripts/devnet_event.py</code>. An organizer UI is optional later work.</p>
+</section>
+
+<!-- 2 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">2</span><h2>Attendee joins (before or at the event)</h2><span class="who">widget on the organizer's page → every oracle</span></div>
+  <ol class="steps">
+    <li><span class="tag on">read</span><div>The widget <code>&lt;attend-now-widget event-id=…&gt;</code> reads the Event from the chain (name, venue, reward, times, spots left, oracle keys, threshold) and shows those terms itself, then reads each oracle's registry entry to get its URL. From the oracles it only takes the consent text and the "going" count.</div></li>
+    <li><span class="tag off">off chain</span><div>The attendee connects MetaMask (Solana) and takes one selfie. <code>POST attendance/test</code> checks quality (one face, frontal, sharp, lit, big enough) and gives instant hints. It goes to one oracle only: the first of the event's oracles to answer when the widget loads, which also supplies the consent text. It's only a convenience: on join every oracle checks the photo again. Nothing is stored at this step.</div></li>
+    <li><span class="tag off">off chain</span><div>They accept the consent and <b>sign one message</b> with their wallet. It's a message signature, not a transaction, so it costs nothing and needs no SOL:
+      <div class="tx" style="margin-top:8px">Attend Now
+Action: join
+Event: &lt;event address&gt;
+Wallet: &lt;attendee wallet&gt;
+Consent: 2026-10-03
+Time: 2026-10-03T12:00:00Z</div></div></li>
+    <li><span class="tag off">off chain</span><div>The widget sends the same signed join and selfie to <b>every</b> oracle of the event. Each oracle checks the signature (valid, under 5 minutes old, never used before), that it is listed on the event, the consent, the photo quality, and that this face isn't already registered under another wallet.</div></li>
+    <li><span class="tag off">off chain</span><div>Each oracle keeps a 512-number face embedding, AES-GCM-encrypted under a per-event key that exists only in memory. The selfie itself is discarded. It also keeps the signed join message, which it will need for its reports.</div></li>
+    <li><span class="tag off">off chain</span><div>The widget shows success once at least <b>threshold</b> oracles accepted the join.</div></li>
+  </ol>
+  <div class="note"><b>Nothing reaches the chain at this step.</b> Someone who joins and never shows up leaves no public trace.</div>
+</section>
+
+<!-- 3 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">3</span><h2>Venue setup: stage screen and camera phone</h2><span class="who">organizer → oracles → phone</span></div>
+  <ol class="steps">
+    <li><span class="tag off">off chain</span><div>The organizer opens <code>stage.html#&lt;event&gt;</code> and signs one <code>camera-token</code> request with the organizer wallet. The page sends it to every oracle. Each oracle checks that the signer is the event's organizer and returns a <b>camera token</b> and a <b>stage token</b>.</div></li>
+    <li><span class="tag off">off chain</span><div>The stage shows a QR code. The link is <code>camera.html#…</code>, with every oracle's URL and camera token in the URL fragment. The fragment never reaches any server.</div></li>
+    <li><span class="tag off">off chain</span><div>The phone at the pay lane scans the code, opens the camera, and streams JPEG frames over one WebSocket per oracle (<code>/api/v1/camera/{token}</code>). Each oracle sets its own pace with immediate acks (up to 10 fps).</div></li>
+    <li><span class="tag off">off chain</span><div>The stage connects to every oracle's live feed (<code>/events/{id}/live</code>) and shows the video with face boxes, a short wallet label (<code>7xKX…gAsU</code>), and stats.</div></li>
+  </ol>
+</section>
+
+<!-- 4 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">4</span><h2>Recognition inside each oracle</h2><span class="who">every oracle, independently</span></div>
+  <div class="pipe">
+    <span class="box">frame</span><span class="arrow">→</span>
+    <span class="box">detect faces (SCRFD)</span><span class="arrow">→</span>
+    <span class="box">embed (ArcFace)</span><span class="arrow">→</span>
+    <span class="box">match against the decrypted guest list</span><span class="arrow">→</span>
+    <span class="box">track + 3-of-5 vote</span><span class="arrow">→</span>
+    <span class="box">wallet identified</span>
+  </div>
+  <p>Video relay and recognition are separate, so the stage video stays smooth even when recognition takes about 1 s per frame on the CPU server. Only people on the guest list can ever be matched. Anyone else gets an unlabeled box and is never reported.</p>
+</section>
+
+<!-- 5 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">5</span><h2>The oracle reports a sighting, and the program decides</h2><span class="who">oracle key → presence_pay</span></div>
+  <p>While a wallet stays identified, the oracle sends a report every 2 seconds until one comes back paid. Each report is <b>one transaction with two instructions</b>:</p>
+  <div class="tx">Transaction (fee payer and signer: oracle key)
+ ├─ #0  Ed25519SigVerify          native Solana program
+ │       pubkey   = attendee wallet
+ │       message  = the signed "Attend Now / Action: join / Event / Wallet …" from step 2
+ │       signature= the attendee's signature from step 2
+ └─ #1  presence_pay.report_sighting
+         accounts: oracle, event, sighting PDA ["sighting", event, attendee],
+                   attendee, system program, Instructions sysvar</div>
+  <p>If the signature in #0 is invalid, Solana rejects the whole transaction. Then the program runs these checks, in order:</p>
+  <div class="checks">
+    <div class="check"><b>1 · Listed oracle</b><span class="muted">The signer is one of the event's oracles (<code>NotOracle</code>).</span></div>
+    <div class="check"><b>2 · Attendee's consent</b><span class="muted">The previous instruction is an ed25519 check of the <i>attendee's</i> key over a join for <i>this</i> event and wallet (<code>BadJoinProof</code>).</span></div>
+    <div class="check"><b>3 · Inside the window</b><span class="muted"><code>start ≤ now ≤ end</code> on the chain clock.</span></div>
+    <div class="check"><b>4 · Record the sighting</b><span class="muted">The first report creates the Sighting account (the oracle pays its rent). A gap of more than 60 s restarts the dwell time.</span></div>
+    <div class="check"><b>5 · Enough oracles</b><span class="muted">The number of different oracles that reported (a bitmask) is at least <b>threshold</b>.</span></div>
+    <div class="check"><b>6 · Seen long enough</b><span class="muted"><code>last_seen − first_seen ≥ min_seen_secs</code>, by the chain's clock, not the oracle's.</span></div>
+    <div class="check"><b>7 · Under the cap, once</b><span class="muted"><code>paid_count &lt; max_paid</code>. The <code>paid</code> flag is set <i>before</i> the transfer, so a second payout is impossible.</span></div>
+  </div>
+  <div class="note money"><b>Payout, inside the same report:</b> <code>reward</code> goes from the Event account to the attendee's wallet and <code>fee</code> (0.002 SOL) goes to the oracle that sent this report, covering what it spends on transactions and deposits. The program also emits <code>AttendeePaid</code>. Until the rules are met, a report only updates the Sighting and nothing moves. Reports after the payout do nothing, so retrying is always safe.</div>
+</section>
+
+<!-- 6 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">6</span><h2>Everyone sees it</h2><span class="who">stage, attendee, explorer</span></div>
+  <ol class="steps">
+    <li><span class="tag off">off chain</span><div>The oracle pushes a <code>payout</code> message to the stage, with the wallet label and the transaction. The stage shows it with a Solana Explorer link (devnet).</div></li>
+    <li><span class="tag on">read</span><div>Anyone can check it: the transaction, the Sighting account (paid flag, times, which oracles reported), and the Event's <code>paid_count</code> and remaining balance.</div></li>
+  </ol>
+</section>
+
+<!-- 7 -->
+<section class="phase">
+  <div class="phase-head"><span class="num">7</span><h2>After the event ends</h2><span class="who">automatic and optional cleanup</span></div>
+  <ol class="steps">
+    <li><span class="tag off">off chain</span><div>Each oracle destroys the event's key and its guest list: embeddings and join proofs. After that the faces can't be recovered.</div></li>
+    <li><span class="tag sol">SOL moves</span><div><code>withdraw_remaining</code> returns the unspent budget to the organizer (also allowed before the start, to cancel). It isn't allowed during the event.</div></li>
+    <li><span class="tag sol">SOL moves</span><div><code>close_sighting</code> lets the oracle that paid a Sighting's rent close it and get the rent back.</div></li>
+  </ol>
+</section>
+
+<section>
+  <div class="eyebrow">Trust</div>
+  <h2>What an oracle can and cannot do</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>An oracle that wants to cheat…</th><th>What stops it</th></tr></thead>
+    <tbody>
+      <tr><td>pays someone directly, or pays more</td><td>There is no instruction that pays on request. Only the program moves SOL, with the event's frozen reward and cap.</td></tr>
+      <tr><td>reports a wallet that <b>never joined</b> (its own, a friend's)</td><td>It would need that wallet's signature over a join for this event. It can't forge one, and the program checks it on chain.</td></tr>
+      <tr><td>reports someone who joined but <b>didn't come</b></td><td>With a threshold of 2 or 3, the other independent oracles must report them too (M-of-N). The organizer chooses the oracles and the threshold.</td></tr>
+      <tr><td>reports a short visit as a long one</td><td>Dwell time is measured on the chain clock between reports, not taken from the oracle.</td></tr>
+      <tr><td>reports outside the event, or for someone already paid</td><td>The time window and the per-wallet paid flag are enforced by the program.</td></tr>
+      <tr><td>reports for an event that didn't choose it</td><td>The signer must be in the event's oracle list (<code>NotOracle</code>).</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note warn"><b>Known limits.</b> A faked camera feed (a photo held up) is handled by liveness and multiple cameras in production, not in this demo. With threshold 1, a single oracle can still report a registered no-show.</div>
+</section>
+
+<section>
+  <div class="eyebrow">Privacy</div>
+  <h2>What ends up where</h2>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Data</th><th>Where</th><th>How long</th></tr></thead>
+    <tbody>
+      <tr><td>Selfie</td><td>The oracle's memory, only while computing the embedding</td><td>Seconds</td></tr>
+      <tr><td>Face embedding</td><td>Each oracle's memory, encrypted with a per-event key</td><td>Until the event ends</td></tr>
+      <tr><td>Signed join message</td><td>Each oracle's memory; <b>on chain once the person is seen</b> (inside the report transaction)</td><td>Memory: until the end. Chain: permanent</td></tr>
+      <tr><td>Wallet of someone who joined but was never seen</td><td>Oracles only</td><td>Until the event ends; never public</td></tr>
+      <tr><td>Wallet of someone seen or paid</td><td>On chain: Sighting address, report transactions, payout</td><td>Permanent (closing the Sighting doesn't erase the history)</td></tr>
+      <tr><td>Camera frames</td><td>Streamed to the oracles and the stage, never stored</td><td>Live only</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="muted">Lawful use is a pay lane or kiosk that people step into after explicit, separate consent, with a non-biometric alternative. Scanning a whole room, bystanders included, isn't.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Status, 2026-10-04</div>
+  <h2>Where the demo stands</h2>
+  <ul>
+    <li>Steps 2 to 6 run against the in-memory dev stand-in, and every program rule is tested in LiteSVM.</li>
+    <li>Next: deploy the program under a new ID, register the oracle, create an event, then run the live loop with a confirmed devnet payout and record it.</li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

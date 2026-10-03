@@ -4,6 +4,8 @@ Each event gets a random AES-256-GCM key. Each entry's embedding is encrypted wi
 bound to (event_id, wallet) through the associated data. Embeddings are decrypted only inside `match`
 and `best_other`. Once an event has ended (end_ts < now) its key and entries are dropped, either by
 the periodic `purge` or lazily on the next access, so an ended event behaves as if it never existed.
+Each entry also keeps the wallet's signed join message (JoinProof), sent with every sighting report so the program
+can check the attendee signed up. It is not encrypted: it reaches the chain with the first report anyway.
 Not thread-safe by design: used only from the event loop.
 """
 
@@ -15,6 +17,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from app.oracle.signatures import JoinProof
+
 EMBEDDING_DIM = 512
 
 
@@ -22,6 +26,7 @@ EMBEDDING_DIM = 512
 class _Entry:
     nonce: bytes
     ciphertext: bytes
+    proof: JoinProof
 
 
 @dataclass
@@ -62,7 +67,7 @@ class GuestLists:
 
     # writes
 
-    def put(self, event_id: str, end_ts: int, wallet: str, embedding: np.ndarray) -> None:
+    def put(self, event_id: str, end_ts: int, wallet: str, embedding: np.ndarray, proof: JoinProof) -> None:
         if end_ts < self._wall_clock():
             raise ValueError("event has ended")
         ev = self._get(event_id)
@@ -72,11 +77,7 @@ class GuestLists:
         plaintext = np.asarray(embedding, np.float32).reshape(EMBEDDING_DIM).tobytes()
         nonce = os.urandom(12)
         ciphertext = AESGCM(ev.key).encrypt(nonce, plaintext, _aad(event_id, wallet))
-        ev.entries[wallet] = _Entry(nonce=nonce, ciphertext=ciphertext)
-
-    def remove(self, event_id: str, wallet: str) -> bool:
-        ev = self._get(event_id)
-        return ev is not None and ev.entries.pop(wallet, None) is not None
+        ev.entries[wallet] = _Entry(nonce=nonce, ciphertext=ciphertext, proof=proof)
 
     def drop(self, event_id: str) -> None:
         ev = self._events.pop(event_id, None)
@@ -96,6 +97,11 @@ class GuestLists:
     def has(self, event_id: str, wallet: str) -> bool:
         ev = self._get(event_id)
         return ev is not None and wallet in ev.entries
+
+    def join_proof(self, event_id: str, wallet: str) -> JoinProof | None:
+        ev = self._get(event_id)
+        entry = ev.entries.get(wallet) if ev else None
+        return entry.proof if entry else None
 
     def count(self, event_id: str) -> int:
         ev = self._get(event_id)

@@ -330,10 +330,17 @@ function Header({
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
       <div className="grid gap-1">
         <p className="text-xs font-semibold tracking-widest text-sky-300 uppercase">Stage screen</p>
-        <h1 className="text-2xl font-bold sm:text-3xl">
-          Event <span className="font-mono text-xl sm:text-2xl">{shortAddress(eventId)}</span>
+        <h1 className="text-2xl font-bold break-words sm:text-3xl">
+          {meta ? (
+            meta.name
+          ) : (
+            <>
+              Event <span className="font-mono text-xl sm:text-2xl">{shortAddress(eventId)}</span>
+            </>
+          )}
         </h1>
         <p className="text-sm text-neutral-400">
+          {meta?.venue ? `${meta.venue} · ` : ''}
           {meta ? `${fmtTime(meta.start)} – ${fmtTime(meta.end)} · ${eventStatus(meta, now)} · ` : ''}
           pays when {event.threshold} of {event.oracles.length + event.unregistered.length} oracles agree
           {meta ? ` · organizer ${shortAddress(meta.organizer)}` : ''}
