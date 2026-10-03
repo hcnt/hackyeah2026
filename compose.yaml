@@ -18,11 +18,13 @@ services:
 
   backend:
     build: ./backend
+    # Prod's .env is written by deploy.yml from the repo's GitHub variables and secrets (e.g. ORACLE_KEYPAIR);
+    # previews and local runs have none and fall back to the defaults in backend/app/config.py.
+    env_file:
+      - path: .env
+        required: false
     environment:
       ENV: ${ENV:-prod}
-      # Solana payouts (contracts/presence_pay). Empty ORACLE_KEYPAIR = in-memory dev payouts.
-      ORACLE_KEYPAIR: ${ORACLE_KEYPAIR:-}
-      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
     restart: unless-stopped
 
 networks:
