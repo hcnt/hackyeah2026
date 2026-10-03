@@ -60,7 +60,7 @@ export async function connect(wallet: Wallet): Promise<Connection> {
   const { connect } = (wallet.features as StandardConnectFeature)[StandardConnect]
   const { accounts } = await connect()
   const account = accounts.find((a) => a.chains.some((c) => c.startsWith('solana:'))) ?? accounts[0]
-  if (!account) throw new Error(`${wallet.name} did not share an account`)
+  if (!account) throw new Error(`Choose a Solana account in ${wallet.name} to continue.`)
   return { wallet, account }
 }
 
@@ -84,12 +84,12 @@ export async function signAction(
 }
 
 /**
- * True when MetaMask can't sign for the account it handed us: its KeyringController has no keyring holding
- * that address ("KeyringController - Keyring not found."). Happens when the site's stored connection still
- * points at an account the wallet no longer has; connect() restores it silently. Reconnecting fixes it.
+ * True when a MetaMask call failed because the wallet isn't usable right now. Seen when MetaMask locked
+ * itself after connecting: its keyrings are unloaded, so signing fails with "KeyringController - Keyring not
+ * found." instead of asking to unlock. The connection itself is fine; unlocking and retrying works.
  */
-export function isStaleAccount(err: unknown): boolean {
-  return /keyring not found/i.test((err as Error | null)?.message ?? '')
+export function isLockedWallet(err: unknown): boolean {
+  return /keyring not found|no keyring found/i.test((err as Error | null)?.message ?? '')
 }
 
 /** True when the user closed or rejected the wallet prompt. */

@@ -17,9 +17,8 @@ import { WALLET_LOGOS } from './assets'
 import Selfie from './Selfie'
 import {
   connect,
-  disconnect,
   isMetaMask,
-  isStaleAccount,
+  isLockedWallet,
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
   signAction,
@@ -111,6 +110,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
     setStage({ name: 'connecting' })
     try {
+      // MetaMask asks only the first time; after that it reuses this site's stored connection silently.
       const c = await connect(wallet)
       setConn(c)
       const s = await api.status(c.account.address)
@@ -122,12 +122,12 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
   }
 
-  async function join(frames: Frame[], firstName: string, c: Connection | null = conn, retried = false) {
-    if (!c || !event) return
+  async function join(frames: Frame[], firstName: string) {
+    if (!conn || !event) return
     setError(null)
     setStage({ name: 'signing', frames, firstName })
     try {
-      const signed = await signAction(c, 'join', event.event_id, event.consent.version)
+      const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
       await api.submit({
         ...signed,
         consent: { version: event.consent.version, accepted: true },
@@ -137,33 +137,15 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       setStatus({ status: 'on_list', tx: null })
       setStage({ name: 'done' })
       api.event().then(setEvent, () => {})
-    } catch (signErr) {
-      let err = signErr
-      if (isStaleAccount(err) && !retried) {
-        // MetaMask restored a connection to an account it can no longer sign for: drop it, reconnect
-        // (MetaMask asks which account to use) and sign again with the same photos.
-        console.warn('[attend-now] MetaMask cannot sign for', c.account.address, '- reconnecting', err)
-        try {
-          await disconnect(c)
-          setStage({ name: 'connecting' })
-          const fresh = await connect(c.wallet)
-          setConn(fresh)
-          return join(frames, firstName, fresh, true)
-        } catch (reconnectErr) {
-          err = reconnectErr
-        }
-      }
+    } catch (err) {
       if (isUserRejection(err)) {
         setError('Signature cancelled in MetaMask.')
         setStage({ name: 'consent', frames, firstName })
       } else if (err instanceof ApiError && PHOTO_ERRORS.has(err.code)) {
         setError(`${err.message} Let's take the photos again.`)
         setStage({ name: 'selfie' })
-      } else if (isStaleAccount(err)) {
-        setError('MetaMask cannot sign with this account. Open MetaMask, check your Solana account, and try again.')
-        setStage({ name: 'consent', frames, firstName })
       } else {
-        setError((err as Error).message)
+        setError(walletErrorMessage(err))
         setStage({ name: 'consent', frames, firstName })
       }
     }
@@ -178,7 +160,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       setStage({ name: 'connected' })
       api.event().then(setEvent, () => {})
     } catch (err) {
-      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : (err as Error).message)
+      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
     }
   }
 
@@ -328,6 +310,12 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       {body()}
     </Card>
   )
+}
+
+/** Readable text for a failed MetaMask call. */
+function walletErrorMessage(err: unknown): string {
+  if (isLockedWallet(err)) return 'MetaMask is locked. Unlock it (click the MetaMask icon), then try again.'
+  return (err as Error).message
 }
 
 function Card({
