@@ -33,6 +33,7 @@ from app.oracle.face import normalize
 from app.oracle.interfaces import DevEventSource, EventInfo, providers
 from app.oracle.quality import check_photo
 from app.oracle.runtime import (
+    CAMERA_MIN_FRAME_INTERVAL,
     STAGE_MIN_FRAME_INTERVAL,
     STAGE_STATS_INTERVAL,
     StageClient,
@@ -312,7 +313,7 @@ async def camera_ws(ws: WebSocket, token: str) -> None:
             if len(data) > MAX_BODY_BYTES:
                 await ws.send_json({"type": "error", "message": "frame over 4 MB"})
                 continue
-            started = time.perf_counter()
+            started = time.monotonic()
             try:
                 img = await asyncio.to_thread(state.engine.decode, data)
             except ValueError:
@@ -321,14 +322,10 @@ async def camera_ws(ws: WebSocket, token: str) -> None:
             if max(img.shape[0], img.shape[1]) > MAX_IMAGE_SIDE:
                 await ws.send_json({"type": "error", "message": f"frame larger than {MAX_IMAGE_SIDE} px"})
                 continue
-            try:
-                faces = await rt.process_frame(token, img, data)
-            except Exception as e:  # noqa: BLE001 - a bad frame must not kill the socket
-                log.warning("frame failed event_id=%s status=error error=%s", rt.event_id, type(e).__name__)
-                await ws.send_json({"type": "error", "message": "could not process this frame"})
-                continue
-            ms = round((time.perf_counter() - started) * 1000)
-            await ws.send_json({"type": "ack", "faces": len(faces), "ms": ms})
+            faces = rt.submit_frame(token, img, data)
+            # Pace the phone: the next frame is sent when this ack arrives.
+            await asyncio.sleep(max(0.0, CAMERA_MIN_FRAME_INTERVAL - (time.monotonic() - started)))
+            await ws.send_json({"type": "ack", "faces": len(faces), "ms": rt.last_ms.get(token, 0)})
     except WebSocketDisconnect:
         return
 

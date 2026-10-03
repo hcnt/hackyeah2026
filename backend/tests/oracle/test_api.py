@@ -232,10 +232,14 @@ def test_camera_ws_bad_frame_errors_and_stays_open_then_stage_gets_payout(env):
             assert cam.receive_json() == {"type": "error", "message": "not a decodable image"}
             cam.send_text("hello")
             assert cam.receive_json()["type"] == "error"
-            for _ in range(4):  # socket still open; 3 matching frames identify, min_seen_secs=0 pays
+            # Socket still open. Acks come back at once and report the most recently recognised frame, so the
+            # first ones may say 0 faces; recognition catches up in the background (3 matches identify,
+            # min_seen_secs=0 pays).
+            for _ in range(8):
                 cam.send_bytes(frame)
                 ack = cam.receive_json()
-                assert ack["type"] == "ack" and ack["faces"] == 2
+                assert ack["type"] == "ack"
+            assert ack["faces"] == 2
         payout = None
         for _ in range(20):
             msg = stage.receive_json()
@@ -293,3 +297,35 @@ def test_event_details_counts_status_and_consent(env):
     assert client.post("/api/oracle/dev/events", json=ended).status_code == 200
     d = client.get("/api/v1/events/ev3").json()
     assert d["status"] == "ended" and d["joining_open"] is False
+
+
+def test_slow_recognition_does_not_slow_the_video(env):
+    import time
+
+    client, engine, rng, org, _ = env
+    calls = []
+    real_detect = engine.detect
+
+    def slow_detect(img):
+        calls.append(1)
+        time.sleep(0.4)  # recognition far slower than the camera
+        return real_detect(img)
+
+    engine.detect = slow_detect
+    tokens = client.post("/api/v1/events/ev1/camera-token", json=signed(org, "camera-token")).json()
+    frame = engine.set(b"slow", [(BOX, 0.0, unit(rng))])
+    with client.websocket_connect(f"/api/v1/events/ev1/live?stage_token={tokens['stage_token']}") as stage:
+        assert stage.receive_json()["type"] == "stats"
+        with client.websocket_connect(f"/api/v1/camera/{tokens['camera_token']}") as cam:
+            started = time.monotonic()
+            for _ in range(10):
+                cam.send_bytes(frame)
+                assert cam.receive_json()["type"] == "ack"
+            elapsed = time.monotonic() - started
+        frames = 0
+        while frames < 5:
+            if stage.receive_json()["type"] == "frame":
+                frames += 1
+    # 10 frames at <= 10 fps take ~1 s; recognising each (0.4 s) in line would take >= 4 s.
+    assert elapsed < 2.0, elapsed
+    assert len(calls) < 10  # frames that arrived during recognition were skipped, not queued
