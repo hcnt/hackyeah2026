@@ -70,7 +70,8 @@ def get_model() -> FaceAnalysis:
     else:
         providers, ctx_id = ["CPUExecutionProvider"], -1
     model = FaceAnalysis(name="buffalo_l", allowed_modules=["detection", "recognition"], providers=providers)
-    model.prepare(ctx_id=ctx_id, det_size=(640, 640))
+    size = get_settings().oracle_det_size
+    model.prepare(ctx_id=ctx_id, det_size=(size, size))
     return model
 
 

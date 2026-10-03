@@ -14,10 +14,10 @@ page and the stage screen. Wallet connection is the client's job; the oracle onl
 
 ```
 event details ──▶ show event + consent text ──yes──▶
-open camera ──▶ test (≈2×/s) ──ok──▶ capture "straight", "left", "right"
-                    │                          │
-                 issues → show hint            ▼
-                                    MetaMask signMessage ──▶ submit ──▶ "You're on the list"
+open camera ──▶ test (≈2×/s) ──ok──▶ take the photo
+                    │                     │
+                 issues → show hint       ▼
+                             MetaMask signMessage ──▶ submit ──▶ "You're on the list"
 ```
 
 ## Signatures
@@ -83,10 +83,10 @@ must display. Show `consent.text` as given and sign `consent.version`.
 `POST /events/{event_id}/attendance/test` — no signature. Stateless: nothing is stored.
 
 ```json
-{ "step": "straight", "image": "<base64 JPEG>" }
+{ "image": "<base64 JPEG>" }
 ```
 
-`step` is `straight`, `left` or `right` (the head angle the user was asked for).
+The photo must show one face looking straight at the camera.
 
 `200`:
 
@@ -99,7 +99,7 @@ must display. Show `consent.text` as given and sign `consent.version`.
 ```
 
 `face` is `null` when no face was found. `bbox` is `[x1, y1, x2, y2]` in image pixels; `yaw` is negative for left,
-positive for right, roughly −0.5…0.5. `ok` is `true` exactly when `issues` is empty.
+positive for right, roughly −0.5…0.5 (straight is within ±0.15). `ok` is `true` exactly when `issues` is empty.
 
 ### Submit attendance ("I'm going")
 
@@ -112,17 +112,13 @@ positive for right, roughly −0.5…0.5. `ok` is `true` exactly when `issues` i
   "signature": "<base58>",
   "consent": { "version": "2026-10-03", "accepted": true },
   "first_name": "Ola",
-  "frames": [
-    { "step": "straight", "image": "<base64 JPEG>" },
-    { "step": "left", "image": "<base64 JPEG>" },
-    { "step": "right", "image": "<base64 JPEG>" }
-  ]
+  "image": "<base64 JPEG>"
 }
 ```
 
-`first_name`: 1–40 characters, shown on the stage screen when the person is recognised. Each frame is checked like
-`test`; the three must show the same person and a head turn. Submitting again for the same wallet replaces the
-earlier entry.
+`first_name`: 1–40 characters, shown on the stage screen when the person is recognised. The photo is checked like
+`test`. Submitting again for the same wallet replaces the earlier entry. There is no liveness check in this
+version: production adds a certified liveness provider in front of submit.
 
 `201`:
 
@@ -211,15 +207,15 @@ Server to client only:
 Every non-2xx response has the same shape:
 
 ```json
-{ "error": { "code": "photo_rejected", "message": "Photo 2: too dark — face a light",
-             "issues": [{ "frame": 1, "code": "too_dark", "message": "Too dark — face a light" }] } }
+{ "error": { "code": "photo_rejected", "message": "Too dark — face a light",
+             "issues": [{ "code": "too_dark", "message": "Too dark — face a light" }] } }
 ```
 
-`issues` is present only for `photo_rejected` (`frame` is the 0-based index in `frames`).
+`issues` is present only for `photo_rejected`.
 
 | HTTP | `code` | When |
 |---|---|---|
-| 400 | `invalid_request` | Body malformed, wrong field types, wrong number of frames |
+| 400 | `invalid_request` | Body malformed or wrong field types |
 | 401 | `bad_signature` | Signature does not verify for `wallet` |
 | 401 | `signature_expired` | `signed_at` outside the allowed window |
 | 401 | `signature_reused` | Signature already used |
@@ -229,9 +225,7 @@ Every non-2xx response has the same shape:
 | 409 | `face_already_registered` | This face is already registered to another wallet for this event |
 | 413 | `too_large` | Body over 4 MB |
 | 422 | `consent_required` | `consent.accepted` is not `true` or the version is unknown |
-| 422 | `photo_rejected` | One or more frames failed the photo checks |
-| 422 | `not_same_person` | The three frames do not show the same person |
-| 422 | `liveness_failed` | No head turn across the frames |
+| 422 | `photo_rejected` | The photo failed the photo checks |
 
 ## Photo issue codes
 
@@ -245,20 +239,19 @@ Every non-2xx response has the same shape:
 | `blurry` | Hold still — the photo is blurry |
 | `too_dark` | Too dark — face a light |
 | `too_bright` | Too bright — move away from the light |
-| `wrong_pose` | Turn your head as shown |
+| `wrong_pose` | Look straight at the camera |
 
 Clients may show their own text per `code`; `message` is a ready-to-use default in English.
 
 ## TypeScript types
 
 ```ts
-export type Step = 'straight' | 'left' | 'right'
 export type IssueCode =
   | 'no_face' | 'multiple_faces' | 'low_confidence' | 'too_small' | 'out_of_frame'
   | 'blurry' | 'too_dark' | 'too_bright' | 'wrong_pose'
-export interface Issue { code: IssueCode; message: string; frame?: number }
+export interface Issue { code: IssueCode; message: string }
 
-export interface TestRequest { step: Step; image: string }
+export interface TestRequest { image: string }
 export interface TestResponse {
   ok: boolean
   issues: Issue[]
@@ -269,7 +262,7 @@ export interface Signed { wallet: string; signed_at: string; signature: string }
 export interface SubmitRequest extends Signed {
   consent: { version: string; accepted: true }
   first_name: string
-  frames: { step: Step; image: string }[]
+  image: string
 }
 export interface EventDetails {
   event_id: string
@@ -313,7 +306,7 @@ export function signedMessage(
 
 ## Privacy rules the oracle follows
 
-- Photos are never stored: each frame is decoded in memory, turned into a face signature and dropped.
+- Photos are never stored: each image is decoded in memory, turned into a face signature and dropped.
 - Face signatures are kept per event, encrypted with a key held only in memory, and destroyed when the event ends
   or the attendee leaves.
 - Faces of people who are not on the event's list are discarded immediately and never sent to any client.

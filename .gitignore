@@ -5,3 +5,7 @@ node_modules/
 dist/
 
 .playwright-mcp/
+
+# Solana keypairs (secrets)
+*keypair*.json
+presence-*.json

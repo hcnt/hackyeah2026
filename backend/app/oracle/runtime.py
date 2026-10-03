@@ -24,7 +24,8 @@ from app.oracle.tracker import Tracker
 log = logging.getLogger("app.oracle")
 
 PAYOUT_RETRY_SECS = 5.0
-STAGE_MIN_FRAME_INTERVAL = 0.2  # <= 5 fps per stage client
+STAGE_MIN_FRAME_INTERVAL = 0.1  # <= 10 fps per stage client
+CAMERA_MIN_FRAME_INTERVAL = 0.1  # the camera's ack is paced to <= 10 fps
 STAGE_STATS_INTERVAL = 3.0
 
 
@@ -87,6 +88,14 @@ class EventRuntime:
         self.trackers: dict[str, Tracker] = {}
         self.stage_clients: set[StageClient] = set()
         self._tasks: set[asyncio.Task] = set()
+        # Video and recognition run at different speeds: every camera frame is relayed to the stage at once
+        # with the newest known boxes, while one worker per camera recognises the latest frame whenever it is
+        # free (frames that arrive meanwhile are skipped, never queued).
+        self._latest: dict[str, Any] = {}
+        self._new_frame: dict[str, asyncio.Event] = {}
+        self._workers: dict[str, asyncio.Task] = {}
+        self.last_faces: dict[str, list[dict]] = {}
+        self.last_ms: dict[str, int] = {}
 
     @property
     def event_id(self) -> str:
@@ -138,6 +147,43 @@ class EventRuntime:
             )
         return out
 
+    def submit_frame(self, camera_token: str, img: Any, jpeg: bytes) -> list[dict]:
+        """Relay the frame to the stage now, with the newest boxes, and hand it to the camera's recognition
+        worker. Returns the faces of the most recently recognised frame."""
+        faces = self.last_faces.get(camera_token, [])
+        if self.stage_clients:
+            h, w = _shape(img)
+            self._push_frame(
+                {"type": "frame", "jpeg": base64.b64encode(jpeg).decode(), "width": w, "height": h, "faces": faces}
+            )
+        self._latest[camera_token] = img
+        self._new_frame.setdefault(camera_token, asyncio.Event()).set()
+        worker = self._workers.get(camera_token)
+        if worker is None or worker.done():
+            self._workers[camera_token] = asyncio.create_task(self._recognise_loop(camera_token))
+        return faces
+
+    async def _recognise_loop(self, camera_token: str) -> None:
+        signal = self._new_frame[camera_token]
+        while True:
+            await signal.wait()
+            signal.clear()
+            img = self._latest.pop(camera_token, None)
+            if img is None:
+                continue
+            started = time.perf_counter()
+            try:
+                self.last_faces[camera_token] = await self.process_frame(camera_token, img)
+            except Exception as e:  # noqa: BLE001 - a bad frame must not stop recognition for this camera
+                log.warning("frame failed event_id=%s status=error error=%s", self.event_id, type(e).__name__)
+                continue
+            self.last_ms[camera_token] = round((time.perf_counter() - started) * 1000)
+
+    async def idle(self) -> None:
+        """Wait until every camera's worker has recognised the latest frame (tests)."""
+        while any(t in self._latest or self._new_frame[t].is_set() for t in self._new_frame):
+            await asyncio.sleep(0.01)
+
     def _maybe_pay(self, wallet: str, now: float) -> None:
         if not self.ledger.try_begin(wallet, now):
             return
@@ -177,6 +223,10 @@ class EventRuntime:
             c.wake.set()
 
     def close(self) -> None:
+        for worker in self._workers.values():
+            worker.cancel()
+        self._workers.clear()
+        self._latest.clear()
         self.trackers.clear()
         for c in self.stage_clients:
             c.wake.set()
