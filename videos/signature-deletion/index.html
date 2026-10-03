@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Signature Deletion</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* brand: video/storyboard.html — matches videos/face-scan-reward */
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Medium.ttf"); font-weight: 500; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Bold.ttf"); font-weight: 700; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-ExtraBold.ttf"); font-weight: 800; }
+      @font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Medium.ttf"); font-weight: 500; }
+
+      :root {
+        --canvas: #F3F2EE;
+        --ink: #15161A;
+        --muted: #6B6D74;
+        --hair: #D9D7D0;
+        --frame: #C9C7BF;
+        --accent: #2775CA;
+        --accent-soft: #E3EDF8;
+        --ok: #1F8A5B;
+        --ok-soft: #E2F1EA;
+        --card: #FFFFFF;
+        --shadow: 0 12px 32px rgba(21,22,26,.10);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--canvas); }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--canvas);
+        font-family: "Geist", ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+      #scene { position: absolute; inset: 0; }
+      #nothing { position: absolute; left: 0; top: 70px; width: 1920px; text-align: center; font-family: "Geist Mono", monospace; font-weight: 500;
+        font-size: 24px; letter-spacing: .16em; text-transform: uppercase; color: var(--ok); opacity: 0; }
+
+      /* ---- oracles: server + label/count + their own timer ---- */
+      .oracle { position: absolute; left: 625px; width: 670px; height: 124px; }
+      #oracle-1 { top: 160px; } #oracle-2 { top: 378px; } #oracle-3 { top: 596px; }
+      .srv { position: absolute; left: 0; top: 0; width: 270px; height: 124px; border-radius: 18px; background: var(--card);
+        border: 3px solid var(--hair); box-shadow: var(--shadow); }
+      .srv-edge, .srv-ok { position: absolute; left: 0; top: 0; width: 270px; height: 124px; border-radius: 18px; border: 3px solid var(--accent); opacity: 0; }
+      .srv-ok { border-color: var(--ok); }
+      .led { position: absolute; left: 236px; width: 12px; height: 12px; border-radius: 50%; background: var(--hair); }
+      .led.l1 { top: 32px; } .led.l2 { top: 56px; } .led.l3 { top: 80px; }
+      .leds-on { position: absolute; inset: 0; opacity: 0; }
+      .leds-on .led { background: var(--accent); }
+      .tok { position: absolute; top: 33px; width: 58px; height: 58px; }
+      .tok svg { position: absolute; left: 0; top: 0; width: 58px; height: 58px; overflow: visible; }
+      .tok .face { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+      .tok .mesh { fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+      .tok .dot { fill: var(--ink); }
+      .pt { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--accent); opacity: 0; }
+      .olabel { position: absolute; left: 300px; top: 20px; font-weight: 700; font-size: 34px; letter-spacing: -0.02em; white-space: nowrap; }
+      .count { position: absolute; left: 300px; top: 66px; width: 160px; height: 36px; overflow: hidden; }
+      .cnt { position: absolute; left: 0; top: 0; font-family: "Geist Mono", monospace; font-weight: 500; font-size: 26px; line-height: 36px;
+        color: var(--muted); white-space: nowrap; }
+      .cnt.zero { color: var(--ok); }
+      .check { position: absolute; left: 240px; top: -22px; width: 52px; height: 52px; border-radius: 50%; background: var(--ok);
+        box-shadow: 0 6px 16px rgba(31,138,91,.35); opacity: 0; }
+      .check svg { position: absolute; left: 0; top: 0; width: 52px; height: 52px; }
+
+      /* timer pill on each oracle */
+      .timer { position: absolute; left: 470px; top: 30px; width: 200px; height: 64px; opacity: 0; }
+      .t-ring { position: absolute; inset: 0; border-radius: 32px; border: 3px solid var(--accent); opacity: 0; }
+      .t-base { position: absolute; inset: 0; border-radius: 32px; background: var(--accent-soft); }
+      .t-hot { position: absolute; inset: 0; border-radius: 32px; background: var(--accent); opacity: 0; }
+      .t-done { position: absolute; inset: 0; border-radius: 32px; background: var(--ok-soft); opacity: 0; }
+      .bell { position: absolute; left: 16px; top: 13px; width: 38px; height: 38px; color: var(--accent); transform-origin: 50% 15%; }
+      .bell svg { width: 38px; height: 38px; }
+      .digits { position: absolute; left: 58px; top: 0; width: 126px; height: 64px; overflow: hidden; }
+      .tk { position: absolute; left: 0; top: 0; width: 126px; text-align: center; font-family: "Geist Mono", monospace; font-weight: 500;
+        font-size: 34px; line-height: 64px; letter-spacing: -0.02em; color: var(--accent); }
+
+      /* ---- captions ---- */
+      .cap { position: absolute; left: 0; top: 860px; width: 1920px; text-align: center; font-weight: 800; font-size: 84px;
+        letter-spacing: -0.045em; color: var(--ink); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="5" data-width="1920" data-height="1080">
+      <section id="scene">
+        <div id="nothing">Nothing on chain</div>
+
+        <!-- oracles (tokens, particles, counters and timers are generated below) -->
+        <div class="oracle" id="oracle-1"><div class="srv"></div><div class="srv-edge"></div><div class="srv-ok"></div>
+          <div class="olabel">Oracle 1</div><div class="count" data-layout-allow-overflow="true"></div></div>
+        <div class="oracle" id="oracle-2"><div class="srv"></div><div class="srv-edge"></div><div class="srv-ok"></div>
+          <div class="olabel">Oracle 2</div><div class="count" data-layout-allow-overflow="true"></div></div>
+        <div class="oracle" id="oracle-3"><div class="srv"></div><div class="srv-edge"></div><div class="srv-ok"></div>
+          <div class="olabel">Oracle 3</div><div class="count" data-layout-allow-overflow="true"></div></div>
+
+        <!-- captions -->
+        <div class="cap" id="cap-1">Timers start</div>
+        <div class="cap" id="cap-2">Time's up</div>
+        <div class="cap" id="cap-3">Signatures deleted</div>
+        <div class="cap" id="cap-4">Nothing kept</div>
+      </section>
+    </div>
+    <script>
+      // ---- build server contents (deterministic) ----
+      const TOKENS = 3;
+      const tokSvg = `<svg viewBox="0 0 58 58"><circle class="face" cx="29" cy="29" r="26"/>
+        <polyline class="mesh" points="29,10 16,16 12,29 17,41 29,47 41,41 46,29 42,16 29,10"/>
+        <polyline class="mesh" points="22,26 36,26 29,34 22,26"/><line class="mesh" x1="29" y1="34" x2="29" y2="40"/>
+        <circle class="dot" cx="29" cy="10" r="2"/><circle class="dot" cx="12" cy="29" r="2"/><circle class="dot" cx="46" cy="29" r="2"/>
+        <circle class="dot" cx="29" cy="47" r="2"/><circle class="dot" cx="22" cy="26" r="2"/><circle class="dot" cx="36" cy="26" r="2"/></svg>`;
+      const bellSvg = `<svg viewBox="0 0 38 38" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 27V17a9 9 0 0 1 18 0v10l3 3H7z"/><path d="M16 33a3.2 3.2 0 0 0 6 0"/><path d="M19 5v3"/></svg>`;
+      const oracles = [1, 2, 3].map((n) => document.getElementById(`oracle-${n}`));
+      oracles.forEach((o, k) => {
+        const srv = o.querySelector(".srv");
+        const ledsOn = document.createElement("div");
+        ledsOn.className = "leds-on";
+        ["l1", "l2", "l3"].forEach((l) => {
+          srv.insertAdjacentHTML("beforeend", `<div class="led ${l}"></div>`);
+          ledsOn.insertAdjacentHTML("beforeend", `<div class="led ${l}"></div>`);
+        });
+        srv.appendChild(ledsOn);
+        for (let j = 0; j < TOKENS; j++) {
+          const t = document.createElement("div");
+          t.className = "tok";
+          t.id = `tok-${k}-${j}`;
+          t.style.left = `${20 + j * 68}px`;
+          t.innerHTML = tokSvg;
+          srv.appendChild(t);
+          for (let i = 0; i < 8; i++) {
+            const p = document.createElement("div");
+            p.className = "pt";
+            p.id = `pt-${k}-${j}-${i}`;
+            p.style.left = `${20 + j * 68 + 29}px`;
+            p.style.top = `${33 + 29}px`;
+            srv.appendChild(p);
+          }
+        }
+        const count = o.querySelector(".count");
+        for (let c = TOKENS; c >= 0; c--) {
+          count.insertAdjacentHTML("beforeend", `<div class="cnt${c === 0 ? " zero" : ""}" id="cnt-${k}-${c}">${c} stored</div>`);
+        }
+        let ticks = "";
+        for (let c = 3; c >= 0; c--) ticks += `<div class="tk" id="tk-${k}-${c}">00:0${c}</div>`;
+        o.insertAdjacentHTML("beforeend", `<div class="timer" id="timer-${k}"><div class="t-ring"></div><div class="t-base"></div><div class="t-hot"></div><div class="t-done"></div>
+          <div class="bell">${bellSvg}</div><div class="digits" data-layout-allow-overflow="true">${ticks}</div></div>`);
+        o.insertAdjacentHTML("beforeend", `<div class="check"><svg viewBox="0 0 52 52"><polyline points="15,27 23,35 38,18" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`);
+      });
+
+      const tl = gsap.timeline({ paused: true });
+      const S = 1.25; // global pacing, same as face-scan-reward: beat times below are the 4s plan, stretched to 5s
+
+      // ---- captions (the last one holds) ----
+      const caps = [["#cap-1", 0.04, 1.12], ["#cap-2", 1.2, 1.74], ["#cap-3", 1.82, 2.92], ["#cap-4", 3.02, null]];
+      caps.forEach(([id, tin, tout]) => {
+        tl.fromTo(id, { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 0.2 * S, ease: "power3.out" }, tin * S);
+        if (tout !== null) tl.to(id, { autoAlpha: 0, y: -14, duration: 0.1 * S, ease: "power2.in" }, tout * S);
+      });
+
+      // ---- beat 1 (0.0–1.2): each oracle starts its own timer ----
+      const zeroAt = [];
+      [0, 1, 2].forEach((k) => {
+        const hit = (0.1 + k * 0.08) * S;
+        const o = `#oracle-${k + 1}`;
+        tl.fromTo(`${o} .srv-edge`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.1 * S }, hit);
+        tl.fromTo(`${o} .leds-on`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.08 * S }, hit);
+        tl.fromTo(`#timer-${k}`, { autoAlpha: 0, scale: 0.6, x: -30 }, { autoAlpha: 1, scale: 1, x: 0, duration: 0.24 * S, ease: "back.out(2)" }, hit);
+
+        // countdown 00:03 -> 00:00 on this oracle
+        [0.35, 0.7, 1.05].forEach((dt, i) => {
+          const t = hit + dt * S, c = 3 - i;
+          tl.to(`#tk-${k}-${c}`, { y: -64, autoAlpha: 0, duration: 0.12 * S, ease: "power2.inOut" }, t);
+          tl.fromTo(`#tk-${k}-${c - 1}`, { y: 64, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.12 * S, ease: "power2.inOut" }, t);
+        });
+        zeroAt.push(hit + 1.05 * S);
+      });
+
+      // ---- beat 2 (~1.2–1.8): each timer goes off ----
+      zeroAt.forEach((z, k) => {
+        const tm = `#timer-${k}`;
+        tl.fromTo(`${tm} .t-hot`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.08 * S }, z + 0.1 * S);
+        tl.fromTo(`#tk-${k}-0`, { color: "#2775CA" }, { color: "#FFFFFF", duration: 0.08 * S, immediateRender: false }, z + 0.1 * S);
+        tl.fromTo(`${tm} .bell`, { color: "#2775CA" }, { color: "#FFFFFF", duration: 0.08 * S }, z + 0.1 * S);
+        tl.fromTo(`${tm} .bell`, { rotation: 0 }, { keyframes: { rotation: [0, -22, 20, -16, 14, -10, 8, -4, 0], easeEach: "sine.inOut" }, duration: 0.5 * S, ease: "none" }, z + 0.1 * S);
+        tl.fromTo(tm, { scale: 1 }, { keyframes: { scale: [1, 1.08, 1], easeEach: "sine.inOut" }, duration: 0.22 * S, ease: "none", immediateRender: false }, z + 0.1 * S);
+        tl.fromTo(`${tm} .t-ring`, { autoAlpha: 0.9, scale: 1 }, { autoAlpha: 0, scale: 1.4, duration: 0.4 * S, ease: "power2.out" }, z + 0.1 * S);
+      });
+
+      // ---- beat 3 (1.8–3.0): each oracle deletes its tokens one after the other, counters drop ----
+      [0, 1, 2].forEach((k) => {
+        for (let j = TOKENS - 1; j >= 0; j--) {
+          const t = (1.85 + k * 0.12 + (TOKENS - 1 - j) * 0.25) * S;
+          tl.to(`#tok-${k}-${j}`, { scale: 0.55, autoAlpha: 0, duration: 0.18 * S, ease: "power2.in" }, t);
+          for (let i = 0; i < 8; i++) {
+            const a = ((i * 45 + ((k * 17 + j * 29) % 45)) * Math.PI) / 180;
+            const d = 34 + ((i * 7 + j * 3 + k * 5) % 4) * 9;
+            tl.fromTo(`#pt-${k}-${j}-${i}`, { autoAlpha: 0, x: 0, y: 0, scale: 1 },
+              { keyframes: { autoAlpha: [0, 1, 0], easeEach: "none" }, x: Math.cos(a) * d, y: Math.sin(a) * d - 10, scale: 0.4,
+                duration: 0.42 * S, ease: "power2.out" }, t + 0.03 * S);
+          }
+          tl.to(`#cnt-${k}-${j + 1}`, { y: -36, autoAlpha: 0, duration: 0.12 * S, ease: "power2.inOut" }, t + 0.06 * S);
+          tl.fromTo(`#cnt-${k}-${j}`, { y: 36, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.12 * S, ease: "power2.inOut" }, t + 0.06 * S);
+        }
+      });
+
+      // ---- beat 4 (3.0–4.0): checks, timers settle green, "Nothing on chain", hold ----
+      [0, 1, 2].forEach((k) => {
+        const o = `#oracle-${k + 1}`, tm = `#timer-${k}`, t = (3.04 + k * 0.1) * S;
+        tl.to(`${o} .leds-on`, { autoAlpha: 0, duration: 0.15 * S }, t);
+        tl.to(`${o} .srv-edge`, { autoAlpha: 0, duration: 0.15 * S }, t);
+        tl.fromTo(`${o} .srv-ok`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.15 * S }, t);
+        tl.fromTo(`${o} .check`, { autoAlpha: 0, scale: 0 }, { autoAlpha: 1, scale: 1, duration: 0.24 * S, ease: "back.out(2.6)" }, t);
+        tl.to(`${tm} .t-hot`, { autoAlpha: 0, duration: 0.2 * S }, t);
+        tl.fromTo(`${tm} .t-done`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 * S }, t);
+        tl.to(`#tk-${k}-0`, { color: "#1F8A5B", duration: 0.2 * S }, t);
+        tl.to(`${tm} .bell`, { color: "#1F8A5B", duration: 0.2 * S }, t);
+      });
+      tl.fromTo("#nothing", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 0.3 * S, ease: "power3.out" }, 3.3 * S);
+      tl.to({}, { duration: 0.01 * S }, 3.99 * S); // hold to the end
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
