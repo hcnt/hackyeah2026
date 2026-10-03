@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Face Scan Reward</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* brand: video/storyboard.html — Geist everywhere, Geist Mono for numbers */
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Medium.ttf"); font-weight: 500; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Bold.ttf"); font-weight: 700; }
+      @font-face { font-family: "Geist"; src: url("assets/fonts/Geist-ExtraBold.ttf"); font-weight: 800; }
+      @font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Medium.ttf"); font-weight: 500; }
+
+      :root {
+        --canvas: #F3F2EE;
+        --ink: #15161A;
+        --muted: #6B6D74;
+        --hair: #D9D7D0;
+        --frame: #C9C7BF;
+        --accent: #2775CA;
+        --accent-soft: #E3EDF8;
+        --ok: #1F8A5B;
+        --card: #FFFFFF;
+        --shadow: 0 12px 32px rgba(21,22,26,.10);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--canvas); }
+      #root { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: var(--canvas);
+        font-family: "Geist", ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+      #scene { position: absolute; inset: 0; }
+
+      #floor { position: absolute; left: 120px; right: 120px; top: 759px; height: 2px;
+        background: linear-gradient(90deg, rgba(201,199,191,0) 0%, var(--frame) 15%, var(--frame) 85%, rgba(201,199,191,0) 100%); }
+
+      /* ---- doorway ---- */
+      #door { position: absolute; left: 600px; top: 400px; width: 220px; height: 360px;
+        border: 10px solid var(--frame); border-bottom: 0; border-radius: 16px 16px 0 0; background: #EAE8E2; }
+      #door-glow { position: absolute; inset: 0; border-radius: 6px 6px 0 0;
+        background: linear-gradient(180deg, rgba(39,117,202,.16) 0%, rgba(39,117,202,0) 100%); }
+      #door-label { position: absolute; left: 600px; top: 352px; width: 220px; text-align: center;
+        font-family: "Geist Mono", monospace; font-weight: 500; font-size: 22px; letter-spacing: .28em; color: var(--muted); }
+
+      /* ---- camera (mounted on the left door post, looking down-left) ---- */
+      #cam { position: absolute; left: 532px; top: 408px; width: 78px; height: 40px; transform-origin: 100% 50%; transform: rotate(-24deg); }
+      #cam-body { position: absolute; left: 14px; top: 0; width: 64px; height: 40px; border-radius: 10px; background: var(--card); border: 3px solid var(--ink); }
+      #cam-lens { position: absolute; left: 0; top: 8px; width: 22px; height: 24px; border-radius: 6px 3px 3px 6px; background: var(--ink); }
+      #cam-led { position: absolute; left: 54px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--hair); }
+      #cam-led-on { position: absolute; left: 54px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+        box-shadow: 0 0 10px rgba(39,117,202,.8); opacity: 0; }
+      #cam-arm { position: absolute; left: 594px; top: 426px; width: 16px; height: 6px; background: var(--ink); }
+
+      /* ---- avatar (feet at x=470, y=760) ---- */
+      #avatar { position: absolute; left: 405px; top: 480px; width: 130px; height: 280px; }
+      #av-body { position: absolute; inset: 0; transform-origin: 50% 100%; }
+      #av-torso { position: absolute; left: 0; top: 120px; width: 130px; height: 160px; border-radius: 65px 65px 22px 22px; background: var(--accent);
+        box-shadow: 0 10px 24px rgba(21,22,26,.16); }
+      #av-head { position: absolute; left: 10px; top: 0; width: 110px; height: 110px; border-radius: 50%; background: var(--card); border: 4px solid var(--accent); }
+      .eye { position: absolute; top: 42px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); }
+      #eye-l { left: 30px; } #eye-r { left: 60px; }
+      #smile { position: absolute; left: 36px; top: 62px; width: 30px; height: 15px; border: 4px solid var(--ink); border-top: 0; border-radius: 0 0 18px 18px; }
+
+      /* ---- scan overlay around the head (box 180x180 centered on 470,535) ---- */
+      #scanbox { position: absolute; left: 380px; top: 445px; width: 180px; height: 180px; transform-origin: 50% 50%; }
+      .br { position: absolute; width: 38px; height: 38px; border: 0 solid var(--accent); }
+      #br-tl { left: 0; top: 0; border-left-width: 5px; border-top-width: 5px; border-top-left-radius: 8px; }
+      #br-tr { right: 0; top: 0; border-right-width: 5px; border-top-width: 5px; border-top-right-radius: 8px; }
+      #br-bl { left: 0; bottom: 0; border-left-width: 5px; border-bottom-width: 5px; border-bottom-left-radius: 8px; }
+      #br-br { right: 0; bottom: 0; border-right-width: 5px; border-bottom-width: 5px; border-bottom-right-radius: 8px; }
+      #scanline { position: absolute; left: 6px; right: 6px; top: 0; height: 4px; border-radius: 2px;
+        background: linear-gradient(90deg, rgba(39,117,202,.2), var(--accent) 50%, rgba(39,117,202,.2)); box-shadow: 0 0 16px rgba(39,117,202,.7); }
+      #mesh { position: absolute; left: 0; top: 0; width: 180px; height: 180px; overflow: visible; }
+      #mesh line, #mesh polyline { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round;
+        stroke-dasharray: 1; stroke-dashoffset: 1; }
+      #mesh circle { fill: var(--ink); }
+
+      /* ---- tokens ---- */
+      .token { position: absolute; left: 452px; top: 517px; width: 36px; height: 36px; border-radius: 50%; background: var(--accent);
+        border: 4px solid var(--card); box-shadow: 0 0 0 3px rgba(39,117,202,.25), 0 0 26px rgba(39,117,202,.55); opacity: 0; }
+
+      /* ---- oracles ---- */
+      .oracle { position: absolute; left: 1095px; width: 170px; height: 160px; }
+      #oracle-1 { top: 150px; }
+      #oracle-2 { top: 360px; }
+      #oracle-3 { top: 570px; }
+      .srv { position: absolute; left: 10px; top: 0; width: 150px; height: 104px; border-radius: 16px; background: var(--card); border: 3px solid var(--hair);
+        box-shadow: var(--shadow); }
+      .srv-glow { position: absolute; left: 10px; top: 0; width: 150px; height: 104px; border-radius: 16px; border: 3px solid var(--ok);
+        box-shadow: 0 0 24px rgba(31,138,91,.25); opacity: 0; }
+      .slot { position: absolute; left: 22px; width: 76px; height: 8px; border-radius: 4px; background: var(--hair); }
+      .slot.s1 { top: 26px; } .slot.s2 { top: 46px; } .slot.s3 { top: 66px; }
+      .led { position: absolute; left: 112px; width: 12px; height: 12px; border-radius: 50%; background: var(--hair); }
+      .led.l1 { top: 24px; } .led.l2 { top: 44px; } .led.l3 { top: 64px; }
+      .srv-leds-on { position: absolute; inset: 0; opacity: 0; }
+      .srv-leds-on .led { background: var(--ok); }
+      .olabel { position: absolute; left: 0; top: 116px; width: 170px; text-align: center; font-weight: 700; font-size: 28px; color: var(--ink); }
+      .check { position: absolute; left: 136px; top: -20px; width: 50px; height: 50px; border-radius: 50%; background: var(--ok);
+        box-shadow: 0 6px 16px rgba(31,138,91,.35); opacity: 0; }
+      .check svg { position: absolute; left: 0; top: 0; width: 50px; height: 50px; }
+
+      /* ---- vault ---- */
+      #vault-wrap { position: absolute; left: 1470px; top: 330px; width: 240px; height: 360px; }
+      #vault-halo { position: absolute; left: -60px; top: -60px; width: 360px; height: 330px; border-radius: 50%;
+        background: radial-gradient(ellipse, rgba(39,117,202,.28) 0%, rgba(39,117,202,.08) 45%, rgba(39,117,202,0) 70%); opacity: 0; }
+      #vault { position: absolute; left: 20px; top: 0; width: 200px; height: 190px; border-radius: 22px; background: var(--card); border: 3px solid var(--hair);
+        box-shadow: var(--shadow); }
+      #vault-edge { position: absolute; left: 20px; top: 0; width: 200px; height: 190px; border-radius: 22px; border: 3px solid var(--accent); opacity: 0; }
+      #dial { position: absolute; left: 56px; top: 51px; width: 82px; height: 82px; border-radius: 50%; border: 6px solid var(--hair); }
+      #dial-on { position: absolute; left: 56px; top: 51px; width: 82px; height: 82px; border-radius: 50%; border: 6px solid var(--accent); opacity: 0; }
+      .spoke { position: absolute; left: 32px; top: -2px; width: 6px; height: 74px; border-radius: 3px; background: var(--hair); }
+      #dial-spokes { position: absolute; inset: 0; }
+      .hinge { position: absolute; left: -9px; width: 12px; height: 34px; border-radius: 4px; background: var(--frame); }
+      #h1 { top: 34px; } #h2 { top: 122px; }
+      #vlabel { position: absolute; left: 0; top: 206px; width: 240px; text-align: center; font-weight: 700; font-size: 30px; }
+      #counter { position: absolute; left: 50px; top: 258px; width: 140px; height: 54px; border-radius: 27px; background: var(--accent-soft);
+        font-family: "Geist Mono", monospace; font-weight: 500; font-size: 30px; line-height: 54px; color: var(--accent); overflow: hidden; }
+      #cnt-roll { position: absolute; left: 18px; top: 0; width: 44px; height: 54px; overflow: hidden; }
+      #cnt-old, #cnt-new { position: absolute; left: 0; top: 0; width: 44px; text-align: right; }
+      #cnt-tail { position: absolute; left: 62px; top: 0; color: var(--muted); }
+
+      /* ---- coin ---- */
+      #coin { position: absolute; left: 1563px; top: 393px; width: 54px; height: 54px; border-radius: 50%; background: var(--accent);
+        border: 4px solid var(--card); box-shadow: 0 8px 20px rgba(39,117,202,.4); opacity: 0; }
+      #coin span { position: absolute; inset: 0; text-align: center; line-height: 46px; font-weight: 800; font-size: 26px; color: var(--card); }
+
+      /* ---- wallet (next to the avatar) ---- */
+      #wallet { position: absolute; left: 120px; top: 600px; width: 150px; height: 104px; opacity: 0; transform-origin: 50% 100%; }
+      #w-body { position: absolute; inset: 0; border-radius: 18px; background: var(--ink); box-shadow: 0 10px 24px rgba(21,22,26,.18); }
+      #w-flap { position: absolute; left: 82px; top: 32px; width: 76px; height: 42px; border-radius: 12px; background: var(--accent); }
+      #w-dot { position: absolute; left: 98px; top: 47px; width: 12px; height: 12px; border-radius: 50%; background: var(--card); }
+      #w-ring { position: absolute; left: -6px; top: -6px; width: 162px; height: 116px; border-radius: 24px; border: 4px solid var(--accent); opacity: 0; }
+      #paid { position: absolute; left: -5px; top: 466px; width: 400px; white-space: nowrap; text-align: center; font-family: "Geist Mono", monospace; font-weight: 500;
+        font-size: 22px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); opacity: 0; }
+      #amount { position: absolute; left: -5px; top: 498px; width: 400px; white-space: nowrap; text-align: center; font-family: "Geist Mono", monospace; font-weight: 500;
+        font-size: 60px; line-height: 80px; letter-spacing: -0.03em; color: var(--accent); opacity: 0; }
+
+      /* ---- captions ---- */
+      .cap { position: absolute; left: 0; top: 860px; width: 1920px; text-align: center; font-weight: 800; font-size: 84px;
+        letter-spacing: -0.045em; color: var(--ink); opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="5" data-width="1920" data-height="1080">
+      <section id="scene">
+        <div id="floor"></div>
+
+        <!-- doorway + camera -->
+        <div id="door-label">ENTRANCE</div>
+        <div id="door"><div id="door-glow"></div></div>
+        <div id="cam-arm"></div>
+        <div id="cam">
+          <div id="cam-body"></div>
+          <div id="cam-lens"></div>
+          <div id="cam-led"></div>
+          <div id="cam-led-on"></div>
+        </div>
+
+        <!-- oracles -->
+        <div class="oracle" id="oracle-1">
+          <div class="srv"><div class="slot s1"></div><div class="slot s2"></div><div class="slot s3"></div>
+            <div class="led l1"></div><div class="led l2"></div><div class="led l3"></div>
+            <div class="srv-leds-on"><div class="led l1"></div><div class="led l2"></div><div class="led l3"></div></div></div>
+          <div class="srv-glow"></div>
+          <div class="olabel">Oracle 1</div>
+          <div class="check"><svg viewBox="0 0 50 50"><polyline points="14,26 22,34 37,17" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="oracle" id="oracle-2">
+          <div class="srv"><div class="slot s1"></div><div class="slot s2"></div><div class="slot s3"></div>
+            <div class="led l1"></div><div class="led l2"></div><div class="led l3"></div>
+            <div class="srv-leds-on"><div class="led l1"></div><div class="led l2"></div><div class="led l3"></div></div></div>
+          <div class="srv-glow"></div>
+          <div class="olabel">Oracle 2</div>
+          <div class="check"><svg viewBox="0 0 50 50"><polyline points="14,26 22,34 37,17" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+        <div class="oracle" id="oracle-3">
+          <div class="srv"><div class="slot s1"></div><div class="slot s2"></div><div class="slot s3"></div>
+            <div class="led l1"></div><div class="led l2"></div><div class="led l3"></div>
+            <div class="srv-leds-on"><div class="led l1"></div><div class="led l2"></div><div class="led l3"></div></div></div>
+          <div class="srv-glow"></div>
+          <div class="olabel">Oracle 3</div>
+          <div class="check"><svg viewBox="0 0 50 50"><polyline points="14,26 22,34 37,17" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        </div>
+
+        <!-- vault -->
+        <div id="vault-wrap">
+          <div id="vault-halo"></div>
+          <div id="vault">
+            <div class="hinge" id="h1"></div><div class="hinge" id="h2"></div>
+            <div id="dial"><div id="dial-spokes"><div class="spoke"></div><div class="spoke" style="transform: rotate(90deg)"></div></div></div>
+            <div id="dial-on"></div>
+          </div>
+          <div id="vault-edge"></div>
+          <div id="vlabel">Reward pool</div>
+          <div id="counter"><div id="cnt-roll" data-layout-allow-overflow="true"><div id="cnt-old">37</div><div id="cnt-new">38</div></div><div id="cnt-tail">/100</div></div>
+        </div>
+
+        <!-- avatar -->
+        <div id="avatar">
+          <div id="av-body">
+            <div id="av-torso"></div>
+            <div id="av-head"><div class="eye" id="eye-l"></div><div class="eye" id="eye-r"></div><div id="smile"></div></div>
+          </div>
+        </div>
+
+        <!-- scan overlay -->
+        <div id="scanbox">
+          <svg id="mesh" viewBox="0 0 180 180">
+            <polyline pathLength="1" points="90,38 52,60 40,95 58,130 90,146 122,130 140,95 128,60 90,38" />
+            <line pathLength="1" x1="72" y1="84" x2="108" y2="84" />
+            <line pathLength="1" x1="72" y1="84" x2="90" y2="106" />
+            <line pathLength="1" x1="108" y1="84" x2="90" y2="106" />
+            <line pathLength="1" x1="90" y1="106" x2="90" y2="124" />
+            <line pathLength="1" x1="90" y1="124" x2="58" y2="130" />
+            <line pathLength="1" x1="90" y1="124" x2="122" y2="130" />
+            <line pathLength="1" x1="52" y1="60" x2="72" y2="84" />
+            <line pathLength="1" x1="128" y1="60" x2="108" y2="84" />
+            <line pathLength="1" x1="90" y1="38" x2="72" y2="84" />
+            <line pathLength="1" x1="90" y1="38" x2="108" y2="84" />
+            <circle cx="90" cy="38" r="5" /><circle cx="52" cy="60" r="5" /><circle cx="128" cy="60" r="5" />
+            <circle cx="40" cy="95" r="5" /><circle cx="140" cy="95" r="5" /><circle cx="58" cy="130" r="5" />
+            <circle cx="122" cy="130" r="5" /><circle cx="90" cy="146" r="5" /><circle cx="72" cy="84" r="5" />
+            <circle cx="108" cy="84" r="5" /><circle cx="90" cy="106" r="5" /><circle cx="90" cy="124" r="5" />
+          </svg>
+          <div id="scanline"></div>
+          <div class="br" id="br-tl"></div><div class="br" id="br-tr"></div>
+          <div class="br" id="br-bl"></div><div class="br" id="br-br"></div>
+        </div>
+
+        <div class="token" id="tok-1"></div>
+        <div class="token" id="tok-2"></div>
+        <div class="token" id="tok-3"></div>
+
+        <!-- wallet + payout -->
+        <div id="paid">Paid on chain</div>
+        <div id="amount">+50 USDC</div>
+        <div id="wallet"><div id="w-ring"></div><div id="w-body"></div><div id="w-flap"></div><div id="w-dot"></div></div>
+
+        <div id="coin"><span>$</span></div>
+
+        <!-- captions -->
+        <div class="cap" id="cap-1">Arrive</div>
+        <div class="cap" id="cap-2">Face scan</div>
+        <div class="cap" id="cap-3">Match confirmed</div>
+        <div class="cap" id="cap-4">Rules checked</div>
+      </section>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const S = 1.25; // global pacing: beat times below are the original 4s plan, stretched to 5s
+
+      // ---- captions: quick in / out per beat ----
+      const caps = [["#cap-1", 0.04, 0.72], ["#cap-2", 0.82, 1.72], ["#cap-3", 1.82, 2.52], ["#cap-4", 2.62, 3.32]];
+      caps.forEach(([id, tin, tout]) => {
+        tl.fromTo(id, { autoAlpha: 0, y: 26 }, { autoAlpha: 1, y: 0, duration: 0.2 * S, ease: "power3.out" }, tin * S);
+        tl.to(id, { autoAlpha: 0, y: -14, duration: 0.1 * S, ease: "power2.in" }, tout * S);
+      });
+
+      // ---- beat 1 (0.0–0.8): walk in from the left ----
+      tl.fromTo("#avatar", { x: -720 }, { x: 0, duration: 0.8 * S, ease: "power2.out" }, 0 * S);
+      tl.fromTo("#av-body", { y: 0, rotation: 5 }, { keyframes: { y: [0, -12, 0, -10, 0, -6, 0], rotation: [5, 4, 3, 2, 1, 0.5, 0], easeEach: "sine.inOut" }, duration: 0.8 * S, ease: "none" }, 0 * S);
+
+      // ---- beat 2 (0.8–1.8): face scan ----
+      tl.fromTo("#cam-led-on", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.1 * S }, 0.8 * S);
+      tl.fromTo("#scanbox", { autoAlpha: 0, scale: 1.25 }, { autoAlpha: 1, scale: 1, duration: 0.25 * S, ease: "power3.out" }, 0.84 * S);
+      tl.fromTo("#scanline", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.06 * S }, 1.0 * S);
+      tl.fromTo("#scanline", { y: 4 }, { y: 172, duration: 0.45 * S, ease: "sine.inOut", immediateRender: false }, 1.0 * S);
+      tl.to("#scanline", { autoAlpha: 0, duration: 0.1 * S }, 1.45 * S);
+      tl.fromTo("#mesh circle", { autoAlpha: 0, scale: 0, transformOrigin: "50% 50%" },
+        { autoAlpha: 1, scale: 1, duration: 0.16 * S, ease: "back.out(2.5)", stagger: 0.02 * S }, 1.08 * S);
+      tl.to("#mesh polyline, #mesh line", { strokeDashoffset: 0, duration: 0.3 * S, ease: "power2.inOut", stagger: 0.015 * S }, 1.32 * S);
+
+      // ---- beat 3 (1.8–2.6): mesh -> token -> three oracles ----
+      tl.to("#scanbox", { scale: 0.18, autoAlpha: 0, duration: 0.2 * S, ease: "power3.in" }, 1.8 * S);
+      tl.to("#cam-led-on", { autoAlpha: 0, duration: 0.1 * S }, 1.85 * S);
+      tl.fromTo(".token", { autoAlpha: 0, scale: 0 }, { autoAlpha: 1, scale: 1, duration: 0.14 * S, ease: "back.out(3)" }, 1.92 * S);
+      // token centre (470,535) -> oracle server centres (1180, 202 / 412 / 622)
+      [["#tok-1", "#oracle-1", -333], ["#tok-2", "#oracle-2", -123], ["#tok-3", "#oracle-3", 87]].forEach(([tok, o, dy], i) => {
+        const go = (2.02 + i * 0.08) * S, hit = go + 0.28 * S;
+        tl.to(tok, { x: 710, y: dy, duration: 0.28 * S, ease: "power2.inOut" }, go);
+        tl.to(tok, { scale: 0, autoAlpha: 0, duration: 0.08 * S, ease: "power2.in" }, hit);
+        tl.fromTo(`${o} .srv-glow`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.12 * S }, hit);
+        tl.fromTo(`${o} .srv-leds-on`, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.08 * S }, hit);
+        tl.fromTo(`${o} .check`, { autoAlpha: 0, scale: 0 }, { autoAlpha: 1, scale: 1, duration: 0.22 * S, ease: "back.out(2.6)" }, hit + 0.02 * S);
+      });
+
+      // ---- beat 4 (2.6–3.4): vault glows, counter ticks, coin flies ----
+      tl.fromTo("#vault-halo", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25 * S, ease: "power2.out" }, 2.6 * S);
+      tl.fromTo("#vault-edge", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 * S }, 2.6 * S);
+      tl.fromTo("#dial-on", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 * S }, 2.62 * S);
+      tl.fromTo("#dial-spokes", { rotation: 0 }, { rotation: 90, duration: 0.35 * S, ease: "power2.inOut" }, 2.62 * S);
+      tl.fromTo("#cnt-old", { y: 0 }, { y: -54, duration: 0.18 * S, ease: "power2.inOut" }, 2.74 * S);
+      tl.fromTo("#cnt-new", { y: 54 }, { y: 0, duration: 0.18 * S, ease: "power2.inOut" }, 2.74 * S);
+      tl.fromTo("#wallet", { autoAlpha: 0, scale: 0.4, y: 20 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.25 * S, ease: "back.out(2)" }, 2.64 * S);
+      tl.fromTo("#coin", { autoAlpha: 0, scale: 0 }, { autoAlpha: 1, scale: 1, duration: 0.12 * S, ease: "back.out(2.5)" }, 2.86 * S);
+      // vault centre (1590,420) -> wallet (195,652), arcing up over the oracles
+      tl.to("#coin", { x: -1395, duration: 0.44 * S, ease: "power1.inOut" }, 2.92 * S);
+      tl.to("#coin", { y: -340, duration: 0.2 * S, ease: "sine.out" }, 2.92 * S);
+      tl.to("#coin", { y: 232, duration: 0.24 * S, ease: "sine.in" }, 3.12 * S);
+      tl.to("#coin", { rotation: -360, duration: 0.44 * S, ease: "none" }, 2.92 * S);
+      tl.to("#coin", { scale: 0.3, autoAlpha: 0, duration: 0.07 * S, ease: "power2.in" }, 3.33 * S);
+
+      // ---- beat 5 (3.4–4.0): payout ----
+      tl.fromTo("#wallet", { scale: 1 }, { keyframes: { scale: [1, 1.12, 1], easeEach: "sine.inOut" }, duration: 0.3 * S, ease: "none", immediateRender: false }, 3.36 * S);
+      tl.fromTo("#w-ring", { autoAlpha: 0.9, scale: 1 }, { autoAlpha: 0, scale: 1.45, duration: 0.5 * S, ease: "power2.out" }, 3.38 * S);
+      tl.fromTo("#amount", { autoAlpha: 0, y: 24, scale: 0.85 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.3 * S, ease: "back.out(2)" }, 3.42 * S);
+      tl.fromTo("#paid", { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.25 * S, ease: "power3.out" }, 3.52 * S);
+      tl.to({}, { duration: 0.01 * S }, 3.99 * S); // hold to the end
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
