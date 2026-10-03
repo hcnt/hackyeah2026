@@ -85,9 +85,6 @@ rest to the organizer only before the start or after the end.
 5. **The program pays** when the rules hold. The stage shows the payout with an Explorer link.
 6. **After the end**, oracles destroy the guest list, and the organizer withdraws what's left.
 
-Full walkthrough: [`docs/full-flow.html`](docs/full-flow.html). Every account, transaction and lamport, measured:
-[`docs/onchain.html`](docs/onchain.html).
-
 ## What is where
 
 | Path | What |
@@ -100,7 +97,7 @@ Full walkthrough: [`docs/full-flow.html`](docs/full-flow.html). Every account, t
 | `frontend/src/venue/` | Stage screen (`stage.html#<event>`) and camera page (`camera.html`). |
 | `frontend/src/event-page/` | An example host page with the widget embedded. |
 | `scripts/` | `devnet_event.py` creates a devnet event; `register_oracle.py` publishes an oracle's name and URL on chain. |
-| `docs/` | Flow and on-chain explanations, the oracle API (`oracle-api.md`), architecture pages. |
+| `docs/` | The oracle API (`oracle-api.md`) and architecture pages. |
 
 Embedding the widget on any page:
 
