@@ -134,12 +134,6 @@ If the oracles stop, nobody is paid and the organizer withdraws everything after
   consent, with a non-biometric alternative; scanning a whole room isn't.
 - **No organizer UI yet:** events are created with `scripts/devnet_event.py`.
 
-## With another week
-
-Certified liveness and multiple cameras against faked feeds; oracle staking and slashing; splitting the fee among
-all reporting oracles; USDC (SPL Token) rewards; an organizer page to create and fund events; a timeout after
-which anyone can return a stuck budget to the organizer.
-
 ## Run it
 
 Devnet only. The program ID lives in `contracts/presence_pay/lib.rs` (`declare_id!`), the backend's
