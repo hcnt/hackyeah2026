@@ -178,7 +178,7 @@ async def attendance_test(event_id: str, request: Request) -> dict:
     return await asyncio.to_thread(_test_photo, _b64(body.image))
 
 
-# Submit / leave / status ---------------------------------------------------------------------------
+# Submit / status ---------------------------------------------------------------------------------
 
 
 def _analyze_submit(data: bytes) -> np.ndarray:
@@ -217,19 +217,6 @@ async def attendance_submit(
     state.guestlists.put(event_id, info.end_ts, body.wallet, emb, proof)
     log.info("join event_id=%s wallet=%s status=on_list", event_id, body.wallet)
     return JSONResponse({"status": "on_list", "event_id": event_id, "wallet": body.wallet}, status_code=201)
-
-
-@v1.post("/events/{event_id}/attendance/leave")
-async def attendance_leave(event_id: str, request: Request) -> dict:
-    body = await _body(request, Signed)
-    get_state().signatures.verify(
-        action="leave", event_id=event_id, wallet=body.wallet, signed_at=body.signed_at, signature=body.signature
-    )
-    info = await _event(event_id)
-    _not_ended(info)
-    get_state().guestlists.remove(event_id, body.wallet)
-    log.info("leave event_id=%s wallet=%s status=not_joined", event_id, body.wallet)
-    return {"status": "not_joined", "event_id": event_id, "wallet": body.wallet}
 
 
 def _iso(ts: float) -> str:

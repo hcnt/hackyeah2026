@@ -404,11 +404,11 @@ def test_another_attendees_valid_join_is_bad_join_proof(chain):
     assert chain.sighting(ev_addr, other) is None and chain.balance(other) == 0
 
 
-def test_leave_message_is_bad_join_proof(chain):
+def test_message_that_is_not_a_join_is_bad_join_proof(chain):
     ev_addr, attendee, vault = joined_event(chain)
-    leave = signed_join(ev_addr, chain.attendees[attendee], action="leave")
-    assert leave.message.startswith(b"Attend Now\nAction: leave\n")
-    assert chain.code(chain.report(ev_addr, attendee, START + 10, proof=leave)) == "BadJoinProof"
+    other = signed_join(ev_addr, chain.attendees[attendee], action="camera-token")
+    assert other.message.startswith(b"Attend Now\nAction: camera-token\n")
+    assert chain.code(chain.report(ev_addr, attendee, START + 10, proof=other)) == "BadJoinProof"
     assert_nothing_happened(chain, ev_addr, attendee, vault)
 
 

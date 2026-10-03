@@ -79,10 +79,6 @@ class GuestLists:
         ciphertext = AESGCM(ev.key).encrypt(nonce, plaintext, _aad(event_id, wallet))
         ev.entries[wallet] = _Entry(nonce=nonce, ciphertext=ciphertext, proof=proof)
 
-    def remove(self, event_id: str, wallet: str) -> bool:
-        ev = self._get(event_id)
-        return ev is not None and ev.entries.pop(wallet, None) is not None
-
     def drop(self, event_id: str) -> None:
         ev = self._events.pop(event_id, None)
         if ev is not None:

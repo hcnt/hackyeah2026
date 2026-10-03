@@ -251,8 +251,8 @@ pub mod presence_pay {
 /// tymi, które natywny program zweryfikował (inaczej offsety mogłyby wskazać dane z innej instrukcji).
 /// Klucz = portfel uczestnika, a wiadomość zaczyna się od nagłówka dołączenia z widgetu (signatures.py w backendzie):
 ///   "Attend Now\nAction: join\nEvent: <event>\nWallet: <attendee>\n"  (dalej Consent i Time, nie sprawdzane).
-/// Podpis "leave" lub dla innego eventu/portfela się nie zgadza. Ograniczenie: rezygnacja (leave) nie trafia na
-/// łańcuch, więc podpis dołączenia pozostaje ważny do końca eventu.
+/// Podpis innej akcji (np. camera-token) albo dla innego eventu/portfela się nie zgadza. Dołączenia nie da się
+/// wycofać, więc podpis jest ważny do końca eventu.
 fn check_join_proof(instructions: &AccountInfo, event: &Pubkey, attendee: &Pubkey) -> Result<()> {
     let current = load_current_index_checked(instructions)? as usize;
     require!(current > 0, PresenceError::BadJoinProof);

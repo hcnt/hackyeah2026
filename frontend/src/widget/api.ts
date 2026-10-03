@@ -42,7 +42,7 @@ export interface EventDetails {
 export type AttendanceStatus = 'not_joined' | 'on_list' | 'paid'
 export interface StatusResponse { status: AttendanceStatus; tx: string | null }
 
-export type SignAction = 'join' | 'leave' | 'camera-token'
+export type SignAction = 'join' | 'camera-token'
 
 export function signedMessage(
   action: SignAction, eventId: string, wallet: string, signedAt: string, consentVersion?: string,
@@ -103,8 +103,6 @@ export function createApi(baseUrl: string, eventId: string, name = 'OnSight') {
     test: (image: string) => call<TestResponse>('/attendance/test', { method: 'POST', body: { image } }),
     submit: (body: SubmitRequest) =>
       call<{ status: 'on_list'; event_id: string; wallet: string }>('/attendance', { method: 'POST', body }),
-    leave: (body: Signed) =>
-      call<{ status: 'not_joined'; event_id: string; wallet: string }>('/attendance/leave', { method: 'POST', body }),
     status: (wallet: string) => call<StatusResponse>(`/attendance/${encodeURIComponent(wallet)}`),
   }
 }

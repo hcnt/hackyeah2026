@@ -81,8 +81,8 @@ one signature, whose key, signature and message all sit in that instruction's ow
 `u16::MAX`). The key must be the attendee's wallet and the message must start with
 `"Attend Now\nAction: join\nEvent: <event>\nWallet: <attendee>\n"`, the join message the widget had the wallet sign
 (the Consent and Time lines after it are not checked). Otherwise `BadJoinProof`. An oracle therefore cannot report a
-wallet that never signed up for this event. Limit: a cancellation (`leave`) is off chain only, so a join signature
-stays usable until the event ends.
+wallet that never signed up for this event. A join cannot be cancelled, so its signature stays valid until the
+event ends.
 
 `report_sighting` accounts, in order: `oracle` (signer, writable, pays the sighting rent; must be in
 `event.oracles`), `event` (w), `sighting` (w), `attendee` (w), `treasury` (w; must equal `event.treasury`),

@@ -204,7 +204,7 @@ class EventRuntime:
 
     async def _report(self, wallet: str, name: str, started: float) -> None:
         proof = self.state.guestlists.join_proof(self.event_id, wallet)
-        if proof is None:  # left between the match and this report
+        if proof is None:  # the event ended between the match and this report
             self.ledger.fail(wallet, started)
             return
         try:

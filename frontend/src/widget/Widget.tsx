@@ -200,24 +200,6 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     }
   }
 
-  async function leave() {
-    if (!conn || !event || !oracleSet || !primary) return
-    setError(null)
-    try {
-      const signed = await signAction(conn, 'leave', event.event_id)
-      const results = await toAll(oracleSet.oracles, (api) => api.leave(signed))
-      const failed = results.filter((r) => !r.ok)
-      if (failed.length === results.length && failed[0] && !failed[0].ok) throw failed[0].error
-      if (failed.length > 0) setError(`Could not leave at ${failureText(failed)}`)
-      setStatus({ status: 'not_joined', tx: null, onList: failed.length })
-      setProgress([])
-      setStage({ name: 'connected' })
-      primary.api.event().then(setEvent, () => {})
-    } catch (err) {
-      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
-    }
-  }
-
   const multi = oracleSet.oracles.length > 1
   const failedOracles = oracleSet.oracles.filter((_, i) => progress[i]?.state === 'failed')
   const canRetry = multi && failedOracles.length > 0 && progress.some((p) => p?.state === 'ok')
@@ -377,16 +359,6 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     <Card
       stepper={STEPPER[stage.name]}
       branded={stage.name === 'signup'}
-      footerExtra={
-        stage.name === 'done' && status?.status === 'on_list' ? (
-          <>
-            <span aria-hidden>·</span>
-            <button type="button" className="an-link" onClick={leave}>
-              Leave event
-            </button>
-          </>
-        ) : null
-      }
     >
       {body()}
     </Card>

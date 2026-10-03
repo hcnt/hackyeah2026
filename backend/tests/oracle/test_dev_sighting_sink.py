@@ -81,7 +81,7 @@ def test_only_with_the_wallets_signed_join_for_this_event():
         "other event": signed_join("other", a),
         "signed by another wallet": signed_join("ev", b, wallet=str(a.pubkey())),
         "another wallet's join": signed_join("ev", b),
-        "a leave, not a join": signed_join("ev", a, action="leave"),
+        "not a join": signed_join("ev", a, action="camera-token"),
     }
     for why, proof in bad.items():
         with pytest.raises(SightingRejected, match="BadJoinProof"):

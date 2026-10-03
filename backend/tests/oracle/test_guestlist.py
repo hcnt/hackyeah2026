@@ -49,7 +49,7 @@ def test_ended_event_is_dropped_lazily_without_purge():
     assert not gl.has_key("ev")
 
 
-def test_rejoin_replaces_and_remove_deletes():
+def test_rejoin_replaces():
     rng = np.random.default_rng(3)
     gl = GuestLists(wall_clock=FakeClock(0))
     a1, a2 = unit(rng), unit(rng)
@@ -60,6 +60,3 @@ def test_rejoin_replaces_and_remove_deletes():
     assert n1 != n2  # fresh nonce per entry write
     assert gl.count("ev") == 1
     assert gl.match("ev", a2[None, :], 0.4)[0][0] == "w"
-    assert gl.remove("ev", "w")
-    assert gl.count("ev") == 0
-    assert gl.join_proof("ev", "w") is None  # a wallet that left is no longer reported

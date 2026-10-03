@@ -27,7 +27,7 @@ UTF-8 bytes of the message below). The signature is base58-encoded.
 
 ```
 Attend Now
-Action: <join | leave | camera-token>
+Action: <join | camera-token>
 Event: <event_id>
 Wallet: <wallet>
 Consent: <consent version>          ← only for Action: join
@@ -124,15 +124,8 @@ version: production adds a certified liveness provider in front of submit.
 { "status": "on_list", "event_id": "…", "wallet": "…" }
 ```
 
-### Leave
-
-`POST /events/{event_id}/attendance/leave` — signature with `Action: leave`. Deletes the face data immediately.
-
-```json
-{ "wallet": "…", "signed_at": "…", "signature": "<base58>" }
-```
-
-`200`: `{ "status": "not_joined", "event_id": "…", "wallet": "…" }`
+A join cannot be cancelled: the entry stays until the event ends. The oracle keeps the signed join message with it
+and sends it with every sighting report; the program checks it on chain (see contracts/presence_pay/README.md).
 
 ### Status
 
@@ -288,7 +281,7 @@ export interface ApiError {
 }
 
 export function signedMessage(
-  action: 'join' | 'leave' | 'camera-token',
+  action: 'join' | 'camera-token',
   eventId: string, wallet: string, signedAt: string, consentVersion?: string,
 ): string {
   return [
@@ -306,6 +299,6 @@ export function signedMessage(
 
 - Photos are never stored: each image is decoded in memory, turned into a face signature and dropped.
 - Face signatures are kept per event, encrypted with a key held only in memory, and destroyed when the event ends
-  or the attendee leaves.
+  (a join cannot be cancelled).
 - Faces of people who are not on the event's list are discarded immediately and never sent to any client.
 - Logs contain only event, wallet, transaction and status — never images or face signatures.

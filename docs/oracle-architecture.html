@@ -114,7 +114,7 @@ flowchart LR
     end
     WS[Wallet side:<br/>EventSource,<br/>PayoutSink]
     SOL[(Solana)]
-    W -->|test, submit, leave| R
+    W -->|test, submit| R
     C -->|JPEG frames, WS| R
     R -->|frames, payouts, WS| S
     R --> SG
@@ -197,7 +197,7 @@ flowchart LR
         <ul class="tight">
           <li>Photos and frames are never written to disk or logs.</li>
           <li>Face signatures are stored encrypted with a per-event key held only in memory.</li>
-          <li>Keys, guest lists and tokens are destroyed when the event ends (checked every 60 s and on every access) or when the attendee leaves.</li>
+          <li>Keys, guest lists and tokens are destroyed when the event ends (checked every 60 s and on every access).</li>
           <li>Unknown faces are never named or scored to any client.</li>
         </ul>
       </div>
