@@ -17,6 +17,9 @@ pub const SIGHTING_GAP_SECS: i64 = 60;
 /// Rejestr oracli: maksymalna długość nazwy i adresu API (w bajtach UTF-8).
 pub const MAX_ORACLE_NAME: usize = 32;
 pub const MAX_ORACLE_URL: usize = 128;
+/// Opłata za każdego wypłaconego uczestnika (0.002 SOL). Dostaje ją oracle, którego zgłoszenie wywołało wypłatę:
+/// to on płaci za transakcje i depozyt konta Sighting. Nie ma osobnego treasury ani konta Config.
+pub const FEE_LAMPORTS: u64 = 2_000_000;
 /// Ed25519SigVerify: nagłówek (liczba podpisów + wypełnienie) i 7 offsetów u16 na każdy podpis.
 const ED25519_HEADER: usize = 2;
 const ED25519_OFFSETS: usize = 14;
@@ -25,29 +28,10 @@ const ED25519_OFFSETS: usize = 14;
 pub mod presence_pay {
     use super::*;
 
-    /// Raz po deployu. Ustawia treasury i opłatę platformy dla przyszłych eventów.
-    /// Oracle nie są globalne: każdy event ma własną listę, wybraną przez organizatora.
-    pub fn init_config(ctx: Context<InitConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        cfg.admin = ctx.accounts.admin.key();
-        cfg.treasury = treasury;
-        cfg.fee = fee;
-        cfg.bump = ctx.bumps.config;
-        Ok(())
-    }
-
-    /// Admin może zmienić treasury / opłatę. Dotyczy to TYLKO eventów utworzonych później:
-    /// każdy event zamraża treasury i opłatę przy utworzeniu, więc trwające eventy się nie zmieniają.
-    pub fn update_config(ctx: Context<UpdateConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        cfg.treasury = treasury;
-        cfg.fee = fee;
-        Ok(())
-    }
-
     /// Organizator tworzy event z warunkami i wpłaca cały budżet do konta eventu (vault).
     /// Organizator wybiera 1..=3 oracli i próg `threshold` (ilu RÓŻNYCH oracli musi zgłosić portfel).
-    /// Oracle, próg, treasury, opłata, nagroda, limit i min_seen_secs są zamrożone na cały event.
+    /// Oracle, próg, opłata (FEE_LAMPORTS z chwili utworzenia), nagroda, limit, czasy i min_seen_secs są zamrożone na
+    /// cały event; zmiana terminu = anulowanie (withdraw_remaining przed startem) i nowy event.
     #[allow(clippy::too_many_arguments)]
     pub fn create_event(
         ctx: Context<CreateEvent>,
@@ -69,7 +53,7 @@ pub mod presence_pay {
         }
         require!(threshold >= 1 && threshold as usize <= oracles.len(), PresenceError::BadThreshold);
 
-        let fee = ctx.accounts.config.fee;
+        let fee = FEE_LAMPORTS;
         let budget = reward
             .checked_add(fee)
             .and_then(|per| per.checked_mul(max_paid as u64))
@@ -96,27 +80,15 @@ pub mod presence_pay {
         ev.oracles[..oracles.len()].copy_from_slice(&oracles);
         ev.oracle_count = oracles.len() as u8;
         ev.threshold = threshold;
-        ev.treasury = ctx.accounts.config.treasury; // zamrożone jak fee
         ev.event_id = event_id;
         ev.start = start;
         ev.end = end;
         ev.reward = reward;
-        ev.fee = fee; // zamrożona opłata, późniejsza zmiana w config jej nie dotyczy
+        ev.fee = fee; // zamrożona: ewentualny upgrade programu ze zmienioną opłatą nie dotyczy trwających eventów
         ev.max_paid = max_paid;
         ev.paid_count = 0;
         ev.min_seen_secs = min_seen_secs;
         ev.bump = ctx.bumps.event;
-        Ok(())
-    }
-
-    /// Przed startem organizator może przesunąć czasy (kwoty są zablokowane).
-    pub fn update_event_times(ctx: Context<OrganizerEvent>, start: i64, end: i64) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let ev = &mut ctx.accounts.event;
-        require!(now < ev.start, PresenceError::AlreadyStarted);
-        require!(end > start, PresenceError::BadTimes);
-        ev.start = start;
-        ev.end = end;
         Ok(())
     }
 
@@ -159,7 +131,7 @@ pub mod presence_pay {
         let is_new = s.payer == Pubkey::default();
         if is_new {
             s.payer = oracle;
-            s.event_end = event_end; // `end` nie zmieni się już: update_event_times działa tylko przed startem
+            s.event_end = event_end; // czasy eventu są niezmienne
             s.bump = ctx.bumps.sighting;
         }
         if is_new || now - s.last_seen > SIGHTING_GAP_SECS {
@@ -188,7 +160,7 @@ pub mod presence_pay {
         let total = reward.checked_add(fee).ok_or(PresenceError::Overflow)?;
         ctx.accounts.event.sub_lamports(total)?;
         ctx.accounts.attendee.add_lamports(reward)?;
-        ctx.accounts.treasury.add_lamports(fee)?;
+        ctx.accounts.oracle.add_lamports(fee)?; // opłata dla oracla, którego zgłoszenie wypłaciło
 
         emit!(AttendeePaid {
             event: ctx.accounts.event.key(),
@@ -220,7 +192,8 @@ pub mod presence_pay {
     // Widget uczestnika czyta stąd adresy WSZYSTKICH oracli eventu i wysyła zgłoszenie (selfie) do każdego z nich,
     // więc to nie nasze API decyduje, z którymi oraclami rozmawia uczestnik. Rejestr nie wpływa na wypłaty.
 
-    /// Oracle rejestruje się raz (sam płaci rent): nazwa 1..=32 bajtów, url do 128 bajtów, http(s)://.
+    /// Oracle publikuje albo zmienia swój wpis (pierwszy raz sam płaci depozyt): nazwa 1..=32 bajtów, url do
+    /// 128 bajtów, http(s)://. Wpis jest pod adresem z klucza oracla, więc tylko on może go zmienić.
     pub fn register_oracle(ctx: Context<RegisterOracle>, name: String, url: String) -> Result<()> {
         check_oracle_info(&name, &url)?;
         let info = &mut ctx.accounts.oracle_info;
@@ -231,19 +204,6 @@ pub mod presence_pay {
         Ok(())
     }
 
-    /// Tylko sam oracle może zmienić swoją nazwę i adres.
-    pub fn update_oracle(ctx: Context<UpdateOracle>, name: String, url: String) -> Result<()> {
-        check_oracle_info(&name, &url)?;
-        let info = &mut ctx.accounts.oracle_info;
-        info.name = name;
-        info.url = url;
-        Ok(())
-    }
-
-    /// Oracle usuwa swój wpis; rent wraca do niego.
-    pub fn close_oracle(_ctx: Context<CloseOracle>) -> Result<()> {
-        Ok(())
-    }
 }
 
 /// Zgoda uczestnika na łańcuchu. Instrukcja tuż przed bieżącą musi być Ed25519SigVerify z jednym podpisem, którego
@@ -294,21 +254,11 @@ fn check_oracle_info(name: &str, url: &str) -> Result<()> {
 
 #[account]
 #[derive(InitSpace)]
-pub struct Config {
-    pub admin: Pubkey,
-    pub treasury: Pubkey,
-    pub fee: u64,
-    pub bump: u8,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct Event {
     pub organizer: Pubkey,
     pub oracles: [Pubkey; MAX_ORACLES], // klucze, które mogą zgłaszać obecność; nieużyte = Pubkey::default()
     pub oracle_count: u8,
     pub threshold: u8,    // ilu różnych oracli musi zgłosić portfel, zanim program wypłaci
-    pub treasury: Pubkey, // odbiorca opłaty, zamrożony z Config przy utworzeniu
     pub event_id: u64,
     pub start: i64,
     pub end: i64,
@@ -348,28 +298,10 @@ pub struct OracleInfo {
 // ---------- Listy kont dla instrukcji ----------
 
 #[derive(Accounts)]
-pub struct InitConfig<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(init, payer = admin, space = 8 + Config::INIT_SPACE, seeds = [b"config"], bump)]
-    pub config: Account<'info, Config>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateConfig<'info> {
-    pub admin: Signer<'info>,
-    #[account(mut, seeds = [b"config"], bump = config.bump, has_one = admin)]
-    pub config: Account<'info, Config>,
-}
-
-#[derive(Accounts)]
 #[instruction(event_id: u64)]
 pub struct CreateEvent<'info> {
     #[account(mut)]
     pub organizer: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
-    pub config: Account<'info, Config>,
     #[account(
         init,
         payer = organizer,
@@ -382,18 +314,12 @@ pub struct CreateEvent<'info> {
 }
 
 #[derive(Accounts)]
-pub struct OrganizerEvent<'info> {
-    pub organizer: Signer<'info>,
-    #[account(mut, has_one = organizer)]
-    pub event: Account<'info, Event>,
-}
-
-#[derive(Accounts)]
 pub struct ReportSighting<'info> {
-    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci rent konta Sighting.
+    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci depozyt konta Sighting i dostaje
+    /// opłatę, gdy jego zgłoszenie wypłaca.
     #[account(mut)]
     pub oracle: Signer<'info>,
-    #[account(mut, has_one = treasury)]
+    #[account(mut)]
     pub event: Account<'info, Event>,
     // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml). Ponowne utworzenie po close_sighting
     // jest niemożliwe: close działa dopiero po końcu eventu, a zgłoszenia tylko do końca.
@@ -408,9 +334,6 @@ pub struct ReportSighting<'info> {
     /// CHECK: tylko odbiorca SOL, dowolny portfel
     #[account(mut)]
     pub attendee: UncheckedAccount<'info>,
-    /// CHECK: sprawdzany przez has_one na event
-    #[account(mut)]
-    pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     /// CHECK: sysvar Instructions (adres sprawdzany); stąd czytamy weryfikację podpisu uczestnika
     #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
@@ -438,7 +361,7 @@ pub struct RegisterOracle<'info> {
     #[account(mut)]
     pub oracle: Signer<'info>,
     #[account(
-        init,
+        init_if_needed,
         payer = oracle,
         space = 8 + OracleInfo::INIT_SPACE,
         seeds = [b"oracle", oracle.key().as_ref()],
@@ -446,21 +369,6 @@ pub struct RegisterOracle<'info> {
     )]
     pub oracle_info: Account<'info, OracleInfo>,
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateOracle<'info> {
-    pub oracle: Signer<'info>,
-    #[account(mut, has_one = oracle)]
-    pub oracle_info: Account<'info, OracleInfo>,
-}
-
-#[derive(Accounts)]
-pub struct CloseOracle<'info> {
-    #[account(mut)]
-    pub oracle: Signer<'info>,
-    #[account(mut, has_one = oracle, close = oracle)]
-    pub oracle_info: Account<'info, OracleInfo>,
 }
 
 // ---------- Eventy i błędy ----------
@@ -472,7 +380,7 @@ pub struct AttendeePaid {
     pub reward: u64,
 }
 
-// Nowe błędy dopisujemy NA KOŃCU: kody (6000 + indeks) istniejących wariantów nie mogą się zmienić.
+// Po deployu nowe błędy dopisujemy NA KOŃCU: kody (6000 + indeks) istniejących wariantów nie mogą się zmienić.
 #[error_code]
 pub enum PresenceError {
     #[msg("End must be after start")]
@@ -481,8 +389,6 @@ pub enum PresenceError {
     BadAmounts,
     #[msg("Math overflow")]
     Overflow,
-    #[msg("Event already started")]
-    AlreadyStarted,
     #[msg("Event has not started yet")]
     NotStarted,
     #[msg("Event has ended")]

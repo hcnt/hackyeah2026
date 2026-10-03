@@ -2,7 +2,8 @@
 // decides which oracles receive the join. Plain JSON-RPC over fetch plus small decoders; the only dependency is bs58.
 //
 // Layouts mirror contracts/presence_pay/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
-//   Event:      organizer 32 | oracles 3×32 | oracle_count u8 | threshold u8 | treasury 32 | …
+//   Event:      organizer 32 | oracles 3×32 | oracle_count u8 | threshold u8 | event_id u64 | start i64 | end i64 |
+//               reward u64 | fee u64 | max_paid u32 | paid_count u32 | min_seen_secs u32 | bump u8
 //   OracleInfo: oracle 32 | name (u32 LE length + UTF-8) | url (u32 LE length + UTF-8) | bump u8   (PDA ["oracle", key])
 import bs58 from 'bs58'
 
@@ -167,9 +168,9 @@ export function decodeEventOracles(data: Uint8Array, disc: Uint8Array): { oracle
   return { oracles, threshold }
 }
 
-// Event: … treasury 32 | event_id u64 | start i64 | end i64 | reward u64 | fee u64 | max_paid u32 | paid_count u32 |
-// min_seen_secs u32 | bump u8
-const EVENT_META_OFFSET = EVENT_COUNT_OFFSET + 2 + 32 + 8
+// Event: … threshold u8 | event_id u64 | start i64 | end i64 | reward u64 | fee u64 | max_paid u32 | paid_count u32 |
+// min_seen_secs u32 | bump u8. EVENT_META_OFFSET points at `start` (event_id is skipped).
+const EVENT_META_OFFSET = EVENT_COUNT_OFFSET + 2 + 8
 
 /** Organizer, times and counters of an Event account's data (already checked by decodeEventOracles). */
 export function decodeEventMeta(data: Uint8Array): EventMeta | null {

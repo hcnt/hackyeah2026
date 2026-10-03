@@ -18,24 +18,22 @@ from solders.pubkey import Pubkey
 from solders.system_program import TransferParams, transfer
 
 from app.chain.presence_chain import (
+    FEE_LAMPORTS,
     SIGHTING_GAP_SECS,
     Event,
     OracleInfo,
     Sighting,
     _program_error,
     attendee_paid,
-    close_oracle_ix,
     close_sighting_ix,
     create_event_ix,
     ed25519_verify_ix,
     event_pda,
-    init_config_ix,
     oracle_info_pda,
     register_oracle_ix,
     report_sighting_ix,
     report_sighting_ixs,
     sighting_pda,
-    update_oracle_ix,
     withdraw_remaining_ix,
 )
 from app.oracle.signatures import JoinProof, build_message
@@ -43,11 +41,12 @@ from app.oracle.signatures import JoinProof, build_message
 SO = os.environ.get("PRESENCE_SO", "")
 pytestmark = pytest.mark.skipif(not SO or not Path(SO).is_file(), reason="PRESENCE_SO (a built presence_pay.so) not set")
 
-FEE = 2_000_000
+FEE = FEE_LAMPORTS  # frozen into every Event at creation
 REWARD = 10_000_000
 START = 1_000_000
 END = START + 3_600
 TX_FEE = 5_000  # LiteSVM's default fee per signature
+REPORT_TX_FEE = 2 * TX_FEE  # a report pays for the oracle's signature and the ed25519-verified join signature
 
 
 def signed_join(event: Pubkey, kp: Keypair, action: str = "join", wallet: Pubkey | None = None) -> JoinProof:
@@ -73,14 +72,12 @@ class Chain:
         self.pid = _program_id()
         self.svm = LiteSVM()
         self.svm.add_program(self.pid, Path(SO).read_bytes())
-        self.admin, self.organizer, self.oracle, self.oracle2, self.outsider = (Keypair() for _ in range(5))
-        for kp in (self.admin, self.organizer, self.oracle, self.oracle2, self.outsider):
+        self.organizer, self.oracle, self.oracle2, self.outsider = (Keypair() for _ in range(4))
+        for kp in (self.organizer, self.oracle, self.oracle2, self.outsider):
             self.svm.airdrop(kp.pubkey(), 100 * 10**9)
-        self.treasury = Keypair().pubkey()
         self.attendees: dict[Pubkey, Keypair] = {}
         self.next_id = 1
         self.set_time(START - 100)
-        self.ok(self.send([init_config_ix(self.admin.pubkey(), self.treasury, FEE, self.pid)], self.admin))
 
     # plumbing -------------------------------------------------------------------------------------
 
@@ -167,7 +164,7 @@ def test_create_event_funds_escrow_and_freezes_terms(chain):
     chain.ok(res)
     ev = chain.event(ev_addr)
     assert ev.oracles == [chain.oracle.pubkey(), chain.oracle2.pubkey()] and ev.threshold == 2
-    assert (ev.treasury, ev.fee, ev.reward, ev.max_paid, ev.paid_count) == (chain.treasury, FEE, REWARD, 3, 0)
+    assert (ev.fee, ev.reward, ev.max_paid, ev.paid_count) == (FEE, REWARD, 3, 0)
     assert ev.balance == rent(chain, ev_addr) + 3 * (REWARD + FEE)
 
 
@@ -203,17 +200,20 @@ def test_threshold_1_pays_after_dwell_exactly_once(chain):
     chain.ok(chain.report(ev_addr, attendee, t0 + 2))
     assert chain.balance(attendee) == 0 and not chain.sighting(ev_addr, attendee).paid
 
+    oracle_before = chain.balance(chain.oracle.pubkey())
     res = chain.ok(chain.report(ev_addr, attendee, t0 + 3))  # dwell 3 s on the chain clock
     assert attendee_paid(res.logs(), ev_addr, attendee)
     assert chain.balance(attendee) == REWARD
-    assert chain.balance(chain.treasury) == FEE
+    assert chain.balance(chain.oracle.pubkey()) == oracle_before + FEE - REPORT_TX_FEE  # the reporting oracle earns it
     assert chain.balance(ev_addr) == vault - REWARD - FEE
     assert chain.event(ev_addr).paid_count == 1 and chain.sighting(ev_addr, attendee).paid
 
-    for dt in (4, 10, 100):  # later sightings are successful no-ops
+    for dt in (4, 10, 100):  # later sightings are successful no-ops: no second reward, no second fee
+        before = chain.balance(chain.oracle.pubkey())
         res = chain.ok(chain.report(ev_addr, attendee, t0 + dt))
         assert not attendee_paid(res.logs(), ev_addr, attendee)
-    assert (chain.balance(attendee), chain.balance(chain.treasury)) == (REWARD, FEE)
+        assert chain.balance(chain.oracle.pubkey()) == before - REPORT_TX_FEE
+    assert chain.balance(attendee) == REWARD
     assert chain.event(ev_addr).paid_count == 1
 
 
@@ -232,10 +232,25 @@ def test_threshold_2_of_2_needs_both_oracles(chain):
         chain.ok(chain.report(ev_addr, attendee, t0 + dt))
     s = chain.sighting(ev_addr, attendee)
     assert s.reporters == 0b01 and not s.paid and chain.balance(attendee) == 0
+    first, second = chain.balance(chain.oracle.pubkey()), chain.balance(chain.oracle2.pubkey())
     chain.ok(chain.report(ev_addr, attendee, t0 + 21, oracle=chain.oracle2))
     s = chain.sighting(ev_addr, attendee)
     assert s.reporters == 0b11 and s.paid
-    assert chain.balance(attendee) == REWARD and chain.balance(chain.treasury) == FEE
+    assert chain.balance(attendee) == REWARD
+    # The fee goes to the oracle whose report paid (oracle2), not to the one that reported first.
+    assert chain.balance(chain.oracle2.pubkey()) == second + FEE - REPORT_TX_FEE
+    assert chain.balance(chain.oracle.pubkey()) == first
+
+
+def test_threshold_2_of_2_fee_goes_to_whichever_oracle_completes_it(chain):
+    _, ev_addr = chain.create_event(oracles=[chain.oracle.pubkey(), chain.oracle2.pubkey()], threshold=2, min_seen=0)
+    attendee = chain.attendee()
+    chain.ok(chain.report(ev_addr, attendee, START + 10, oracle=chain.oracle2))  # creates the Sighting, no payout
+    first, second = chain.balance(chain.oracle.pubkey()), chain.balance(chain.oracle2.pubkey())
+    chain.ok(chain.report(ev_addr, attendee, START + 11, oracle=chain.oracle))
+    assert chain.balance(attendee) == REWARD
+    assert chain.balance(chain.oracle.pubkey()) == first + FEE - REPORT_TX_FEE
+    assert chain.balance(chain.oracle2.pubkey()) == second
 
 
 def test_non_oracle_signer_rejected(chain):
@@ -332,7 +347,7 @@ def test_withdraw_remaining_after_end_returns_the_rest(chain):
 
 def assert_nothing_happened(chain: Chain, ev_addr: Pubkey, attendee: Pubkey, vault: int) -> None:
     assert chain.sighting(ev_addr, attendee) is None
-    assert chain.balance(attendee) == 0 and chain.balance(chain.treasury) == 0
+    assert chain.balance(attendee) == 0
     assert chain.balance(ev_addr) == vault and chain.event(ev_addr).paid_count == 0
 
 
@@ -355,10 +370,13 @@ def ed25519_data(signer: Pubkey, signature: bytes, message: bytes, indexes=(0xFF
 
 def test_legit_join_proof_pays_exactly_once(chain):
     ev_addr, attendee, vault = joined_event(chain)
+    before = chain.balance(chain.oracle.pubkey())
     res = chain.ok(chain.report(ev_addr, attendee, START + 10))
     assert attendee_paid(res.logs(), ev_addr, attendee)
+    sighting_rent = chain.balance(sighting_pda(ev_addr, attendee, chain.pid))  # first report: the oracle pays it
+    assert chain.balance(chain.oracle.pubkey()) == before + FEE - sighting_rent - REPORT_TX_FEE
     chain.ok(chain.report(ev_addr, attendee, START + 11))  # a second report is a no-op, not a second payout
-    assert (chain.balance(attendee), chain.balance(chain.treasury)) == (REWARD, FEE)
+    assert chain.balance(attendee) == REWARD
     assert chain.balance(ev_addr) == vault - REWARD - FEE and chain.event(ev_addr).paid_count == 1
 
 
@@ -461,24 +479,36 @@ def test_register_oracle_publishes_name_and_url_paid_by_the_oracle(chain):
     assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://hackyeah.kindhome.io")
     info_addr = oracle_info_pda(me.pubkey(), chain.pid)
     assert chain.balance(me.pubkey()) == before - rent(chain, info_addr) - TX_FEE
-    # Once per key: a second register fails (the account exists), and the entry is unchanged.
-    res = chain.send([register_oracle_ix(me.pubkey(), "Other", "https://other.example", chain.pid)], me)
-    assert chain.code(res) == "TransactionFailed"
-    assert oracle_info(chain, me.pubkey()).name == "OnSight"
 
 
-def test_update_oracle_only_by_its_owner(chain):
+def test_register_oracle_again_updates_the_entry_without_new_rent(chain):
+    me = chain.oracle
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
+    info_addr = oracle_info_pda(me.pubkey(), chain.pid)
+    info_rent = chain.balance(info_addr)
+    before = chain.balance(me.pubkey())
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight 2", "http://b.example:8000", chain.pid)], me))
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight 2", "http://b.example:8000")
+    assert chain.balance(me.pubkey()) == before - TX_FEE  # the account exists: only the tx fee
+    assert chain.balance(info_addr) == info_rent
+
+
+def test_another_key_cannot_overwrite_an_oracles_entry(chain):
     me, other = chain.oracle, chain.outsider
     chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
-    chain.ok(chain.send([update_oracle_ix(me.pubkey(), "OnSight 2", "http://b.example:8000", chain.pid)], me))
-    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight 2", "http://b.example:8000")
-
     mine = oracle_info_pda(me.pubkey(), chain.pid)
-    hijack = update_oracle_ix(other.pubkey(), "Evil", "https://evil.example", chain.pid, info=mine)
-    assert chain.code(chain.send([hijack], other)) == "Unauthorized"  # has_one = oracle
-    steal = close_oracle_ix(other.pubkey(), chain.pid, info=mine)
-    assert chain.code(chain.send([steal], other)) == "Unauthorized"
-    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight 2", "http://b.example:8000")
+    assert oracle_info_pda(other.pubkey(), chain.pid) != mine  # another signer derives another PDA
+
+    hijack = register_oracle_ix(other.pubkey(), "Evil", "https://evil.example", chain.pid, info=mine)
+    res = chain.send([hijack], other)
+    assert chain.code(res) == "TransactionFailed"
+    assert "ConstraintSeeds" in "\n".join(res.meta().logs())  # seeds = ["oracle", signer] does not match
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://a.example")
+
+    # Registering under its own key is fine and leaves the first oracle's entry alone.
+    chain.ok(chain.send([register_oracle_ix(other.pubkey(), "Other", "https://other.example", chain.pid)], other))
+    assert oracle_info(chain, other.pubkey()) == OracleInfo(other.pubkey(), "Other", "https://other.example")
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://a.example")
 
 
 @pytest.mark.parametrize(
@@ -499,7 +529,8 @@ def test_register_and_update_validate_name_and_url(chain, name, url, code):
     assert chain.code(chain.send([register_oracle_ix(me.pubkey(), name, url, chain.pid)], me)) == code
     assert oracle_info(chain, me.pubkey()) is None
     chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
-    assert chain.code(chain.send([update_oracle_ix(me.pubkey(), name, url, chain.pid)], me)) == code
+    assert chain.code(chain.send([register_oracle_ix(me.pubkey(), name, url, chain.pid)], me)) == code  # update
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://a.example")
 
 
 def test_limits_are_inclusive(chain):
@@ -507,14 +538,3 @@ def test_limits_are_inclusive(chain):
     url = "https://" + "a" * 120  # exactly 128 bytes
     chain.ok(chain.send([register_oracle_ix(me.pubkey(), "x" * 32, url, chain.pid)], me))
     assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "x" * 32, url)
-
-
-def test_close_oracle_returns_rent(chain):
-    me = chain.oracle
-    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://a.example", chain.pid)], me))
-    info_rent = chain.balance(oracle_info_pda(me.pubkey(), chain.pid))
-    assert info_rent > 0
-    before = chain.balance(me.pubkey())
-    chain.ok(chain.send([close_oracle_ix(me.pubkey(), chain.pid)], me))
-    assert chain.balance(me.pubkey()) == before + info_rent - TX_FEE
-    assert oracle_info(chain, me.pubkey()) is None

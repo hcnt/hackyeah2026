@@ -5,7 +5,8 @@
 
 The organizer chooses the event's oracles (1-3, default: our backend's oracle key) and how many of them must report a
 wallet (--threshold). Oracles only report sightings; the program pays once `threshold` of them saw the wallet for
-`--min-seen` seconds.
+`--min-seen` seconds. The fee per paid attendee is the program's FEE_LAMPORTS (0.002 SOL), frozen into the event;
+it goes to the oracle whose report paid.
 
 A test organizer keypair is kept at ~/.config/attend-now/organizer-devnet.json (created on first run, never in the
 repo) and topped up from the devnet faucet when it runs low. The event starts now, so sightings count at once.
@@ -30,14 +31,14 @@ from solders.system_program import ID as SYSTEM_PROGRAM
 from solders.transaction import Transaction
 
 RPC = "https://api.devnet.solana.com"
-# OLD program id (global oracle in Config, superseded). Its accounts do NOT match the sightings layout this script
-# builds: replace with the new id after the redeploy, or pass --program <new id>.
+# OLD program id (superseded). Its create_event accounts do NOT match what this script builds (no Config account
+# any more): replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
 # Our backend's oracle (public key, see contracts/presence_pay/README.md).
 DEFAULT_ORACLE = "5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt"
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000
-CONFIG_LEN = 8 + 32 + 32 + 8 + 1  # discriminator, admin, treasury, fee, bump
+FEE_LAMPORTS = 2_000_000  # lib.rs FEE_LAMPORTS: per paid attendee, frozen into the Event at creation
 
 
 def rpc(method: str, params: list) -> dict:
@@ -107,16 +108,7 @@ def main() -> None:
         sys.exit(f"--threshold must be between 1 and {len(oracles)} (the number of oracles)")
 
     org = organizer()
-    config, _ = Pubkey.find_program_address([b"config"], program)
-    acc = rpc("getAccountInfo", [str(config), {"encoding": "base64"}])["value"]
-    if acc is None:
-        sys.exit(f"No Config for program {program}: wrong --program, or init_config was not run.")
-    cfg = base64.b64decode(acc["data"][0])
-    if len(cfg) != CONFIG_LEN:
-        # The old program's Config (with a global oracle) is 113 bytes; sending it this layout would misread the fee
-        # and create a garbled event.
-        sys.exit(f"Config of {program} is {len(cfg)} bytes, expected {CONFIG_LEN}: not a per-event-oracle program.")
-    fee = struct.unpack_from("<Q", cfg, 8 + 64)[0]  # Config: admin, treasury, fee, bump
+    fee = FEE_LAMPORTS
 
     reward = round(args.reward * LAMPORTS)
     budget = args.max * (reward + fee)
@@ -139,7 +131,6 @@ def main() -> None:
         data,
         [
             AccountMeta(org.pubkey(), is_signer=True, is_writable=True),
-            AccountMeta(config, is_signer=False, is_writable=False),
             AccountMeta(event, is_signer=False, is_writable=True),
             AccountMeta(SYSTEM_PROGRAM, is_signer=False, is_writable=False),
         ],

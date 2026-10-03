@@ -13,9 +13,9 @@ from solders.sysvar import INSTRUCTIONS as INSTRUCTIONS_SYSVAR
 
 from app.chain.presence_chain import (
     EVENT_ORACLES_OFFSET,
+    FEE_LAMPORTS,
     PROGRAM_ERRORS,
     PROGRAM_ID,
-    Config,
     Event,
     OracleInfo,
     PresenceChain,
@@ -23,9 +23,7 @@ from app.chain.presence_chain import (
     Sighting,
     _program_error,
     attendee_paid,
-    close_oracle_ix,
     close_sighting_ix,
-    config_pda,
     create_event_ix,
     ed25519_verify_ix,
     event_pda,
@@ -34,7 +32,6 @@ from app.chain.presence_chain import (
     report_sighting_ix,
     report_sighting_ixs,
     sighting_pda,
-    update_oracle_ix,
 )
 from app.oracle.signatures import JoinProof, build_message
 
@@ -42,7 +39,6 @@ ADDRESS = Keypair().pubkey()
 ORGANIZER = Keypair().pubkey()
 ORACLE = Keypair().pubkey()
 ORACLE2 = Keypair().pubkey()
-TREASURY = Keypair().pubkey()
 ATTENDEE_KP = Keypair()
 ATTENDEE = ATTENDEE_KP.pubkey()
 ED25519_PROGRAM = Pubkey.from_string("Ed25519SigVerify111111111111111111111111111")
@@ -63,23 +59,23 @@ def disc(namespace: str, name: str) -> bytes:
 
 
 def event_bytes(oracles: list[Pubkey] | None = None, threshold: int = 1) -> bytes:
-    # lib.rs order: organizer, oracles[3], oracle_count, threshold, treasury, event_id, start, end, reward, fee,
-    # max_paid, paid_count, min_seen_secs, bump
+    # lib.rs order: organizer, oracles[3], oracle_count, threshold, event_id, start, end, reward, fee, max_paid,
+    # paid_count, min_seen_secs, bump
     oracles = [ORACLE, ORACLE2] if oracles is None else oracles
     slots = b"".join(bytes(o) for o in oracles) + bytes(32) * (3 - len(oracles))
     return disc("account", "Event") + (
-        bytes(ORGANIZER) + slots + bytes([len(oracles), threshold]) + bytes(TREASURY)
+        bytes(ORGANIZER) + slots + bytes([len(oracles), threshold])
         + struct.pack("<QqqQQIIIB", 7, 1_000, 2_000, 10_000_000, 2_000_000, 3, 1, 5, 254)
     )
 
 
-def test_event_decode_reads_oracle_slots_threshold_and_treasury():
+def test_event_decode_reads_oracle_slots_threshold_and_fee():
     data = event_bytes(threshold=2)
-    assert len(data) == 8 + 32 + 96 + 2 + 32 + 8 * 5 + 4 * 3 + 1
+    assert len(data) == 8 + 32 + 96 + 2 + 8 * 5 + 4 * 3 + 1
     assert data[EVENT_ORACLES_OFFSET : EVENT_ORACLES_OFFSET + 32] == bytes(ORACLE)
     assert data[EVENT_ORACLES_OFFSET + 32 : EVENT_ORACLES_OFFSET + 64] == bytes(ORACLE2)
     ev = Event.decode(ADDRESS, data, balance=123)
-    assert (ev.address, ev.organizer, ev.treasury) == (ADDRESS, ORGANIZER, TREASURY)
+    assert (ev.address, ev.organizer) == (ADDRESS, ORGANIZER)
     assert ev.oracles == [ORACLE, ORACLE2] and ev.threshold == 2  # unused slot 3 is not listed
     assert (ev.event_id, ev.start, ev.end) == (7, 1_000, 2_000)
     assert (ev.reward, ev.fee, ev.max_paid, ev.paid_count, ev.min_seen_secs, ev.balance) == (
@@ -106,10 +102,8 @@ def test_sighting_decode():
         Sighting.decode(data[:-1])
 
 
-def test_config_decode_has_no_oracle():
-    admin = Keypair().pubkey()
-    data = disc("account", "Config") + bytes(admin) + bytes(TREASURY) + struct.pack("<QB", 2_000_000, 255)
-    assert Config.decode(data) == Config(admin=admin, treasury=TREASURY, fee=2_000_000)
+def test_fee_constant_mirrors_lib_rs():
+    assert FEE_LAMPORTS == 2_000_000
 
 
 def sample_event() -> Event:
@@ -121,12 +115,9 @@ def test_report_sighting_ix_accounts_in_lib_rs_order():
     assert ix.program_id == PROGRAM_ID
     assert bytes(ix.data) == disc("global", "report_sighting")
     keys = [m.pubkey for m in ix.accounts]
-    assert keys == [
-        ORACLE, ADDRESS, sighting_pda(ADDRESS, ATTENDEE), ATTENDEE, TREASURY, SYSTEM_PROGRAM_ID, SYSVAR_INSTRUCTIONS
-    ]
-    assert config_pda() not in keys
-    assert [m.is_signer for m in ix.accounts] == [True, False, False, False, False, False, False]
-    assert [m.is_writable for m in ix.accounts] == [True, True, True, True, True, False, False]
+    assert keys == [ORACLE, ADDRESS, sighting_pda(ADDRESS, ATTENDEE), ATTENDEE, SYSTEM_PROGRAM_ID, SYSVAR_INSTRUCTIONS]
+    assert [m.is_signer for m in ix.accounts] == [True, False, False, False, False, False]
+    assert [m.is_writable for m in ix.accounts] == [True, True, True, True, False, False]
 
 
 def test_sighting_pda_seeds():
@@ -149,20 +140,23 @@ def test_create_event_ix_borsh_layout():
     assert data[20:52] == bytes(ORACLE) and data[52:84] == bytes(ORACLE2)
     assert struct.unpack_from("<BqqQII", data, 84) == (2, 1_000, 2_000, 10_000_000, 3, 5)
     assert len(data) == 84 + 1 + 8 + 8 + 8 + 4 + 4
-    assert [m.pubkey for m in ix.accounts] == [ORGANIZER, config_pda(), event_pda(ORGANIZER, 7), SYSTEM_PROGRAM_ID]
+    assert [m.pubkey for m in ix.accounts] == [ORGANIZER, event_pda(ORGANIZER, 7), SYSTEM_PROGRAM_ID]
 
 
 def test_program_error_codes_are_appended():
-    assert PROGRAM_ERRORS[6] == "CapReached"
-    assert PROGRAM_ERRORS[8:] == ["BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof"]
-    assert _program_error("Custom(6013)").code == "BadJoinProof"
-    assert _program_error("custom program error: 0x177d").code == "BadJoinProof"  # 0x177d = 6013
-    assert _program_error("Program log: AnchorError ... Error Code: BadJoinProof. Error Number: 6013.").code == (
+    # lib.rs PresenceError in declaration order (AlreadyStarted was removed with update_event_times).
+    assert PROGRAM_ERRORS == [
+        "BadTimes", "BadAmounts", "Overflow", "NotStarted", "Ended", "CapReached", "EventRunning",
+        "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof",
+    ]
+    assert _program_error("Custom(6012)").code == "BadJoinProof"
+    assert _program_error("custom program error: 0x177c").code == "BadJoinProof"  # 0x177c = 6012
+    assert _program_error("Program log: AnchorError ... Error Code: BadJoinProof. Error Number: 6012.").code == (
         "BadJoinProof"
     )
-    assert _program_error("Custom(6012)").code == "BadUrl"
-    assert _program_error("custom program error: 0x1776").code == "CapReached"  # 0x1776 = 6006
-    assert _program_error("Custom(6010)").code == "NotOracle"
+    assert _program_error("Custom(6011)").code == "BadUrl"
+    assert _program_error("custom program error: 0x1775").code == "CapReached"  # 0x1775 = 6005
+    assert _program_error("Custom(6009)").code == "NotOracle"
     assert _program_error("Error Code: ConstraintHasOne").code == "Unauthorized"
     assert _program_error("something else").code == "TransactionFailed"
 
@@ -205,13 +199,14 @@ def test_report_sighting_without_event_is_noevent():
     assert e.value.code == "NoEvent" and chain.sent == []
 
 
-def test_report_sighting_from_any_listed_oracle_uses_the_events_treasury():
+def test_report_sighting_from_any_listed_oracle_is_signed_by_that_oracle():
     oracle = Keypair()
     ev = Event.decode(ADDRESS, event_bytes(oracles=[ORACLE, oracle.pubkey()], threshold=2), 0)
     chain = OfflineChain(ev)
     asyncio.run(chain.report_sighting(oracle, ADDRESS, ATTENDEE, PROOF))
     (ixs,) = chain.sent
-    assert ixs[1].accounts[0].pubkey == oracle.pubkey() and ixs[1].accounts[4].pubkey == TREASURY
+    assert ixs[1].accounts[0].pubkey == oracle.pubkey()
+    assert [m.pubkey for m in ixs[1].accounts].count(oracle.pubkey()) == 1  # the fee goes to the signer, no treasury
 
 
 def check_ed25519_layout(ix, signer: Pubkey, proof: JoinProof) -> None:
@@ -304,12 +299,8 @@ def test_oracle_registry_instructions():
     )
     assert [(m.pubkey, m.is_signer, m.is_writable) for m in reg.accounts] == [
         (ORACLE, True, True), (info, False, True), (SYSTEM_PROGRAM_ID, False, False)]
-    upd = update_oracle_ix(ORACLE, "OnSight", "https://a.example")
-    assert upd.data[:8] == disc("global", "update_oracle") and upd.data[8:] == reg.data[8:]
-    assert [(m.pubkey, m.is_signer, m.is_writable) for m in upd.accounts] == [(ORACLE, True, False), (info, False, True)]
-    close = close_oracle_ix(ORACLE)
-    assert close.data == disc("global", "close_oracle")
-    assert [(m.pubkey, m.is_signer, m.is_writable) for m in close.accounts] == [(ORACLE, True, True), (info, False, True)]
+    other = Keypair().pubkey()
+    assert register_oracle_ix(ORACLE, "x", "https://a.example", info=other).accounts[1].pubkey == other
 
 
 class _Acc:

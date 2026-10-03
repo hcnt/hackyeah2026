@@ -1,5 +1,6 @@
 // Test dla Solana Playground (beta.solpg.io): wklej do tests/anchor.test.ts i kliknij "Test".
-// Twój portfel z Playground gra tu jednocześnie admina, organizatora i oracle (wybranego per event).
+// Twój portfel z Playground gra tu jednocześnie organizatora i oracle (wybranego per event).
+// Opłata (FEE_LAMPORTS) trafia do oracla, którego zgłoszenie wypłaciło, czyli też do tego portfela.
 // Oracle tylko zgłasza obecność (reportSighting); o wypłacie decyduje program.
 // Każde zgłoszenie poprzedza weryfikacja ed25519 podpisu uczestnika pod wiadomością dołączenia (joinProof).
 // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml projektu), patrz README.
@@ -18,12 +19,11 @@ describe("presence_pay", () => {
 
   const oracleInfoPda = (oracle: web3.PublicKey) => pda([Buffer.from("oracle"), oracle.toBuffer()]);
 
-  const configPda = pda([Buffer.from("config")]);
-  const treasury = web3.Keypair.generate().publicKey;
   const attendeeKp = web3.Keypair.generate(); // uczestnik podpisuje dołączenie, więc potrzebny jest jego klucz
   const attendee = attendeeKp.publicKey;
 
-  const fee = new BN(2_000_000); // 0.002 SOL
+  const fee = new BN(2_000_000); // FEE_LAMPORTS z lib.rs (0.002 SOL), zamrażana w Event.fee
+  const txFee = 10_000; // opłata devnetu za zgłoszenie: podpis oracla + podpis ed25519 uczestnika, po 5000
   const reward = new BN(10_000_000); // 0.01 SOL (oszczędzamy devnetowe SOL)
   const maxPaid = 3;
   const minSeen = 3; // sekundy obecności na zegarze łańcucha
@@ -60,7 +60,7 @@ describe("presence_pay", () => {
 
   const reportAccounts = (ev: web3.PublicKey, who: web3.PublicKey) =>
     ({
-      oracle: me, event: ev, sighting: sightingPda(ev, who), attendee: who, treasury, systemProgram: sys,
+      oracle: me, event: ev, sighting: sightingPda(ev, who), attendee: who, systemProgram: sys,
       instructions: web3.SYSVAR_INSTRUCTIONS_PUBKEY,
     }) as any;
   // Podpis dołączenia, jak w widgecie (wallet signMessage), sprawdzany natywnym programem Ed25519 w tej samej transakcji.
@@ -84,20 +84,8 @@ describe("presence_pay", () => {
     send(
       program.methods
         .createEvent(id, oracles, threshold, new BN(start), new BN(end), reward, max, seen)
-        .accounts({ organizer: me, config: configPda, event: eventPda(id), systemProgram: sys } as any)
+        .accounts({ organizer: me, event: eventPda(id), systemProgram: sys } as any)
     );
-
-  it("init / update config (treasury + opłata dla nowych eventów)", async () => {
-    const existing = await program.account.config.fetchNullable(configPda);
-    const m = existing
-      ? program.methods.updateConfig(treasury, fee).accounts({ admin: me, config: configPda } as any)
-      : program.methods.initConfig(treasury, fee).accounts({ admin: me, config: configPda, systemProgram: sys } as any);
-    await send(m);
-    await eventually(async () => {
-      const cfg = await program.account.config.fetch(configPda, "confirmed");
-      assert.ok(cfg.treasury.equals(treasury) && cfg.fee.eq(fee));
-    });
-  });
 
   it("organizator tworzy event (1 oracle, próg 1) i wpłaca budżet", async () => {
     await createEvent(eventId, [me], 1, now - 60, now + 600);
@@ -108,7 +96,8 @@ describe("presence_pay", () => {
       assert.equal(ev.maxPaid, maxPaid);
       assert.equal(ev.oracleCount, 1);
       assert.equal(ev.threshold, 1);
-      assert.ok(ev.oracles[0].equals(me) && ev.treasury.equals(treasury));
+      assert.ok(ev.oracles[0].equals(me));
+      assert.ok(ev.fee.eq(fee));
       assert.equal(await conn.getBalance(event, "confirmed"), rent + budget);
     });
   });
@@ -118,24 +107,31 @@ describe("presence_pay", () => {
     await expectFail(createEvent(new BN(now + 4), [me, me], 1, now - 60, now + 600), "BadOracles");
   });
 
-  it("pierwsze zgłoszenie nie wypłaca; po min_seen_secs program wypłaca", async () => {
+  it("pierwsze zgłoszenie nie wypłaca; po min_seen_secs program wypłaca (opłata dla oracla)", async () => {
     await report();
+    let before = 0; // saldo oracla (me) po pierwszym zgłoszeniu, które zapłaciło też depozyt Sighting
     await eventually(async () => {
       const s = await program.account.sighting.fetch(sightingPda(event, attendee), "confirmed");
       assert.equal(s.paid, false);
       assert.equal(await conn.getBalance(attendee, "confirmed"), 0);
+      before = await conn.getBalance(me, "confirmed");
     });
     // Zegar łańcucha bywa opóźniony: zgłaszamy co 2 s, aż program uzna, że minęło min_seen_secs.
+    let reports = 0;
     await eventually(async () => {
       await report();
+      reports += 1;
       const s = await program.account.sighting.fetch(sightingPda(event, attendee), "confirmed");
       assert.equal(s.paid, true);
     }, 60000);
     await eventually(async () => {
       assert.equal(await conn.getBalance(attendee, "confirmed"), reward.toNumber());
-      assert.equal(await conn.getBalance(treasury, "confirmed"), fee.toNumber());
       const ev = await program.account.event.fetch(event, "confirmed");
       assert.equal(ev.paidCount, 1);
+      // Oracle dostał opłatę i zapłacił za każde zgłoszenie; tolerancja na opóźnione odczyty salda z RPC.
+      const gained = (await conn.getBalance(me, "confirmed")) - before;
+      const expected = fee.toNumber() - reports * txFee;
+      assert.ok(Math.abs(gained - expected) <= 2 * txFee, `oracle gained ${gained}, expected ~${expected}`);
     });
   });
 
@@ -145,19 +141,6 @@ describe("presence_pay", () => {
     assert.equal(await conn.getBalance(attendee, "confirmed"), reward.toNumber());
     const ev = await program.account.event.fetch(event, "confirmed");
     assert.equal(ev.paidCount, 1);
-  });
-
-  it("inny treasury niż zapisany w evencie jest odrzucany", async () => {
-    const other = web3.Keypair.generate();
-    await expectFail(
-      send(
-        program.methods
-          .reportSighting()
-          .accounts({ ...reportAccounts(event, other.publicKey), treasury: other.publicKey })
-          .preInstructions([joinProof(event, other)])
-      ),
-      "ConstraintHasOne"
-    );
   });
 
   it("zgłoszenie bez podpisu dołączenia uczestnika jest odrzucane", async () => {
@@ -218,29 +201,29 @@ describe("presence_pay", () => {
     );
   });
 
-  it("rejestr oracli: rejestracja / zmiana / walidacja / zamknięcie", async () => {
+  it("rejestr oracli: rejestracja / ponowna rejestracja zmienia wpis / walidacja", async () => {
     const info = oracleInfoPda(me);
-    const accs = { oracle: me, oracleInfo: info } as any;
-    // Po przerwanym poprzednim uruchomieniu wpis może już istnieć: wtedy go aktualizujemy.
-    const existing = await program.account.oracleInfo.fetchNullable(info);
-    await send(
-      existing
-        ? program.methods.updateOracle("Playground", "https://example.com").accounts(accs)
-        : program.methods
-            .registerOracle("Playground", "https://example.com")
-            .accounts({ ...accs, systemProgram: sys } as any)
-    );
-    await send(program.methods.updateOracle("Playground 2", "http://example.org:8000").accounts(accs));
+    const accs = { oracle: me, oracleInfo: info, systemProgram: sys } as any;
+    const register = (name: string, url: string) => send(program.methods.registerOracle(name, url).accounts(accs));
+    // Pierwsze wywołanie tworzy wpis (albo zmienia go, jeśli został po poprzednim uruchomieniu).
+    await register("Playground", "https://example.com");
+    await eventually(async () => {
+      const o = await program.account.oracleInfo.fetch(info, "confirmed");
+      assert.ok(o.oracle.equals(me));
+      assert.equal(o.name, "Playground");
+      assert.equal(o.url, "https://example.com");
+    });
+    // Drugie wywołanie (init_if_needed) nie tworzy nowego konta, tylko zmienia nazwę i url.
+    await register("Playground 2", "http://example.org:8000");
     await eventually(async () => {
       const o = await program.account.oracleInfo.fetch(info, "confirmed");
       assert.ok(o.oracle.equals(me));
       assert.equal(o.name, "Playground 2");
       assert.equal(o.url, "http://example.org:8000");
     });
-    await expectFail(send(program.methods.updateOracle("Playground", "ftp://example.com").accounts(accs)), "BadUrl");
-    await expectFail(send(program.methods.updateOracle("", "https://example.com").accounts(accs)), "BadName");
-    await send(program.methods.closeOracle().accounts(accs));
-    await eventually(async () => assert.equal(await program.account.oracleInfo.fetchNullable(info, "confirmed"), null));
+    await expectFail(register("Playground", "ftp://example.com"), "BadUrl");
+    await expectFail(register("", "https://example.com"), "BadName");
+    // Wpisu nie da się usunąć (nie ma close_oracle); zostaje na devnecie z wartościami testowymi.
   });
 
   it("anulowanie eventu przed startem zwraca cały budżet", async () => {

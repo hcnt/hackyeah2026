@@ -16,7 +16,6 @@ EVENT = Keypair().pubkey()
 ORGANIZER = Keypair().pubkey()
 ORACLE = Keypair()
 ORACLE_PK = ORACLE.pubkey()
-TREASURY = Keypair().pubkey()
 WALLET = str(Keypair().pubkey())
 PAID_TX = Signature.new_unique()
 _MSG = build_message("join", str(EVENT), WALLET, "2026-10-03T12:00:00Z", "2026-10-03").encode()
@@ -26,7 +25,7 @@ PROOF = JoinProof(message=_MSG, signature=bytes(range(64)))  # the sink does not
 def chain_event(address: Pubkey = EVENT, oracles: list[Pubkey] | None = None) -> Event:
     return Event(
         address=address, organizer=ORGANIZER, oracles=[ORACLE_PK] if oracles is None else oracles, threshold=1,
-        treasury=TREASURY, event_id=1, start=1_000, end=2_000, reward=10_000_000, fee=2_000_000, max_paid=3,
+        event_id=1, start=1_000, end=2_000, reward=10_000_000, fee=2_000_000, max_paid=3,
         paid_count=0, min_seen_secs=3, balance=0,
     )
 
