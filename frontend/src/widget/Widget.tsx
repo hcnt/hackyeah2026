@@ -1,6 +1,6 @@
 // The embeddable "Attend Now" widget, built to Penpot "Widget v1":
 //   1a sign up (split button + wallet picker) → 1b confirm in wallet → 1c wallet connected
-//   2a selfie (one photo) → 2d first name
+//   2a selfie (one photo)
 //   3a consent → sign "join" in the wallet → 3b you're in
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
@@ -31,9 +31,8 @@ type Stage =
   | { name: 'connecting' }
   | { name: 'connected' }
   | { name: 'selfie' }
-  | { name: 'details'; image: string }
-  | { name: 'consent'; image: string; firstName: string }
-  | { name: 'signing'; image: string; firstName: string }
+  | { name: 'consent'; image: string }
+  | { name: 'signing'; image: string }
   | { name: 'done' }
 
 type Fill = 'empty' | 'half' | 'full'
@@ -42,7 +41,6 @@ const STEPPER: Record<Stage['name'], [Fill, Fill, Fill] | null> = {
   connecting: ['half', 'empty', 'empty'],
   connected: ['full', 'empty', 'empty'],
   selfie: ['full', 'half', 'empty'],
-  details: ['full', 'half', 'empty'],
   consent: ['full', 'full', 'half'],
   signing: ['full', 'full', 'half'],
   done: ['full', 'full', 'full'],
@@ -90,7 +88,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     return () => clearInterval(id)
   }, [api, stage.name, conn])
 
-  const onSelfieDone = useCallback((image: string) => setStage({ name: 'details', image }), [])
+  const onSelfieDone = useCallback((image: string) => setStage({ name: 'consent', image }), [])
 
   if (!event) {
     return (
@@ -122,16 +120,15 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
   }
 
-  async function join(image: string, firstName: string) {
+  async function join(image: string) {
     if (!conn || !event) return
     setError(null)
-    setStage({ name: 'signing', image, firstName })
+    setStage({ name: 'signing', image })
     try {
       const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
       await api.submit({
         ...signed,
         consent: { version: event.consent.version, accepted: true },
-        first_name: firstName,
         image,
       })
       setStatus({ status: 'on_list', tx: null })
@@ -140,13 +137,13 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     } catch (err) {
       if (isUserRejection(err)) {
         setError('Signature cancelled in MetaMask.')
-        setStage({ name: 'consent', image, firstName })
+        setStage({ name: 'consent', image })
       } else if (err instanceof ApiError && PHOTO_ERRORS.has(err.code)) {
         setError(`${err.message} Let's take the photo again.`)
         setStage({ name: 'selfie' })
       } else {
         setError(walletErrorMessage(err))
-        setStage({ name: 'consent', image, firstName })
+        setStage({ name: 'consent', image })
       }
     }
   }
@@ -230,8 +227,6 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
             {errorLine}
           </>
         )
-      case 'details':
-        return <Details onSubmit={(firstName) => setStage({ name: 'consent', image: stage.image, firstName })} />
       case 'consent':
       case 'signing': {
         const [question, ...rest] = event.consent.text.split('\n')
@@ -250,7 +245,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
               type="button"
               className="an-button"
               disabled={signing}
-              onClick={() => join(stage.image, stage.firstName)}
+              onClick={() => join(stage.image)}
             >
               {signing ? (
                 'Confirm in MetaMask…'
@@ -422,37 +417,6 @@ function WalletPicker({ onPick, onClose }: { onPick: () => void; onClose: () => 
         ))}
       </ul>
     </>
-  )
-}
-
-function Details({ onSubmit }: { onSubmit: (firstName: string) => void }) {
-  const [name, setName] = useState('')
-  const trimmed = name.trim()
-  return (
-    <form
-      className="an-body an-form"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (trimmed) onSubmit(trimmed)
-      }}
-    >
-      <label className="an-field">
-        <span className="an-label">First name</span>
-        <input
-          className="an-input"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={40}
-          autoComplete="given-name"
-          required
-          autoFocus
-        />
-      </label>
-      <span className="an-spacer" />
-      <button type="submit" className="an-button" disabled={!trimmed}>
-        Continue
-      </button>
-    </form>
   )
 }
 
