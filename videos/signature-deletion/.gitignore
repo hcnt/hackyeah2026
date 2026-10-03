@@ -1,0 +1,8 @@
+node_modules/
+renders/
+snapshots/
+*.mp4
+*.webm
+.hyperframes/
+.thumbnails/
+.waveform-cache/
