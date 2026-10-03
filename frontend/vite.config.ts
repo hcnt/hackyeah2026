@@ -10,12 +10,13 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, './src') },
   },
   build: {
-    // The stage screen and the event camera are separate pages next to the main app.
+    // The stage screen, the event camera and the organizer's event form are separate pages next to the main app.
     rolldownOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
         stage: path.resolve(__dirname, 'stage.html'),
         camera: path.resolve(__dirname, 'camera.html'),
+        organizer: path.resolve(__dirname, 'organizer.html'),
       },
     },
   },

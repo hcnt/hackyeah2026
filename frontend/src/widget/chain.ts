@@ -62,7 +62,7 @@ interface RpcAccount {
   owner: string
 }
 
-async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(RpcAccount | null)[]> {
+export async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(RpcAccount | null)[]> {
   let res: Response
   try {
     res = await fetch(rpcUrl, {
@@ -86,14 +86,14 @@ async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(Rpc
   return value as (RpcAccount | null)[]
 }
 
-function base64Bytes(b64: string): Uint8Array {
+export function base64Bytes(b64: string): Uint8Array {
   const bin = atob(b64)
   const out = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
 }
 
-async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
+export async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
   const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   let off = 0
   for (const p of parts) {
@@ -105,7 +105,7 @@ async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
 
 const utf8 = new TextEncoder()
 
-async function discriminator(account: string): Promise<Uint8Array> {
+export async function discriminator(account: string): Promise<Uint8Array> {
   return (await sha256(utf8.encode(`account:${account}`))).slice(0, 8)
 }
 
