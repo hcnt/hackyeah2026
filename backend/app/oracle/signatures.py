@@ -4,7 +4,7 @@ Checks, in order: signature valid for `wallet` (401 bad_signature), `signed_at` 
 and 1 min in the future (401 signature_expired), signature not seen before (401 signature_reused). A signature
 is consumed as soon as it passes the first two checks, even if the request then fails for another reason.
 
-A verified join is kept as a JoinProof: the oracle sends it with every sighting report, and the presence_pay program
+A verified join is kept as a JoinProof: the oracle sends it with every sighting report, and the on_sight program
 checks it on chain, so no oracle can report a wallet that never signed up for the event.
 """
 

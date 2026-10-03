@@ -1,7 +1,7 @@
-// Reads an event's oracles straight from the presence_pay program on Solana, so the attendee's widget (not our API)
+// Reads an event's oracles straight from the on_sight program on Solana, so the attendee's widget (not our API)
 // decides which oracles receive the join. Plain JSON-RPC over fetch plus small decoders; the only dependency is bs58.
 //
-// Layouts mirror contracts/presence_pay/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
+// Layouts mirror contracts/on_sight/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
 //   Event:      organizer 32 | oracles 3×32 | oracle_count u8 | threshold u8 | event_id u64 | start i64 | end i64 |
 //               reward u64 | fee u64 | max_paid u32 | paid_count u32 | min_seen_secs u32 | bump u8 |
 //               name (u32 LE length + UTF-8, ≤ 64) | venue (u32 LE length + UTF-8, ≤ 64)
@@ -9,7 +9,7 @@
 import bs58 from 'bs58'
 
 export const DEFAULT_RPC_URL = 'https://api.devnet.solana.com'
-// TODO after the new deploy: the presence_pay program id that has the oracle registry. The id below is the OLD
+// TODO after the new deploy: the on_sight program id that has the oracle registry. The id below is the OLD
 // program (no OracleInfo accounts, different Event layout), so until then reads fail and the widget falls back to
 // single-oracle mode (api-base). Override per page with the `program-id` attribute.
 export const DEFAULT_PROGRAM_ID = '4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf'

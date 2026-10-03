@@ -1,4 +1,4 @@
-# presence_pay: Solana program
+# on_sight: Solana program
 
 Escrow for Attend Now. An organizer funds an event, sets its terms and chooses its oracles; the oracles (by default
 our backend) only **report sightings** ("I see wallet W now"); the **program decides** when a wallet is paid.
@@ -151,8 +151,8 @@ anchor-lang = { version = "0.31.2", features = ["init-if-needed"] }
 There is no config step: the fee is a constant in the program, and the program has no admin.
 
 Locally: `cargo build-sbf` in an Anchor project with this `lib.rs` (and a `declare_id!` matching the deploy keypair),
-then `cd backend && PRESENCE_SO=<path>/presence_pay.so uv run pytest tests/chain/test_program_litesvm.py` runs the
-program in LiteSVM with the chain clock warped (the program id is read from `presence_pay-keypair.json` next to the
+then `cd backend && PRESENCE_SO=<path>/on_sight.so uv run pytest tests/chain/test_program_litesvm.py` runs the
+program in LiteSVM with the chain clock warped (the program id is read from `on_sight-keypair.json` next to the
 .so, or from `PRESENCE_SO_PROGRAM_ID`).
 
 The test uses the Playground wallet as organizer and oracle, so the fee of its paying report comes back

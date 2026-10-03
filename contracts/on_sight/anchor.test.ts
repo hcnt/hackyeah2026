@@ -4,7 +4,7 @@
 // Oracle tylko zgłasza obecność (reportSighting); o wypłacie decyduje program.
 // Każde zgłoszenie poprzedza weryfikacja ed25519 podpisu uczestnika pod wiadomością dołączenia (joinProof).
 // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml projektu), patrz README.
-describe("presence_pay", () => {
+describe("on_sight", () => {
   const program = pg.program;
   const me = pg.wallet.publicKey;
   const sys = web3.SystemProgram.programId;

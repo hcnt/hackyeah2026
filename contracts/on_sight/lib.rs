@@ -28,7 +28,7 @@ const ED25519_HEADER: usize = 2;
 const ED25519_OFFSETS: usize = 14;
 
 #[program]
-pub mod presence_pay {
+pub mod on_sight {
     use super::*;
 
     /// Organizator tworzy event z warunkami i wpłaca cały budżet do konta eventu (vault).
