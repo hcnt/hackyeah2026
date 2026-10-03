@@ -36,7 +36,7 @@ A sponsor wants people in the room and is willing to pay for it, so the event an
 |---|---|
 | The organizer holds the reward budget. | The budget is **locked in the program's escrow** when the event is created. Nobody, us included, can take it while the event runs; what is not paid out goes back to the organizer after the end. |
 | Rules live in a promise ("first 100, arrive before 18:00"). | Rules are **frozen in the Event account**: reward, cap, time window, how long a person must be seen, which oracles count and how many must agree. |
-| Staff decide who came. | Independent **oracles report sightings**; the **program** checks them against the frozen rules on the chain's clock and pays. No instruction pays on request. |
+| Staff decide who came. | Independent **oracles report sightings**; the **program** checks them against the frozen rules on the chain's clock and pays. |
 | Payouts happen later, by hand, if at all. | The payout is **in the same transaction** as the report that satisfies the rules: seconds after the person is seen. |
 | Nobody can audit the list. | Every payout is a **public transaction**. A sponsor can count them on Solana Explorer. |
 | The organizer can add their own friends. | A report is only accepted with the **attendee's own wallet signature** over the join message for this event, checked on chain. An oracle cannot report someone who never signed up. |
@@ -67,8 +67,8 @@ report pays, which covers its transaction fees and deposits.
 - `report_sighting` (line 114): the oracle's report. Checks, in order: the signer is one of the event's
   oracles, the attendee's signed join (`check_join_proof`, line 224), the time window. Then it records the
   sighting, and pays only when enough different oracles reported (line 152) for long enough on the chain clock
-  (line 153), under the cap (line 160). The paid flag is set before any money moves (line 165), then reward goes
-  to the attendee and the fee to the reporting oracle (lines 170-171).
+  (line 153), under the cap (line 160). Then the reward goes to the attendee and the fee to the reporting oracle
+  (lines 170-171).
 - `create_event` (line 39): locks the whole budget in the Event account and freezes the rules.
 - `withdraw_remaining` (line 183): the organizer gets the rest back, only before the start or after the end.
 
@@ -130,13 +130,9 @@ If the oracles stop, nobody is paid and the organizer withdraws everything after
   M-of-N reduces this; it doesn't remove it.
 - **A faked camera feed** (a photo held up) isn't caught. Production needs certified liveness and several cameras.
 - **If the organizer loses their key**, the unspent budget stays locked forever.
-- **Fee to the last reporter.** With several oracles, the one whose report completes the payout earns the fee,
-  while the first reporter paid the Sighting deposit.
 - **Biometrics and GDPR.** The lawful setting is a pay lane or kiosk people step into after explicit, separate
-  consent, with a non-biometric alternative; scanning a whole room isn't. A join can't be withdrawn before the
-  event ends, and the selfie quality check reaches one oracle before the consent step.
+  consent, with a non-biometric alternative; scanning a whole room isn't.
 - **No organizer UI yet:** events are created with `scripts/devnet_event.py`.
-- **Rewards are in SOL**, not a stablecoin.
 
 ## With another week
 
