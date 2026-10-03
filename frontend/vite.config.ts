@@ -9,6 +9,16 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
+  build: {
+    // The stage screen and the event camera are separate pages next to the main app.
+    rolldownOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        stage: path.resolve(__dirname, 'stage.html'),
+        camera: path.resolve(__dirname, 'camera.html'),
+      },
+    },
+  },
   server: {
     // Dev only: forward API calls to the local backend (uv run fastapi dev).
     proxy: { '/api': process.env.API_PROXY ?? 'http://localhost:8000' },

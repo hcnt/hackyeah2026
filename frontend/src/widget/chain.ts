@@ -33,6 +33,19 @@ export interface EventOracles {
   oracles: OracleEntry[]
   /** Oracles listed on the event without a (valid) registry entry: the widget cannot reach them. */
   unregistered: string[]
+  /** Organizer, times and payout counters of the Event account (null if the account is too short to hold them). */
+  meta: EventMeta | null
+}
+
+export interface EventMeta {
+  organizer: string
+  /** Unix seconds (chain clock). */
+  start: number
+  end: number
+  rewardLamports: number
+  maxPaid: number
+  paidCount: number
+  minSeenSecs: number
 }
 
 export class ChainError extends Error {}
@@ -154,6 +167,26 @@ export function decodeEventOracles(data: Uint8Array, disc: Uint8Array): { oracle
   return { oracles, threshold }
 }
 
+// Event: … treasury 32 | event_id u64 | start i64 | end i64 | reward u64 | fee u64 | max_paid u32 | paid_count u32 |
+// min_seen_secs u32 | bump u8
+const EVENT_META_OFFSET = EVENT_COUNT_OFFSET + 2 + 32 + 8
+
+/** Organizer, times and counters of an Event account's data (already checked by decodeEventOracles). */
+export function decodeEventMeta(data: Uint8Array): EventMeta | null {
+  if (data.length < EVENT_META_OFFSET + 44) return null
+  const view = new DataView(data.buffer, data.byteOffset, data.length)
+  const at = EVENT_META_OFFSET
+  return {
+    organizer: bs58.encode(data.slice(8, 40)),
+    start: Number(view.getBigInt64(at, true)),
+    end: Number(view.getBigInt64(at + 8, true)),
+    rewardLamports: Number(view.getBigUint64(at + 16, true)),
+    maxPaid: view.getUint32(at + 32, true),
+    paidCount: view.getUint32(at + 36, true),
+    minSeenSecs: view.getUint32(at + 40, true),
+  }
+}
+
 function readString(data: Uint8Array, at: number, max: number): [string, number] | null {
   if (at + 4 > data.length) return null
   const len = new DataView(data.buffer, data.byteOffset + at, 4).getUint32(0, true)
@@ -187,7 +220,8 @@ export async function readEventOracles(rpcUrl: string, programId: string, eventI
 
   const [eventAcc] = await getMultipleAccounts(rpcUrl, [eventId])
   if (!eventAcc || eventAcc.owner !== programId) throw new ChainError('No such event on the chain.')
-  const event = decodeEventOracles(base64Bytes(eventAcc.data[0]), eventDisc)
+  const eventData = base64Bytes(eventAcc.data[0])
+  const event = decodeEventOracles(eventData, eventDisc)
   if (!event) throw new ChainError('No such event on the chain.')
 
   const addresses = await Promise.all(event.oracles.map((o) => oracleInfoAddress(o, programId)))
@@ -200,5 +234,5 @@ export async function readEventOracles(rpcUrl: string, programId: string, eventI
     if (info && info.key === key) oracles.push(info)
     else unregistered.push(key)
   })
-  return { threshold: event.threshold, oracles, unregistered }
+  return { threshold: event.threshold, oracles, unregistered, meta: decodeEventMeta(eventData) }
 }
