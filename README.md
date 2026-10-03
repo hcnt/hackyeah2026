@@ -119,8 +119,9 @@ Embedding the widget on any page:
 | Attendee | join (one signature), receive the reward | be paid twice |
 | Us | run one of the oracles | anything an oracle can't; there is no admin. Until the program is made final, its deployer can still upgrade it (see Limitations). |
 
-**If a party disappears halfway:** if the organizer vanishes, the budget stays in escrow and payouts keep working.
-If the oracles stop, nobody is paid and the organizer withdraws everything after the end.
+**If a party disappears halfway:** if the organizer vanishes, the budget stays in escrow and payouts keep working;
+after the end, only the organizer can take back what's left, so it stays in the escrow until they return. If the
+oracles stop, nobody is paid and the organizer withdraws everything after the end.
 
 ## Limitations (known, deliberate for the hackathon)
 
@@ -130,7 +131,6 @@ If the oracles stop, nobody is paid and the organizer withdraws everything after
   M-of-N reduces this; it doesn't remove it.
 - **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
   didn't come. Production needs liveness detection.
-- **If the organizer loses their key**, the unspent budget stays locked forever.
 - **Biometrics and GDPR.** The lawful setting is a pay lane or kiosk people step into after explicit, separate
   consent, with a non-biometric alternative; scanning a whole room isn't.
 - **No organizer UI yet:** events are created with `scripts/devnet_event.py`.
