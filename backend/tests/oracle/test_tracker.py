@@ -25,7 +25,7 @@ class Scenario:
         self.rt = self.state.runtime_for(info)
         self.a = unit(self.rng)  # enrolled
         self.b = unit(self.rng)  # NOT enrolled
-        self.state.guestlists.put("ev", info.end_ts, "A", self.a, "Ola")
+        self.state.guestlists.put("ev", info.end_ts, "A", self.a)
         self.n = 0
         self.outputs: list[list[dict]] = []
 
@@ -78,7 +78,7 @@ def test_walking_one_track_one_payment_b_never_paid():
         b = next(f for f in out if f["bbox"][0] == B_BOX[0])
         assert b["state"] == "unknown" and b["name"] is None and b["seen_secs"] == 0.0
     last_a = next(f for f in s.outputs[-1] if f["bbox"][0] != B_BOX[0])
-    assert last_a["state"] == "paid" and last_a["name"] == "Ola"
+    assert last_a["state"] == "paid" and last_a["name"] == "A"
     # cost control: once A is identified it is embedded at most once per second (every 2nd frame at DT=0.5),
     # while B (unknown) is embedded every frame -> some frames embed only one face.
     assert 1 in s.engine.embed_calls

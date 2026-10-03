@@ -22,7 +22,6 @@ EMBEDDING_DIM = 512
 class _Entry:
     nonce: bytes
     ciphertext: bytes
-    first_name: str
 
 
 @dataclass
@@ -63,7 +62,7 @@ class GuestLists:
 
     # writes
 
-    def put(self, event_id: str, end_ts: int, wallet: str, embedding: np.ndarray, first_name: str) -> None:
+    def put(self, event_id: str, end_ts: int, wallet: str, embedding: np.ndarray) -> None:
         if end_ts < self._wall_clock():
             raise ValueError("event has ended")
         ev = self._get(event_id)
@@ -73,7 +72,7 @@ class GuestLists:
         plaintext = np.asarray(embedding, np.float32).reshape(EMBEDDING_DIM).tobytes()
         nonce = os.urandom(12)
         ciphertext = AESGCM(ev.key).encrypt(nonce, plaintext, _aad(event_id, wallet))
-        ev.entries[wallet] = _Entry(nonce=nonce, ciphertext=ciphertext, first_name=first_name)
+        ev.entries[wallet] = _Entry(nonce=nonce, ciphertext=ciphertext)
 
     def remove(self, event_id: str, wallet: str) -> bool:
         ev = self._get(event_id)
@@ -97,11 +96,6 @@ class GuestLists:
     def has(self, event_id: str, wallet: str) -> bool:
         ev = self._get(event_id)
         return ev is not None and wallet in ev.entries
-
-    def first_name(self, event_id: str, wallet: str) -> str | None:
-        ev = self._get(event_id)
-        entry = ev.entries.get(wallet) if ev else None
-        return entry.first_name if entry else None
 
     def count(self, event_id: str) -> int:
         ev = self._get(event_id)

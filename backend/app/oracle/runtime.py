@@ -139,7 +139,7 @@ class EventRuntime:
                 {
                     "bbox": _round_box(t.bbox),
                     "state": state,
-                    "name": guests.first_name(self.event_id, wallet),
+                    "name": short_wallet(wallet),
                     "seen_secs": round(seen, 1),
                 }
             )
@@ -191,7 +191,7 @@ class EventRuntime:
     def _maybe_pay(self, wallet: str, now: float) -> None:
         if not self.ledger.try_begin(wallet, now):
             return
-        name = self.state.guestlists.first_name(self.event_id, wallet) or "Guest"
+        name = short_wallet(wallet)
         log.info("payout event_id=%s wallet=%s status=pending", self.event_id, wallet)
         task = asyncio.create_task(self._pay(wallet, name))
         self._tasks.add(task)
@@ -238,6 +238,11 @@ class EventRuntime:
         self.trackers.clear()
         for c in self.stage_clients:
             c.wake.set()
+
+
+def short_wallet(wallet: str) -> str:
+    """How a recognised attendee is labelled on the stage screen: 7xKX…9fQa."""
+    return f"{wallet[:4]}…{wallet[-4:]}" if len(wallet) > 10 else wallet
 
 
 def _round_box(b: list[float]) -> list[float]:

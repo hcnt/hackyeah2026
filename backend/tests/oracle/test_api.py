@@ -13,7 +13,7 @@ from app.config import Settings, get_settings
 from app.main import app
 from app.oracle import interfaces
 from app.oracle.interfaces import DevEventSource, DevPayoutSink
-from app.oracle.runtime import OracleState, set_state
+from app.oracle.runtime import OracleState, set_state, short_wallet
 from app.oracle.signatures import build_message
 
 BOX = [100.0, 100.0, 300.0, 340.0]
@@ -64,9 +64,9 @@ def photo_for(engine, rng, person, key, scene=None):
     return b64(engine.set(key.encode(), scene if scene is not None else [(BOX, 0.0, near(person, rng))]))
 
 
-def submit(client, kp, image, event_id="ev1", consent=CONSENT, accepted=True, first_name="Ola", **sig):
+def submit(client, kp, image, event_id="ev1", consent=CONSENT, accepted=True, **sig):
     body = signed(kp, "join", event_id, consent, **sig) | {
-        "consent": {"version": consent, "accepted": accepted}, "first_name": first_name, "image": image}
+        "consent": {"version": consent, "accepted": accepted}, "image": image}
     return client.post(f"/api/v1/events/{event_id}/attendance", json=body)
 
 
@@ -95,7 +95,7 @@ def test_submit_happy_path_status_and_leave(env):
 def test_malformed_body_400(env):
     client, _, _, _, _ = env
     kp = Keypair()
-    body = signed(kp, "join", "ev1", CONSENT) | {"consent": {"version": CONSENT, "accepted": True}, "first_name": "Ola"}
+    body = signed(kp, "join", "ev1", CONSENT) | {"consent": {"version": CONSENT, "accepted": True}}
     assert err(client.post("/api/v1/events/ev1/attendance", json=body)) == "invalid_request"  # no image
     r = client.post("/api/v1/events/ev1/attendance", content=b"{not json", headers={"content-type": "application/json"})
     assert r.status_code == 400 and err(r) == "invalid_request" and "message" in r.json()["error"]
@@ -250,7 +250,7 @@ def test_camera_ws_bad_frame_errors_and_stays_open_then_stage_gets_payout(env):
             if msg["type"] == "payout":
                 payout = msg
                 break
-        assert payout is not None and payout["wallet"] == str(kp.pubkey()) and payout["name"] == "Ola"
+        assert payout is not None and payout["wallet"] == str(kp.pubkey()) and payout["name"] == short_wallet(str(kp.pubkey()))
         assert payout["tx"].startswith("dev-") and payout["at"].endswith("Z")
     assert status(client, kp).json() == {"status": "paid", "tx": payout["tx"]}
 
