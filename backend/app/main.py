@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI
 
+from app import spike
 from app.config import Settings, get_settings
 from app.oracle.cors import OracleCORSMiddleware
 from app.oracle.routes import router as oracle_router
@@ -16,5 +17,8 @@ def health(settings: Annotated[Settings, Depends(get_settings)]) -> dict[str, st
     return {"status": "ok", "env": settings.env}
 
 
+# The spike page enrolls faces with no login: a local test tool, never mounted outside dev.
+if get_settings().env == "dev":
+    api.include_router(spike.router)
 api.include_router(oracle_router)
 app.include_router(api)

@@ -227,6 +227,12 @@ def test_cors_only_on_v1(env):
     assert "access-control-allow-origin" not in r.headers
 
 
+def test_spike_errors_keep_fastapi_shape(env):
+    client, _, _, _, _ = env
+    r = client.delete("/api/spike/people/nobody")
+    assert r.status_code == 404 and r.json() == {"detail": "No such person."}
+
+
 def test_camera_ws_bad_frame_errors_and_stays_open_then_stage_gets_payout(env):
     client, engine, rng, org, _ = env
     p = unit(rng)
