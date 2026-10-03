@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "preferences": {
+    "flow": {
+      "value": "companion",
+      "confirmed_in": [
+        "video"
+      ],
+      "updated_at": "2026-10-03T10:37:59.469Z"
+    },
+    "storyboard": {
+      "value": "yes",
+      "confirmed_in": [
+        "video"
+      ],
+      "updated_at": "2026-10-03T10:37:59.497Z"
+    }
+  },
+  "sightings": {}
+}

@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attend Now Pitch Storyboard</title>
+<style>
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-SemiBold.ttf"); font-weight: 600; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Geist Mono"; src: url("assets/fonts/geist-mono/GeistMono-Medium.ttf"); font-weight: 500; }
+
+  :root {
+    --canvas: #F3F2EE; --ink: #15161A; --muted: #6B6D74; --hair: #D9D7D0;
+    --accent: #2775CA; --accent-soft: #E3EDF8; --red: #C8402F; --card: #FFFFFF; --ok: #1F8A5B;
+    --sheet: #E8E6E0; --sheet-ink: #15161A; --sheet-muted: #5F6168;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --sheet: #1B1C20; --sheet-ink: #EDECE8; --sheet-muted: #9A9CA3; }
+  }
+  :root[data-theme="dark"] { --sheet: #1B1C20; --sheet-ink: #EDECE8; --sheet-muted: #9A9CA3; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--sheet); color: var(--sheet-ink); font-family: "Geist", system-ui, sans-serif; padding: 48px 40px 80px; }
+  header { max-width: 1680px; margin: 0 auto 36px; display: flex; justify-content: space-between; align-items: end; gap: 24px; flex-wrap: wrap; }
+  header h1 { font-weight: 800; font-size: 42px; letter-spacing: -0.035em; }
+  header h1 span { font-family: "Geist Mono"; font-weight: 500; font-size: 17px; letter-spacing: 0; vertical-align: middle; margin-left: 10px; padding: 4px 10px; border: 1.5px solid currentColor; border-radius: 999px; }
+  header p { color: var(--sheet-muted); font-size: 17px; margin-top: 8px; max-width: 780px; line-height: 1.45; }
+  .tag { font-family: "Geist Mono"; font-size: 14px; color: var(--sheet-muted); }
+  .act { max-width: 1680px; margin: 34px auto 14px; font-family: "Geist Mono"; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--sheet-muted); border-top: 1.5px solid currentColor; padding-top: 10px; }
+  .grid { max-width: 1680px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 34px 28px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 700px) { body { padding: 24px 16px 60px; } .grid { grid-template-columns: 1fr; } }
+
+  .cell .label { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-family: "Geist Mono"; font-size: 13px; }
+  .cell .label b { font-weight: 500; }
+  .cell .label i { font-style: normal; color: var(--sheet-muted); text-align: right; }
+  .cell .note { font-size: 14.5px; line-height: 1.45; color: var(--sheet-muted); margin-top: 6px; }
+  .cell .note b { color: var(--sheet-ink); font-weight: 600; }
+  .chip { display: inline-block; margin-top: 8px; font-family: "Geist Mono"; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1.5px solid var(--sheet-muted); color: var(--sheet-muted); }
+  .pick { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- 16:9 frame: 100cqw == 1920px ---------- */
+  .frame { aspect-ratio: 16 / 9; container-type: inline-size; background: var(--canvas); color: var(--ink); position: relative; overflow: hidden; border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 10px 30px rgba(0,0,0,.12); }
+  .frame > * { position: absolute; }
+  .disp { font-family: "Geist"; font-weight: 800; letter-spacing: -0.045em; line-height: .98; }
+  .acc { color: var(--accent); }
+  .mut { color: var(--muted); }
+  .meta { font-family: "Geist Mono"; font-size: 1.05cqw; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+  .optbadge { left: 6.25cqw; top: 4cqw; font-family: "Geist Mono"; font-size: 2.2cqw; line-height: 1; color: var(--accent); border: .15cqw solid var(--accent); border-radius: 999px; padding: .3cqw .9cqw; }
+
+  /* widget — internals in em, size set per context */
+  .widget { background: var(--card); border-radius: 1.1em; border: .09em solid var(--hair); box-shadow: 0 .6em 1.8em rgba(21,22,26,.10); padding: 1.2em 1.3em 1em; width: 21em; font-family: "Geist"; color: var(--ink); }
+  .widget .top { display: flex; justify-content: space-between; align-items: center; gap: .6em; }
+  .widget .ev { font-weight: 600; font-size: 1em; }
+  .widget .pill { font-family: "Geist Mono"; font-size: .62em; background: var(--accent-soft); color: var(--accent); padding: .35em .75em; border-radius: 999px; white-space: nowrap; }
+  .widget .rule { margin-top: .9em; font-size: .95em; color: var(--muted); }
+  .widget .amt { font-family: "Geist Mono"; font-weight: 500; font-size: 2.3em; color: var(--accent); letter-spacing: -0.03em; display: flex; align-items: center; gap: .25em; margin-top: .05em; }
+  .widget .usdc { width: .78em; height: .78em; border-radius: 50%; background: var(--accent); display: inline-grid; place-items: center; color: #fff; font-size: .42em; }
+  .widget .bar { margin-top: .8em; height: .32em; border-radius: 999px; background: var(--hair); overflow: hidden; }
+  .widget .bar i { display: block; width: 63%; height: 100%; background: var(--accent); }
+  .widget .left { font-family: "Geist Mono"; font-size: .6em; color: var(--muted); margin-top: .5em; }
+  .widget .btn { margin-top: 1em; background: var(--ink); color: #fff; border-radius: 999px; padding: .7em 1em; display: flex; align-items: center; justify-content: center; gap: .55em; font-weight: 500; font-size: .95em; }
+  .widget .btn .lg { width: 1.5em; height: 1.5em; border-radius: .35em; background: #fff; display: inline-grid; place-items: center; }
+  .widget .btn .lg img { width: 1.1em; height: 1.1em; object-fit: contain; }
+  .widget .foot { margin-top: .85em; text-align: center; font-size: .58em; color: var(--muted); }
+  .widget .steps { display: flex; gap: .5em; font-family: "Geist Mono"; font-size: .6em; color: var(--muted); }
+  .widget .steps span { flex: 1; border-top: .35em solid var(--hair); padding-top: .5em; }
+  .widget .steps span.on { border-color: var(--accent); color: var(--ink); }
+  .widget .steps span.done { border-color: var(--ok); color: var(--ok); }
+
+  /* browser + codex */
+  .browser { background: #FBFAF8; border: .16cqw solid var(--hair); border-radius: 1.2cqw; overflow: hidden; box-shadow: 0 1.2cqw 3cqw rgba(21,22,26,.10); }
+  .chrome { height: 2.6cqw; border-bottom: .12cqw solid var(--hair); display: flex; align-items: center; gap: .55cqw; padding: 0 1.1cqw; background: #F0EEEA; }
+  .dot { width: .7cqw; height: .7cqw; border-radius: 50%; background: var(--hair); }
+  .url { margin-left: 1.2cqw; flex: 1; max-width: 22cqw; height: 1.55cqw; border-radius: 999px; background: #fff; border: .1cqw solid var(--hair); font-family: "Geist Mono"; font-size: .85cqw; color: var(--muted); display: flex; align-items: center; padding-left: .9cqw; }
+  .blk { background: #E7E5E0; border-radius: .4cqw; }
+  .codex { background: #FFFFFF; border: .2cqw dashed #B9B6AE; border-radius: 1.2cqw; overflow: hidden; }
+  .codex .ph { position: absolute; top: .9cqw; right: 1.2cqw; font-family: "Geist Mono"; font-size: .8cqw; color: #A04B00; background: #FFF1E3; padding: .25cqw .6cqw; border-radius: 999px; }
+  .codex .side { position: absolute; left: 0; top: 0; bottom: 0; width: 13cqw; background: #F6F5F2; border-right: .1cqw solid var(--hair); padding: 2.2cqw 1.2cqw; }
+  .codex .side .blk { height: .9cqw; margin-bottom: .9cqw; }
+  .codex .main { position: absolute; left: 13cqw; right: 0; top: 0; bottom: 0; padding: 2.4cqw 3cqw; font-family: "Geist"; }
+  .bubble-u { margin-left: auto; width: max-content; max-width: 70%; background: #F0EEEA; border-radius: 1.2cqw; padding: .9cqw 1.3cqw; font-size: 1.45cqw; }
+  .ans { margin-top: 1.4cqw; font-size: 1.35cqw; line-height: 1.45; }
+  .ans b { font-weight: 600; }
+
+  /* pain stickers */
+  .sticker { font-family: "Geist"; font-weight: 700; font-size: 2.3cqw; color: var(--red); border: .25cqw solid var(--red); background: #FBEDEA; border-radius: 1cqw; padding: .7cqw 1.4cqw; white-space: nowrap; }
+
+  /* chain */
+  .chain { display: flex; align-items: center; }
+  .block { width: 9cqw; height: 9cqw; border-radius: 1.6cqw; background: var(--card); border: .22cqw solid var(--ink); display: grid; place-items: center; font-family: "Geist Mono"; font-size: 1cqw; color: var(--muted); }
+  .wb { flex: 1; }
+  .link { width: 2.6cqw; height: .25cqw; background: var(--ink); }
+
+  /* cursor */
+  .cursor { width: 3.2cqw; height: 3.2cqw; }
+
+  /* closing cells */
+  .seammap { left: 4cqw; right: 4cqw; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: .8cqw; font-family: "Geist Mono"; font-size: 1.7cqw; flex-wrap: wrap; row-gap: 2.2cqw; }
+  .seammap .n { background: var(--ink); color: var(--canvas); padding: .45cqw .85cqw; border-radius: .5cqw; }
+  .seammap .s { color: var(--accent); }
+  .tokens { inset: 3.5cqw 4cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 2cqw; font-family: "Geist"; font-size: 1.15cqw; }
+  .sw { display: flex; align-items: center; gap: .8cqw; margin-bottom: .9cqw; font-family: "Geist Mono"; font-size: 1cqw; }
+  .sw i { width: 2.4cqw; height: 2.4cqw; border-radius: .5cqw; border: .1cqw solid rgba(0,0,0,.12); }
+  .logos { display: flex; gap: 1.2cqw; margin-top: 1.6cqw; }
+  .logos img { width: 3cqw; height: 3cqw; object-fit: contain; background: #fff; border-radius: .6cqw; padding: .35cqw; border: .1cqw solid var(--hair); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Attend Now · pitch storyboard <span>v5</span></h1>
+    <p>Rewards that get people to your event, without the swag logistics. You choose the prize; blockchain executes it. Sketches only: layout, copy and type are locked here, motion comes in the build.</p>
+  </div>
+  <div class="tag">1920×1080 · ~36.5s of 45s · 8 frames · Geist everywhere · on-screen text + music</div>
+</header>
+
+<div class="act">Act I — rewards work, physical rewards hurt</div>
+<div class="grid">
+  <div class="cell">
+    <div class="frame" id="frame-01">
+      <div class="disp" style="left:6.25cqw;top:12cqw;font-size:8.6cqw">Want people<br>at your event?</div>
+      <div class="disp" style="left:6.25cqw;bottom:6.5cqw;font-size:4.6cqw;font-weight:700;letter-spacing:-0.035em">Give them a <span class="acc">reason to show up.</span></div>
+    </div>
+    <div class="label"><b>01 · HOOK</b><i>kinetic-type-beats · 0.0–3.0s</i></div>
+    <p class="note"><b>The question lands,</b> then the answer cuts in under it. The "reason" is what the next frame cycles through.</p>
+    <span class="chip">→ hard cut</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame" id="frame-02">
+      <div class="meta" style="left:6.25cqw;top:5cqw">Rewards today</div>
+      <div style="left:6.25cqw;top:50%;transform:translateY(-50%);font-family:'Geist';font-weight:500;font-size:6.4cqw;letter-spacing:-0.035em;line-height:1;white-space:nowrap">
+        First <span style="position:relative;display:inline-block"><span style="position:absolute;left:0;bottom:115%;font-family:'Geist Mono';color:var(--accent);opacity:.18;font-size:.7em">1000</span><span style="font-family:'Geist Mono';color:var(--accent)">100</span><span style="position:absolute;left:0;top:115%;font-family:'Geist Mono';color:var(--accent);opacity:.18;font-size:.7em">200</span></span> users get <span style="position:relative;display:inline-block;font-weight:700"><span style="position:absolute;left:0;bottom:115%;opacity:.18;font-size:.7em;white-space:nowrap">a gift bag</span>a coffee.<span style="position:absolute;left:0;top:115%;opacity:.18;font-size:.7em;white-space:nowrap">a gift</span></span>
+      </div>
+      <svg style="right:6.25cqw;bottom:6cqw;width:7cqw;height:7cqw" viewBox="0 0 48 48" fill="none" stroke="#15161A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 18h26v12a10 10 0 0 1-10 10h-6A10 10 0 0 1 8 30z"/><path d="M34 22h3a5 5 0 0 1 0 10h-3"/><path d="M16 6c0 3 3 3 3 6M24 6c0 3 3 3 3 6"/></svg>
+      <div class="meta" style="right:6.25cqw;top:5cqw">1 / 4</div>
+    </div>
+    <div class="label"><b>02 · REWARDS</b><i>fixed-anchor-cycle · 3.0–9.5s</i></div>
+    <p class="note"><b>"First" and "users get" never move.</b> The number rolls and the prize hard-cuts: 100·coffee → 200·gift → 500·T-shirt → 1000·gift bag. It holds on the last one.</p>
+    <span class="chip">→ becomes 03's center</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame" id="frame-03">
+      <div class="disp" style="left:6.25cqw;top:50%;transform:translateY(-50%);font-size:6cqw;white-space:nowrap">1000 gift bags.</div>
+      <div style="left:52cqw;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1.1cqw;font-family:'Geist';font-weight:700;font-size:3.6cqw;letter-spacing:-0.035em;line-height:1.05;color:var(--red)">
+        <span style="opacity:.35">Costs money upfront.</span>
+        <span style="opacity:.5">Hard to distribute.</span>
+        <span style="opacity:.7">Lots of manual work.</span>
+        <span style="opacity:.85">Hard to set up.</span>
+        <span>Impossible to track.</span>
+      </div>
+      <div style="left:49.5cqw;top:22cqw;bottom:22cqw;width:.25cqw;background:var(--red);opacity:.5"></div>
+    </div>
+    <div class="label"><b>03 · WHY IT HURTS</b><i>stacked list · 9.5–14.0s</i></div>
+    <p class="note"><b>"1000 users get a gift bag." shrinks to "1000 gift bags." and slides left.</b> To the right of the period, the red cons stack one on top of another, about 0.6s each. In the sketch the faded lines are the earlier ones; in the build each new one pushes the stack up.</p>
+    <span class="chip">→ swept off left</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame" id="frame-04">
+      <div class="disp" style="left:6.25cqw;top:7cqw;font-size:7.6cqw"><span class="acc">You</span> choose the prize.</div>
+      <div class="disp" style="left:6.25cqw;top:16.5cqw;font-size:7.6cqw">Blockchain executes it.</div>
+      <div class="chain" style="left:6.25cqw;right:6.25cqw;bottom:6.5cqw"><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw">you</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw">choose</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw">the</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw">prize</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw;border-color:var(--accent);color:var(--accent);background:var(--accent-soft)">blockchain</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw;border-color:var(--accent);color:var(--accent);background:var(--accent-soft)">executes</div></div><div class="link" style="width:1.4cqw"></div><div class="wb"><div class="block" style="width:100%;height:5.6cqw;border-radius:1cqw;font-size:1.5cqw;border-color:var(--accent);color:var(--accent);background:var(--accent-soft)">it</div></div></div>
+    </div>
+    <div class="label"><b>04 · THE TURN</b><i>kinetic-type-beats · 14.0–17.5s</i></div>
+    <p class="note"><b>Word by word, fast:</b> each word appears and its block snaps in underneath and links to the one before. The blocks for "blockchain executes it" light up in the accent. Held about 1s at the end.</p>
+    <span class="chip">→ shoved off left</span>
+  </div>
+</div>
+
+<div class="act">Act II — embedded where you need it</div>
+<div class="grid">
+  <div class="cell">
+    <div class="frame" id="frame-05">
+      <div class="disp mut" style="left:-26cqw;top:50%;transform:translateY(-50%);font-size:8.4cqw;opacity:.25;white-space:nowrap">executes it.</div>
+      <div class="disp" style="left:30cqw;top:50%;transform:translateY(-50%);font-size:8cqw;width:64cqw">It's embedded where you <span class="acc">need&nbsp;it.</span></div>
+    </div>
+    <div class="label"><b>05a · HEADLINE</b><i>ticker-takeover · 17.5–19.0s</i></div>
+    <p class="note"><b>Crashes in from the right</b> and shoves frame 04 off left.</p>
+    <span class="chip">→ shrinks to pinned label</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div class="disp" style="left:4.2cqw;top:3.6cqw;font-size:2.4cqw;font-weight:700;letter-spacing:-0.03em">It's embedded where you need it.</div>
+      <div class="meta" style="left:4.2cqw;top:7.2cqw">01 · Your website</div>
+      <div class="browser" style="left:20cqw;right:6cqw;top:11cqw;bottom:5cqw">
+        <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">ethkrakow.events</span></div>
+        <div style="position:absolute;left:3cqw;top:5.6cqw;width:36cqw">
+          <div style="font-weight:700;font-size:3cqw;letter-spacing:-0.03em">ETH Kraków Meetup</div>
+          <div style="font-size:1.25cqw;color:var(--muted);margin-top:.6cqw">Sat, 18:00 · Kraków Tech Hub</div>
+          <div class="blk" style="height:13cqw;margin-top:2cqw"></div>
+          <div class="blk" style="height:1cqw;margin-top:1.4cqw;width:90%"></div>
+          <div class="blk" style="height:1cqw;margin-top:.8cqw;width:70%"></div>
+        </div>
+        <div style="position:absolute;right:2.4cqw;top:4.4cqw"><div class="widget" style="font-size:1.05cqw">
+          <div class="top"><span class="ev">ETH Kraków Meetup</span><span class="pill">Attendance bonus</span></div>
+          <div class="rule">First 200 attendees earn</div>
+          <div class="amt"><span class="usdc">$</span>10 USDC</div>
+          <div class="bar"><i></i></div><div class="left">74 / 200 spots left to claim</div>
+          <div class="btn">Sign up with <span class="lg"><img src=".media/images/logo_001.svg" alt=""></span></div>
+          <div class="foot">Powered by Attend Now</div>
+        </div></div>
+        <div style="position:absolute;right:2.4cqw;bottom:1.4cqw;font-family:'Geist Mono';font-size:.9cqw;background:var(--ink);color:#fff;padding:.4cqw .8cqw;border-radius:.4cqw">&lt;script src="attend.now/w.js"&gt;</div>
+      </div>
+    </div>
+    <div class="label"><b>05b · WEBSITE</b><i>device-surface-showcase · 19.0–21.5s</i></div>
+    <p class="note"><b>The browser enters from the right;</b> the host page stays grey, and the script chip types in last.</p>
+    <span class="chip">→ cut, enters right</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div class="disp" style="left:4.2cqw;top:3.6cqw;font-size:2.4cqw;font-weight:700;letter-spacing:-0.03em">It's embedded where you need it.</div>
+      <div class="meta" style="left:4.2cqw;top:7.2cqw">02 · Inside the chat</div>
+      <div class="codex" style="left:20cqw;right:6cqw;top:11cqw;bottom:5cqw">
+        <span class="ph">placeholder · rebuild 1:1 from Codex screenshot</span>
+        <div class="side"><div class="blk" style="width:70%"></div><div class="blk"></div><div class="blk" style="width:80%"></div><div class="blk" style="width:60%"></div></div>
+        <div class="main">
+          <div class="bubble-u">Any crypto events in Kraków this weekend?</div>
+          <div class="ans">Found one: <b>ETH Kraków Meetup</b> · Sat 18:00 · Kraków Tech Hub</div>
+          <div class="widget" style="font-size:.95cqw;margin-top:1cqw">
+            <div class="top"><span class="ev">ETH Kraków Meetup</span><span class="pill">Attendance bonus</span></div>
+            <div class="rule">First 200 attendees earn</div>
+            <div class="amt"><span class="usdc">$</span>10 USDC</div>
+            <div class="bar"><i></i></div><div class="left">74 / 200 spots left to claim</div>
+            <div class="btn">Sign up with <span class="lg"><img src=".media/images/logo_001.svg" alt=""></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="label"><b>05c · CHAT</b><i>21.5–24.0s</i></div>
+    <p class="note"><b>The question types in, the reply streams,</b> and the widget renders inline as a bonus they discover.</p>
+    <span class="chip">→ push into widget</span>
+  </div>
+</div>
+
+<div class="act">Act III — one tap, two steps, on-chain</div>
+<div class="grid">
+  <div class="cell">
+    <div class="frame" id="frame-06">
+      <div style="left:50%;top:50%;transform:translate(-50%,-50%)"><div class="widget" style="font-size:2.2cqw">
+        <div class="top"><span class="ev">ETH Kraków Meetup</span><span class="pill">Attendance bonus</span></div>
+        <div class="rule">First 200 attendees earn</div>
+        <div class="amt"><span class="usdc">$</span>10 USDC</div>
+        <div class="bar"><i></i></div><div class="left">74 / 200 spots left to claim</div>
+        <div class="btn" style="transform:scale(.97)">Sign up with <span class="lg"><img src=".media/images/logo_002.ico" alt=""></span></div>
+        <div class="foot">Powered by Attend Now</div>
+      </div></div>
+      <svg class="cursor" style="left:56cqw;top:42.5cqw" viewBox="0 0 24 24"><path d="M4 2l15 9-6.5 1.6L9.6 19z" fill="#15161A" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <div style="right:5cqw;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:1.1cqw;opacity:.9">
+        <img src=".media/images/logo_001.svg" style="width:3.4cqw;height:3.4cqw;object-fit:contain;opacity:.35" alt="">
+        <img src=".media/images/logo_002.ico" style="width:3.4cqw;height:3.4cqw;object-fit:contain" alt="">
+        <img src=".media/images/logo_003.svg" style="width:3.4cqw;height:3.4cqw;object-fit:contain;opacity:.35" alt="">
+        <img src=".media/images/logo_004.svg" style="width:3.4cqw;height:3.4cqw;object-fit:contain;opacity:.35" alt="">
+        <img src=".media/images/logo_005.svg" style="width:3.4cqw;height:3.4cqw;object-fit:contain;opacity:.35" alt="">
+      </div>
+    </div>
+    <div class="label"><b>06 · SIGN UP</b><i>cursor-ui-demo · 24.0–27.5s</i></div>
+    <p class="note"><b>The logo slot cycles about every 0.5s</b> (order at right, logos only, no wallet names). The cursor glides in, the cycle stops, and the press squashes the button.</p>
+    <span class="chip">→ card slides to step 1</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame" id="frame-07">
+      <div style="left:50%;top:50%;transform:translate(-50%,-50%)"><div class="widget" style="font-size:2.2cqw">
+        <div class="steps"><span class="on">1 · Wallet</span><span>2 · Selfie</span></div>
+        <div style="margin-top:1.1em;display:flex;align-items:center;gap:.6em"><span style="width:1.9em;height:1.9em;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-weight:700">✓</span><span style="font-weight:600;font-size:1.25em">Wallet connected</span></div>
+        <div style="margin-top:.9em;display:flex;align-items:center;gap:.6em;background:#F5F4F0;border-radius:.6em;padding:.6em .8em"><img src=".media/images/logo_002.ico" style="width:1.3em;height:1.3em" alt=""><span style="font-family:'Geist Mono';font-size:.85em">0x7a3F…21cE</span></div>
+        <div class="rule" style="margin-top:.9em">Signed. Thanks for proving it's you.</div>
+        <div class="btn">Continue</div>
+      </div></div>
+    </div>
+    <div class="label"><b>07a · STEP 1 — WALLET</b><i>27.5–30.0s</i></div>
+    <p class="note"><b>The check pops first,</b> then the address types in and the stepper fills its first bar.</p>
+    <span class="chip">→ slide left to step 2</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div style="left:50%;top:50%;transform:translate(-50%,-50%)"><div class="widget" style="font-size:1.85cqw">
+        <div class="steps"><span class="done">1 · Wallet ✓</span><span class="on">2 · Selfie</span></div>
+        <div style="margin:1em auto 0;width:7.4em;height:7.4em;border-radius:50%;border:.16em dashed var(--accent);display:grid;place-items:center;background:#F5F4F0">
+          <svg viewBox="0 0 64 64" style="width:4.6em;height:4.6em" fill="#C9C7C0"><circle cx="32" cy="24" r="12"/><path d="M10 60c2-13 11-20 22-20s20 7 22 20z"/></svg>
+        </div>
+        <div class="rule" style="text-align:center;margin-top:.8em">Take a quick selfie so the event camera can check you in.</div>
+        <div style="margin:.8em auto 0;width:2.6em;height:2.6em;border-radius:50%;border:.18em solid var(--ink);display:grid;place-items:center"><span style="width:1.9em;height:1.9em;border-radius:50%;background:var(--ink)"></span></div>
+      </div></div>
+      <svg class="cursor" style="left:51.5cqw;top:45cqw" viewBox="0 0 24 24"><path d="M4 2l15 9-6.5 1.6L9.6 19z" fill="#15161A" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </div>
+    <div class="label"><b>07b · STEP 2 — SELFIE</b><i>30.0–32.5s</i></div>
+    <p class="note"><b>The scan ring spins dashed,</b> the cursor presses the shutter, and the ring completes solid. Silhouette only, no real face.</p>
+    <span class="chip">→ flips to success</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame" id="frame-08">
+      <div style="left:50%;top:50%;transform:translate(-50%,-50%)"><div class="widget" style="font-size:2.2cqw;text-align:center">
+        <div class="steps"><span class="done">1 · Wallet ✓</span><span class="done">2 · Selfie ✓</span></div>
+        <div style="margin:1.1em auto 0;width:3.4em;height:3.4em;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:1.3em;font-weight:700">✓</div>
+        <div style="font-weight:800;font-size:2em;letter-spacing:-0.04em;margin-top:.5em">You're in.</div>
+        <div class="rule" style="margin-top:.4em"><span style="font-family:'Geist Mono';color:var(--accent)">10 USDC</span> unlocks when you show up.</div>
+        <div class="foot">Powered by Attend Now</div>
+      </div></div>
+    </div>
+    <div class="label"><b>08a · SUCCESS</b><i>32.5–34.0s</i></div>
+    <p class="note"><b>Both steps turn green</b> and the check pops. A short hold to read the line.</p>
+    <span class="chip">→ shrinks and flies right</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div class="chain" style="left:8cqw;top:50%;transform:translateY(-50%)">
+        <div class="block">#0039</div><div class="link"></div><div class="block">#0040</div><div class="link"></div><div class="block">#0041</div><div class="link"></div>
+        <div class="block" style="border-color:var(--accent);background:var(--accent-soft);color:var(--accent);box-shadow:0 0 0 1.2cqw rgba(39,117,202,.12)">#0042</div>
+      </div>
+      <div style="left:62cqw;top:27cqw;width:7cqw;height:4.4cqw;border-radius:1cqw;background:var(--card);border:.15cqw solid var(--hair);box-shadow:0 .6cqw 1.6cqw rgba(21,22,26,.12);display:grid;place-items:center;font-size:.9cqw;font-weight:600;transform:rotate(-8deg)">You're in ✓</div>
+      <svg style="left:68cqw;top:22cqw;width:20cqw;height:12cqw" viewBox="0 0 200 120" fill="none" stroke="#2775CA" stroke-width="2.5" stroke-dasharray="6 7" stroke-linecap="round"><path d="M10 40 C 80 0, 160 20, 190 110"/></svg>
+      <div class="meta" style="left:8cqw;bottom:8cqw;color:var(--accent)">Rule #0042 · on-chain</div>
+    </div>
+    <div class="label"><b>08b · INTO THE CHAIN</b><i>logo-assemble-lockup · 34.0–36.5s</i></div>
+    <p class="note"><b>The card shrinks to a tile and arcs into the newest block,</b> which swallows it and pulses accent. The dashed arc marks the flight path; the arc's direction gets fixed in the build to keep everything moving left.</p>
+    <span class="chip">→ hold · end of round</span>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div class="meta" style="left:4cqw;top:4cqw">Seam map</div>
+      <div class="seammap">
+        <span class="n">01</span><span class="s">cut</span><span class="n">02</span><span class="s">hold</span><span class="n">03</span><span class="s">sweep ←</span><span class="n">04</span><span class="s">shove ←</span><span class="n">05</span><span class="s">push in</span><span class="n">06</span><span class="s">slide ←</span><span class="n">07</span><span class="s">flip</span><span class="n">08</span>
+      </div>
+    </div>
+    <div class="label"><b>SEAMS</b><i>all handoffs</i></div>
+    <p class="note"><b>One direction for the film:</b> new content comes in from the right and old content leaves to the left. From 05 to 08 it's one continuous object: the widget.</p>
+  </div>
+
+  <div class="cell">
+    <div class="frame">
+      <div class="tokens">
+        <div>
+          <div class="meta" style="position:static;margin-bottom:1.4cqw">Palette</div>
+          <div class="sw"><i style="background:#F3F2EE"></i>#F3F2EE canvas</div>
+          <div class="sw"><i style="background:#15161A"></i>#15161A ink</div>
+          <div class="sw"><i style="background:#6B6D74"></i>#6B6D74 muted</div>
+          <div class="sw"><i style="background:#2775CA"></i>#2775CA accent · USDC</div>
+          <div class="sw"><i style="background:#C8402F"></i>#C8402F problem (03 only)</div>
+        </div>
+        <div>
+          <div class="meta" style="position:static;margin-bottom:1.4cqw">Type · Geist only</div>
+          <div class="disp" style="position:static;font-size:3.2cqw">Geist 800</div>
+          <div style="font-weight:500;font-size:2.2cqw;margin-top:.6cqw">Geist 400–600</div>
+          <div style="font-family:'Geist Mono';font-size:1.9cqw;margin-top:.6cqw;color:var(--accent)">Geist Mono 10 USDC</div>
+          <div class="logos"><img src=".media/images/logo_001.svg" alt=""><img src=".media/images/logo_002.ico" alt=""><img src=".media/images/logo_003.svg" alt=""><img src=".media/images/logo_004.svg" alt=""><img src=".media/images/logo_005.svg" alt=""></div>
+        </div>
+      </div>
+    </div>
+    <div class="label"><b>TOKENS</b><i>provisional brand · wallet marks</i></div>
+    <p class="note"><b>One accent, used for the reward and the chain.</b> Red appears only on the pain frame.</p>
+  </div>
+</div>
+
+</body>
+</html>

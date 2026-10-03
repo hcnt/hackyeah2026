@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Geist Mono"; src: url("assets/fonts/geist-mono/GeistMono-Medium.ttf"); font-weight: 500; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Geist", sans-serif; overflow: hidden; }
+  #s03-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(21,22,26,.06) 2px, transparent 2px), linear-gradient(90deg, rgba(21,22,26,.06) 2px, transparent 2px); background-size: 120px 120px; background-position: -60px -30px; }
+  #s03-redwash { position: absolute; right: -300px; top: 0; bottom: 0; width: 1100px; background: radial-gradient(ellipse at 70% 50%, rgba(200,64,47,.14) 0%, rgba(200,64,47,0) 65%); }
+  #s03-old { position: absolute; left: 120px; right: 120px; top: 0; bottom: 0; display: flex; align-items: center; white-space: nowrap; font-weight: 500; font-size: 96px; letter-spacing: -0.035em; line-height: 1; }
+  #s03-old .num { font-family: "Geist Mono"; letter-spacing: -0.04em; color: #2775CA; margin: 0 0.22em; width: 2.38em; display: inline-block; }
+  #s03-old .prize { font-weight: 700; margin-left: 0.25em; }
+  #s03-sweep { position: absolute; inset: 0; }
+  #s03-title { position: absolute; left: 120px; top: 0; bottom: 0; display: flex; align-items: center; font-weight: 800; font-size: 116px; letter-spacing: -0.05em; white-space: nowrap; }
+  #s03-title .num { font-family: "Geist Mono"; font-weight: 500; letter-spacing: -0.05em; }
+  #s03-rule { position: absolute; left: 1170px; top: 300px; width: 5px; height: 480px; background: #C8402F; transform-origin: center top; }
+  #s03-stack { position: absolute; left: 1230px; right: 60px; top: 500px; height: 80px; }
+  #s03-stack .con { position: absolute; left: 0; height: 80px; line-height: 80px; font-weight: 700; font-size: 54px; letter-spacing: -0.035em; color: #C8402F; white-space: nowrap; }
+</style>
+<div id="root" data-composition-id="s03-pain" data-width="1920" data-height="1080">
+  <div id="s03-grid"></div>
+  <div id="s03-old">
+    <span>First</span><span class="num">1000</span><span>users get</span><span class="prize">a gift bag.</span>
+  </div>
+  <div id="s03-sweep">
+    <div id="s03-redwash"></div>
+    <div id="s03-title"><span class="num">1000</span>&nbsp;gift bags.</div>
+    <div id="s03-rule"></div>
+    <div id="s03-stack">
+      <div class="con" id="s03-c1" style="top:0px">Costs money upfront.</div>
+      <div class="con" id="s03-c2" style="top:92px">Hard to distribute.</div>
+      <div class="con" id="s03-c3" style="top:184px">Lots of manual work.</div>
+      <div class="con" id="s03-c4" style="top:276px">Hard to set up.</div>
+      <div class="con" id="s03-c5" style="top:368px">Impossible to track.</div>
+    </div>
+  </div>
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  // morph: old line dissolves, the shrunk title takes the left half
+  tl.fromTo("#s03-old", { opacity: 1, filter: "blur(0px)", y: 0 }, { opacity: 0, filter: "blur(8px)", y: -16, duration: 0.35, ease: "power2.in" }, 0.15);
+  tl.fromTo("#s03-title", { opacity: 0, x: 380, scale: 0.82 }, { opacity: 1, x: 0, scale: 1, duration: 0.6, ease: "power4.out" }, 0.3);
+  tl.fromTo("#s03-redwash", { opacity: 0 }, { opacity: 1, duration: 2.5, ease: "sine.out" }, 0.9);
+  tl.fromTo("#s03-rule", { scaleY: 0 }, { scaleY: 1, duration: 0.45, ease: "expo.out" }, 0.85);
+  // cons stack one on top of another; the stack recentres as it grows
+  const T = [1.1, 1.7, 2.3, 2.9, 3.5];
+  T.forEach((t, i) => {
+    tl.fromTo(`#s03-c${i + 1}`, { opacity: 0, x: 60, scale: 1.08 }, { opacity: 1, x: 0, scale: 1, duration: 0.32, ease: "back.out(1.8)" }, t);
+    if (i > 0) tl.to("#s03-stack", { y: -46 * i, duration: 0.32, ease: "power3.out" }, t);
+  });
+  tl.fromTo("#s03-title", { color: "#15161A" }, { color: "#6B6D74", duration: 2.4, ease: "none", immediateRender: false }, 1.1);
+  // swept off left
+  tl.to("#s03-sweep", { x: -620, opacity: 0, duration: 0.35, ease: "power3.in" }, 4.15);
+  window.__timelines["s03-pain"] = tl;
+</script>
+</template>
+</body>
+</html>

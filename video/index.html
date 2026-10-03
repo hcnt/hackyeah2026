@@ -1,55 +1,49 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=1920, height=1080" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      html,
-      body {
-        margin: 0;
-        width: 1920px;
-        height: 1080px;
-        overflow: hidden;
-        background: #0a0a0a;
-      }
-      #root {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-      }
-      #title {
-        color: #f4f4f5;
-        font-size: 72px;
-        font-weight: 600;
-        letter-spacing: -0.03em;
-      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #F3F2EE; }
+      #root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #F3F2EE; }
+      #root > div[data-composition-src] { position: absolute; inset: 0; }
     </style>
   </head>
   <body>
-    <div
-      id="root"
-      data-composition-id="main"
-      data-start="0"
-      data-duration="10"
-      data-width="1920"
-      data-height="1080"
-    >
-      <h1 id="title" class="clip" data-start="0" data-duration="10" data-track-index="0">Title</h1>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="37" data-width="1920" data-height="1080">
+      <!-- Scenes (track 1) -->
+      <div id="s01-hook" data-composition-id="s01-hook" data-composition-src="compositions/frames/01-hook.html" data-start="0" data-duration="3" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s02-rewards" data-composition-id="s02-rewards" data-composition-src="compositions/frames/02-rewards.html" data-start="3" data-duration="6.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s03-pain" data-composition-id="s03-pain" data-composition-src="compositions/frames/03-pain.html" data-start="9.5" data-duration="4.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s04-choose" data-composition-id="s04-choose" data-composition-src="compositions/frames/04-choose.html" data-start="14" data-duration="3.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s05-embed" data-composition-id="s05-embed" data-composition-src="compositions/frames/05-embed.html" data-start="17.5" data-duration="6.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s06-signup" data-composition-id="s06-signup" data-composition-src="compositions/frames/06-signup.html" data-start="24" data-duration="3.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s07-wizard" data-composition-id="s07-wizard" data-composition-src="compositions/frames/07-wizard.html" data-start="27.5" data-duration="5" data-track-index="1" data-width="1920" data-height="1080"></div>
+      <div id="s08-chain" data-composition-id="s08-chain" data-composition-src="compositions/frames/08-chain.html" data-start="32.5" data-duration="4.5" data-track-index="1" data-width="1920" data-height="1080"></div>
+
+      <!-- SFX (track 11) -->
+      <audio id="sfx-tick-1" src=".media/audio/sfx/sfx_001.mp3" data-start="4.5" data-duration="0.4" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="sfx-tick-2" src=".media/audio/sfx/sfx_001.mp3" data-start="6" data-duration="0.4" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="sfx-tick-3" src=".media/audio/sfx/sfx_001.mp3" data-start="7.5" data-duration="0.4" data-track-index="11" data-volume="0.5"></audio>
+      <audio id="sfx-con-1" src=".media/audio/sfx/sfx_001.mp3" data-start="10.6" data-duration="0.4" data-track-index="12" data-volume="0.35"></audio>
+      <audio id="sfx-con-2" src=".media/audio/sfx/sfx_001.mp3" data-start="11.2" data-duration="0.4" data-track-index="12" data-volume="0.35"></audio>
+      <audio id="sfx-con-3" src=".media/audio/sfx/sfx_001.mp3" data-start="11.8" data-duration="0.4" data-track-index="12" data-volume="0.35"></audio>
+      <audio id="sfx-con-4" src=".media/audio/sfx/sfx_001.mp3" data-start="12.4" data-duration="0.4" data-track-index="12" data-volume="0.35"></audio>
+      <audio id="sfx-con-5" src=".media/audio/sfx/sfx_001.mp3" data-start="13" data-duration="0.4" data-track-index="12" data-volume="0.35"></audio>
+      <audio id="sfx-whoosh-1" src=".media/audio/sfx/sfx_002.mp3" data-start="17.5" data-duration="0.6" data-track-index="13" data-volume="0.55"></audio>
+      <audio id="sfx-whoosh-2" src=".media/audio/sfx/sfx_002.mp3" data-start="19.05" data-duration="0.6" data-track-index="13" data-volume="0.4"></audio>
+      <audio id="sfx-whoosh-3" src=".media/audio/sfx/sfx_002.mp3" data-start="20.7" data-duration="0.6" data-track-index="13" data-volume="0.4"></audio>
+      <audio id="sfx-whoosh-4" src=".media/audio/sfx/sfx_002.mp3" data-start="23.2" data-duration="0.6" data-track-index="13" data-volume="0.45"></audio>
+      <audio id="sfx-click-1" src=".media/audio/sfx/sfx_003.mp3" data-start="26.1" data-duration="0.4" data-track-index="14" data-volume="0.7"></audio>
+      <audio id="sfx-click-2" src=".media/audio/sfx/sfx_003.mp3" data-start="29.4" data-duration="0.4" data-track-index="14" data-volume="0.7"></audio>
+      <audio id="sfx-click-3" src=".media/audio/sfx/sfx_003.mp3" data-start="31.3" data-duration="0.4" data-track-index="14" data-volume="0.7"></audio>
+      <audio id="sfx-chime" src=".media/audio/sfx/sfx_004.mp3" data-start="32.6" data-duration="2.5" data-track-index="15" data-volume="0.5"></audio>
+      <audio id="sfx-impact" src=".media/audio/sfx/sfx_005.mp3" data-start="35" data-duration="2" data-track-index="16" data-volume="0.45"></audio>
     </div>
     <script>
-      const tl = gsap.timeline({ paused: true });
-      // Example: tl.fromTo("#title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6 }, 0);
-      window.__timelines["main"] = tl;
-      tl.seek(0);
+      window.__timelines["main"] = gsap.timeline({ paused: true });
     </script>
   </body>
 </html>

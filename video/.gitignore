@@ -3,3 +3,5 @@ renders/
 *.mp4
 *.webm
 .hyperframes/
+.thumbnails/
+.waveform-cache/

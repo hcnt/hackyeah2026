@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Geist Mono"; src: url("assets/fonts/geist-mono/GeistMono-Medium.ttf"); font-weight: 500; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Geist", sans-serif; overflow: hidden; }
+  #s04-glow { position: absolute; left: 50%; bottom: -700px; width: 1800px; height: 1200px; margin-left: -900px; border-radius: 50%; background: radial-gradient(ellipse, rgba(39,117,202,.16) 0%, rgba(39,117,202,0) 60%); }
+  .s04-line { position: absolute; left: 120px; font-weight: 800; font-size: 136px; letter-spacing: -0.05em; line-height: 1; white-space: nowrap; }
+  #s04-l1 { top: 170px; }
+  #s04-l2 { top: 340px; }
+  .s04-line .w { display: inline-block; margin-right: 0.22em; }
+  .acc { color: #2775CA; }
+  #s04-chain { position: absolute; left: 120px; right: 120px; top: 720px; height: 150px; display: flex; align-items: center; }
+  .s04-b { flex: 0 0 200px; height: 150px; border-radius: 26px; border: 4px solid #15161A; background: #FFFFFF; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; font-family: "Geist Mono"; }
+  .s04-b .lbl { font-size: 30px; color: #15161A; }
+  .s04-b .h { font-size: 18px; color: #6B6D74; }
+  .s04-b.on { border-color: #2775CA; background: #E3EDF8; }
+  .s04-b.on .lbl { color: #1B5FA8; }
+  .s04-b.on .h { color: #1B5FA8; }
+  .s04-k { flex: 0 0 40px; height: 6px; background: #15161A; transform-origin: left center; }
+  .s04-k.on { background: #2775CA; }
+</style>
+<div id="root" data-composition-id="s04-choose" data-width="1920" data-height="1080">
+  <div id="s04-glow"></div>
+  <div class="s04-line" id="s04-l1"><span class="w acc">You</span><span class="w">choose</span><span class="w">the</span><span class="w">prize.</span></div>
+  <div class="s04-line" id="s04-l2"><span class="w">Blockchain</span><span class="w">executes</span><span class="w">it.</span></div>
+  <div id="s04-chain">
+    <div class="s04-b" id="s04-b1"><span class="lbl">you</span><span class="h">0x1f…a2</span></div><div class="s04-k" id="s04-k2"></div>
+    <div class="s04-b" id="s04-b2"><span class="lbl">choose</span><span class="h">0x8c…04</span></div><div class="s04-k" id="s04-k3"></div>
+    <div class="s04-b" id="s04-b3"><span class="lbl">the</span><span class="h">0x3e…9b</span></div><div class="s04-k" id="s04-k4"></div>
+    <div class="s04-b" id="s04-b4"><span class="lbl">prize</span><span class="h">0xd7…51</span></div><div class="s04-k on" id="s04-k5"></div>
+    <div class="s04-b on" id="s04-b5"><span class="lbl">blockchain</span><span class="h">0x42…c0</span></div><div class="s04-k on" id="s04-k6"></div>
+    <div class="s04-b on" id="s04-b6"><span class="lbl">executes</span><span class="h">0x9a…7e</span></div><div class="s04-k on" id="s04-k7"></div>
+    <div class="s04-b on" id="s04-b7"><span class="lbl">it</span><span class="h">0x0042</span></div>
+  </div>
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  tl.fromTo("#s04-glow", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1.05, duration: 3.5, ease: "sine.out" }, 0);
+  const words = gsap.utils.toArray("#s04-l1 .w, #s04-l2 .w");
+  words.forEach((w, i) => {
+    const t = 0.15 + i * 0.19;
+    tl.fromTo(w, { opacity: 0, y: 46, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.32, ease: "power4.out" }, t);
+    tl.fromTo(`#s04-b${i + 1}`, { opacity: 0, y: 40, scale: 0.7 }, { opacity: 1, y: 0, scale: 1, duration: 0.34, ease: "back.out(2.4)" }, t + 0.04);
+    if (i > 0) tl.fromTo(`#s04-k${i + 1}`, { scaleX: 0 }, { scaleX: 1, duration: 0.16, ease: "power2.out" }, t);
+  });
+  // the finished chain locks with one small pulse
+  tl.fromTo("#s04-chain", { scale: 1 }, { scale: 1.02, duration: 0.14, ease: "power2.out", yoyo: true, repeat: 1, transformOrigin: "50% 50%" }, 1.7);
+  window.__timelines["s04-choose"] = tl;
+</script>
+</template>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-ExtraBold.ttf"); font-weight: 800; }
+  @font-face { font-family: "Geist Mono"; src: url("assets/fonts/geist-mono/GeistMono-Medium.ttf"); font-weight: 500; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Geist", sans-serif; overflow: hidden; }
+  #s01-glow { position: absolute; width: 1400px; height: 1400px; right: -520px; top: -560px; border-radius: 50%; background: radial-gradient(circle, rgba(39,117,202,.16) 0%, rgba(39,117,202,0) 62%); }
+  #s01-ghost { position: absolute; right: 80px; bottom: -120px; font-weight: 800; font-size: 620px; line-height: 1; color: #15161A; opacity: .05; letter-spacing: -0.06em; }
+  #s01-meta { position: absolute; left: 120px; top: 96px; font-family: "Geist Mono"; font-size: 24px; letter-spacing: .08em; text-transform: uppercase; color: #6B6D74; }
+  #s01-wrap { position: absolute; inset: 0; padding: 0 120px; display: flex; flex-direction: column; justify-content: center; gap: 72px; }
+  #s01-q { font-weight: 800; font-size: 176px; letter-spacing: -0.05em; line-height: .96; }
+  #s01-q .w { display: inline-block; }
+  #s01-a { font-weight: 700; font-size: 92px; letter-spacing: -0.04em; line-height: 1; }
+  #s01-a .acc { color: #2775CA; position: relative; display: inline-block; }
+  #s01-ul { position: absolute; left: 0; right: 0; bottom: -14px; height: 8px; background: #2775CA; transform-origin: left center; display: block; }
+</style>
+<div id="root" data-composition-id="s01-hook" data-width="1920" data-height="1080">
+  <div id="s01-glow"></div>
+  <div id="s01-ghost">?</div>
+  <div id="s01-meta">Organizers</div>
+  <div id="s01-wrap">
+    <div id="s01-q"><span class="w">Want</span> <span class="w">people</span><br><span class="w">at</span> <span class="w">your</span> <span class="w">event?</span></div>
+    <div id="s01-a">Give them a <span class="acc">reason to show up.<span id="s01-ul"></span></span></div>
+  </div>
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  tl.fromTo("#s01-glow", { scale: 0.9, opacity: 0.6 }, { scale: 1.08, opacity: 1, duration: 3, ease: "sine.inOut" }, 0);
+  tl.fromTo("#s01-ghost", { y: 40, rotation: -6 }, { y: -10, rotation: 0, duration: 3, ease: "sine.out" }, 0);
+  tl.fromTo("#s01-meta", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, ease: "power2.out" }, 0.05);
+  tl.fromTo("#s01-q .w", { opacity: 0, y: 70, rotation: 3 }, { opacity: 1, y: 0, rotation: 0, duration: 0.5, ease: "power4.out", stagger: 0.09 }, 0.1);
+  // hard-cut answer in on the beat
+  tl.fromTo("#s01-a", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.18, ease: "power2.out" }, 1.4);
+  tl.fromTo("#s01-ul", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "expo.out" }, 1.75);
+  tl.fromTo("#s01-a .acc", { scale: 1 }, { scale: 1.04, duration: 0.12, ease: "power2.out", yoyo: true, repeat: 1 }, 1.75);
+  window.__timelines["s01-hook"] = tl;
+</script>
+</template>
+</body>
+</html>
