@@ -3,9 +3,9 @@
 Superteam Poland challenge "Finance Without Intermediaries", HackYeah 2026.
 
 **Attendance giveaways without a middleman.** An attendance giveaway is a sponsor's promise to reward the people
-who actually come to an event: "the first 100 people at the venue get 0.01 SOL", a coffee, a T-shirt. It isn't a
-draw: everyone who shows up gets it, until the budget runs out. It's how free events fight no-shows, and today
-it only works if everyone trusts whoever holds the prizes and the guest list.
+who actually come to an event: "the first 100 people at the venue get 0.01 SOL", a coffee, a T-shirt. It's how
+free events fight no-shows, and today it only works if everyone trusts whoever holds the prizes and the guest
+list.
 
 With OnSight, an organizer or sponsor locks the giveaway budget in a Solana program. Attendees opt in with their
 wallet and one selfie, through a widget on the event's own page. At the venue, a phone camera at a pay lane streams to
