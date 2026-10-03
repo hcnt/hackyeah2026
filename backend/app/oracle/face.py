@@ -15,6 +15,8 @@ import numpy as np
 from insightface.app import FaceAnalysis
 from insightface.utils import face_align
 
+from app.config import get_settings
+
 # Cosine similarity at or above which a face counts as an enrolled person. ArcFace (buffalo_l)
 # same-person pairs typically score 0.5-0.8 and different people below 0.3.
 MATCH_THRESHOLD = 0.40
@@ -58,7 +60,15 @@ def normalize(v: np.ndarray) -> np.ndarray:
 
 @lru_cache
 def get_model() -> FaceAnalysis:
-    providers, ctx_id = ["CPUExecutionProvider"], -1
+    if get_settings().oracle_device == "cuda":
+        # onnxruntime-gpu finds the pip-installed CUDA/cuDNN libraries only after this; without it, it silently
+        # falls back to the CPU.
+        import onnxruntime
+
+        onnxruntime.preload_dlls()
+        providers, ctx_id = ["CUDAExecutionProvider", "CPUExecutionProvider"], 0
+    else:
+        providers, ctx_id = ["CPUExecutionProvider"], -1
     model = FaceAnalysis(name="buffalo_l", allowed_modules=["detection", "recognition"], providers=providers)
     model.prepare(ctx_id=ctx_id, det_size=(640, 640))
     return model
