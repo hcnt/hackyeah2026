@@ -1,36 +1,42 @@
     use anchor_lang::prelude::*;
 
 // Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy).
+// UWAGA: ta wersja zmienia układ kont Config / Event / Receipt, więc wymaga ŚWIEŻEGO deployu pod NOWYM program id.
+// Poniższy id to STARY program (4Yhph…), który zostaje na devnecie, ale jest zastąpiony.
+// TODO po deployu: wpisać tu nowy program id (oraz w idl.json, README.md i PRESENCE_PROGRAM_ID backendu).
 declare_id!("4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf");
 
 #[program]
 pub mod presence_pay {
     use super::*;
 
-    /// Raz po deployu. Ustawia klucz oracle (backend), treasury i opłatę platformy.
-    pub fn init_config(ctx: Context<InitConfig>, oracle: Pubkey, treasury: Pubkey, fee: u64) -> Result<()> {
+    /// Raz po deployu. Ustawia treasury i opłatę platformy dla przyszłych eventów.
+    /// Oracle nie jest globalny: każdy event ma własny, wybrany przez organizatora.
+    pub fn init_config(ctx: Context<InitConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
         let cfg = &mut ctx.accounts.config;
         cfg.admin = ctx.accounts.admin.key();
-        cfg.oracle = oracle;
         cfg.treasury = treasury;
         cfg.fee = fee;
         cfg.bump = ctx.bumps.config;
         Ok(())
     }
 
-    /// Admin może podmienić oracle / treasury / opłatę (np. nowy klucz backendu).
-    pub fn update_config(ctx: Context<UpdateConfig>, oracle: Pubkey, treasury: Pubkey, fee: u64) -> Result<()> {
+    /// Admin może zmienić treasury / opłatę. Dotyczy to TYLKO eventów utworzonych później:
+    /// każdy event zamraża treasury i opłatę przy utworzeniu, więc trwające eventy się nie zmieniają.
+    pub fn update_config(ctx: Context<UpdateConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
         let cfg = &mut ctx.accounts.config;
-        cfg.oracle = oracle;
         cfg.treasury = treasury;
         cfg.fee = fee;
         Ok(())
     }
 
     /// Organizator tworzy event z warunkami i wpłaca cały budżet do konta eventu (vault).
+    /// Organizator wybiera oracle (klucz, który jako jedyny może wypłacać w tym evencie).
+    /// Oracle, treasury, opłata, nagroda i limit są zamrożone na cały event.
     pub fn create_event(
         ctx: Context<CreateEvent>,
         event_id: u64,
+        oracle: Pubkey,
         start: i64,
         end: i64,
         reward: u64,
@@ -63,6 +69,8 @@ pub mod presence_pay {
 
         let ev = &mut ctx.accounts.event;
         ev.organizer = ctx.accounts.organizer.key();
+        ev.oracle = oracle;
+        ev.treasury = ctx.accounts.config.treasury; // zamrożone jak fee
         ev.event_id = event_id;
         ev.start = start;
         ev.end = end;
@@ -86,7 +94,7 @@ pub mod presence_pay {
         Ok(())
     }
 
-    /// Wywołuje TYLKO oracle (backend), gdy uczestnik spełnił warunki.
+    /// Wywołuje TYLKO oracle zapisany w evencie, gdy uczestnik spełnił warunki.
     /// Program pilnuje: okna czasowego, limitu wypłat i jednej wypłaty na portfel.
     pub fn pay_attendee(ctx: Context<PayAttendee>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
@@ -108,6 +116,7 @@ pub mod presence_pay {
         // drugie wywołanie dla tej samej pary event+portfel padnie, bo konto już istnieje.
         let receipt = &mut ctx.accounts.receipt;
         receipt.event_end = ctx.accounts.event.end;
+        receipt.oracle = ctx.accounts.oracle.key();
         receipt.bump = ctx.bumps.receipt;
 
         emit!(AttendeePaid {
@@ -127,7 +136,7 @@ pub mod presence_pay {
         Ok(())
     }
 
-    /// Po końcu eventu oracle zamyka receipty i odzyskuje rent.
+    /// Po końcu eventu oracle (ten, który zapłacił rent receiptu) zamyka receipty i odzyskuje rent.
     pub fn close_receipt(ctx: Context<CloseReceipt>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(now > ctx.accounts.receipt.event_end, PresenceError::EventRunning);
@@ -141,7 +150,6 @@ pub mod presence_pay {
 #[derive(InitSpace)]
 pub struct Config {
     pub admin: Pubkey,
-    pub oracle: Pubkey,
     pub treasury: Pubkey,
     pub fee: u64,
     pub bump: u8,
@@ -151,6 +159,8 @@ pub struct Config {
 #[derive(InitSpace)]
 pub struct Event {
     pub organizer: Pubkey,
+    pub oracle: Pubkey,   // jedyny klucz, który może wypłacać w tym evencie (wybrany przez organizatora)
+    pub treasury: Pubkey, // odbiorca opłaty, zamrożony z Config przy utworzeniu
     pub event_id: u64,
     pub start: i64,
     pub end: i64,
@@ -166,6 +176,7 @@ pub struct Event {
 #[derive(InitSpace)]
 pub struct Receipt {
     pub event_end: i64,
+    pub oracle: Pubkey, // kto zapłacił rent; tylko on może zamknąć receipt
     pub bump: u8,
 }
 
@@ -216,9 +227,7 @@ pub struct OrganizerEvent<'info> {
 pub struct PayAttendee<'info> {
     #[account(mut)]
     pub oracle: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump, has_one = oracle, has_one = treasury)]
-    pub config: Account<'info, Config>,
-    #[account(mut)]
+    #[account(mut, has_one = oracle, has_one = treasury)]
     pub event: Account<'info, Event>,
     #[account(
         init,
@@ -231,7 +240,7 @@ pub struct PayAttendee<'info> {
     /// CHECK: tylko odbiorca SOL, dowolny portfel
     #[account(mut)]
     pub attendee: UncheckedAccount<'info>,
-    /// CHECK: sprawdzany przez has_one na config
+    /// CHECK: sprawdzany przez has_one na event
     #[account(mut)]
     pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
@@ -249,9 +258,7 @@ pub struct WithdrawRemaining<'info> {
 pub struct CloseReceipt<'info> {
     #[account(mut)]
     pub oracle: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump, has_one = oracle)]
-    pub config: Account<'info, Config>,
-    #[account(mut, close = oracle)]
+    #[account(mut, close = oracle, has_one = oracle)]
     pub receipt: Account<'info, Receipt>,
 }
 

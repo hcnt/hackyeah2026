@@ -1,5 +1,5 @@
 // Test dla Solana Playground (beta.solpg.io): wklej do tests/anchor.test.ts i kliknij "Test".
-// Twój portfel z Playground gra tu jednocześnie admina, oracle i organizatora.
+// Twój portfel z Playground gra tu jednocześnie admina, organizatora i oracle (wybranego per event).
 describe("presence_pay", () => {
   const program = pg.program;
   const me = pg.wallet.publicKey;
@@ -50,25 +50,25 @@ describe("presence_pay", () => {
   };
 
   const payAccounts = {
-    oracle: me, config: configPda, event, receipt, attendee, treasury, systemProgram: sys,
+    oracle: me, event, receipt, attendee, treasury, systemProgram: sys,
   } as any;
 
-  it("init / update config (oracle = mój portfel)", async () => {
+  it("init / update config (treasury + opłata dla nowych eventów)", async () => {
     const existing = await program.account.config.fetchNullable(configPda);
     const m = existing
-      ? program.methods.updateConfig(me, treasury, fee).accounts({ admin: me, config: configPda } as any)
-      : program.methods.initConfig(me, treasury, fee).accounts({ admin: me, config: configPda, systemProgram: sys } as any);
+      ? program.methods.updateConfig(treasury, fee).accounts({ admin: me, config: configPda } as any)
+      : program.methods.initConfig(treasury, fee).accounts({ admin: me, config: configPda, systemProgram: sys } as any);
     await send(m);
     await eventually(async () => {
       const cfg = await program.account.config.fetch(configPda, "confirmed");
-      assert.ok(cfg.oracle.equals(me) && cfg.treasury.equals(treasury));
+      assert.ok(cfg.treasury.equals(treasury) && cfg.fee.eq(fee));
     });
   });
 
   it("organizator tworzy event i wpłaca budżet", async () => {
     await send(
       program.methods
-        .createEvent(eventId, new BN(now - 60), new BN(now + 600), reward, maxPaid, 3)
+        .createEvent(eventId, me, new BN(now - 60), new BN(now + 600), reward, maxPaid, 3)
         .accounts({ organizer: me, config: configPda, event, systemProgram: sys } as any)
     );
     const rent = await conn.getMinimumBalanceForRentExemption(program.account.event.size);
@@ -76,6 +76,7 @@ describe("presence_pay", () => {
     await eventually(async () => {
       const ev = await program.account.event.fetch(event, "confirmed");
       assert.equal(ev.maxPaid, maxPaid);
+      assert.ok(ev.oracle.equals(me) && ev.treasury.equals(treasury));
       assert.equal(await conn.getBalance(event, "confirmed"), rent + budget);
     });
   });
@@ -94,6 +95,32 @@ describe("presence_pay", () => {
     await expectFail(send(program.methods.payAttendee().accounts(payAccounts)), "already in use");
   });
 
+  it("inny treasury niż zapisany w evencie jest odrzucany", async () => {
+    const other = web3.Keypair.generate().publicKey;
+    const r2 = pda([Buffer.from("paid"), event.toBuffer(), other.toBuffer()]);
+    await expectFail(
+      send(program.methods.payAttendee().accounts({ ...payAccounts, receipt: r2, attendee: other, treasury: other })),
+      "ConstraintHasOne"
+    );
+  });
+
+  it("oracle innego eventu nie może wypłacać", async () => {
+    const id3 = new BN(now + 2);
+    const ev3 = eventPda(id3);
+    const otherOracle = web3.Keypair.generate().publicKey; // organizator wybrał inny oracle
+    await send(
+      program.methods
+        .createEvent(id3, otherOracle, new BN(now - 60), new BN(now + 600), reward, 1, 3)
+        .accounts({ organizer: me, config: configPda, event: ev3, systemProgram: sys } as any)
+    );
+    const r3 = pda([Buffer.from("paid"), ev3.toBuffer(), attendee.toBuffer()]);
+    await expectFail(
+      send(program.methods.payAttendee().accounts({ ...payAccounts, event: ev3, receipt: r3 })),
+      "ConstraintHasOne"
+    );
+    // Sprzątanie: event jeszcze trwa, więc budżetu nie da się teraz wypłacić (EventRunning); zostaje na devnecie.
+  });
+
   it("organizator nie może wypłacić reszty w trakcie eventu", async () => {
     await expectFail(
       send(program.methods.withdrawRemaining().accounts({ organizer: me, event } as any)),
@@ -106,7 +133,7 @@ describe("presence_pay", () => {
     const ev2 = eventPda(id2);
     await send(
       program.methods
-        .createEvent(id2, new BN(now + 3600), new BN(now + 7200), reward, 1, 3)
+        .createEvent(id2, me, new BN(now + 3600), new BN(now + 7200), reward, 1, 3)
         .accounts({ organizer: me, config: configPda, event: ev2, systemProgram: sys } as any)
     );
     await send(program.methods.withdrawRemaining().accounts({ organizer: me, event: ev2 } as any));

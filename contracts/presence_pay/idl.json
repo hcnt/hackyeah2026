@@ -23,10 +23,6 @@
       ],
       "args": [
         {
-          "name": "oracle",
-          "type": "publicKey"
-        },
-        {
           "name": "treasury",
           "type": "publicKey"
         },
@@ -51,10 +47,6 @@
         }
       ],
       "args": [
-        {
-          "name": "oracle",
-          "type": "publicKey"
-        },
         {
           "name": "treasury",
           "type": "publicKey"
@@ -93,6 +85,10 @@
         {
           "name": "eventId",
           "type": "u64"
+        },
+        {
+          "name": "oracle",
+          "type": "publicKey"
         },
         {
           "name": "start",
@@ -150,11 +146,6 @@
           "isSigner": true
         },
         {
-          "name": "config",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "event",
           "isMut": true,
           "isSigner": false
@@ -207,11 +198,6 @@
           "isSigner": true
         },
         {
-          "name": "config",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "receipt",
           "isMut": true,
           "isSigner": false
@@ -228,10 +214,6 @@
         "fields": [
           {
             "name": "admin",
-            "type": "publicKey"
-          },
-          {
-            "name": "oracle",
             "type": "publicKey"
           },
           {
@@ -256,6 +238,14 @@
         "fields": [
           {
             "name": "organizer",
+            "type": "publicKey"
+          },
+          {
+            "name": "oracle",
+            "type": "publicKey"
+          },
+          {
+            "name": "treasury",
             "type": "publicKey"
           },
           {
@@ -305,6 +295,10 @@
           {
             "name": "eventEnd",
             "type": "i64"
+          },
+          {
+            "name": "oracle",
+            "type": "publicKey"
           },
           {
             "name": "bump",
