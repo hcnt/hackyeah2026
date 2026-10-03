@@ -162,7 +162,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     setStage({ name: 'signing', image })
     let body: SubmitRequest
     try {
-      const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
+      const signed = await signAction(conn, 'join', eventId, event.consent.version) // the embedded id, never the oracle's
       body = { ...signed, consent: { version: event.consent.version, accepted: true }, image }
     } catch (err) {
       setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
