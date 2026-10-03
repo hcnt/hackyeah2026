@@ -18,7 +18,6 @@ from app.oracle.signatures import build_message
 
 BOX = [100.0, 100.0, 300.0, 340.0]
 CONSENT = "2026-10-03"
-YAW = {"straight": 0.0, "left": -0.2, "right": 0.2}
 
 
 _offset = itertools.count()
@@ -60,18 +59,14 @@ def env():
     set_state(None)
 
 
-def frames_for(engine, rng, person, prefix, yaws=None, **overrides):
-    yaws = yaws or YAW
-    out = []
-    for step in ("straight", "left", "right"):
-        key = engine.set(f"{prefix}-{step}".encode(), overrides[step] if step in overrides else [(BOX, yaws[step], near(person, rng))])
-        out.append({"step": step, "image": b64(key)})
-    return out
+def photo_for(engine, rng, person, key, scene=None):
+    """A base64 'photo' whose fake detection is `scene`, by default one straight face close to `person`."""
+    return b64(engine.set(key.encode(), scene if scene is not None else [(BOX, 0.0, near(person, rng))]))
 
 
-def submit(client, kp, frames, event_id="ev1", consent=CONSENT, accepted=True, first_name="Ola", **sig):
+def submit(client, kp, image, event_id="ev1", consent=CONSENT, accepted=True, first_name="Ola", **sig):
     body = signed(kp, "join", event_id, consent, **sig) | {
-        "consent": {"version": consent, "accepted": accepted}, "first_name": first_name, "frames": frames}
+        "consent": {"version": consent, "accepted": accepted}, "first_name": first_name, "image": image}
     return client.post(f"/api/v1/events/{event_id}/attendance", json=body)
 
 
@@ -87,7 +82,7 @@ def test_submit_happy_path_status_and_leave(env):
     client, engine, rng, _, _ = env
     kp = Keypair()
     assert status(client, kp).json() == {"status": "not_joined", "tx": None}
-    r = submit(client, kp, frames_for(engine, rng, unit(rng), "a"))
+    r = submit(client, kp, photo_for(engine, rng, unit(rng), "a"))
     assert r.status_code == 201, r.text
     assert r.json() == {"status": "on_list", "event_id": "ev1", "wallet": str(kp.pubkey())}
     assert status(client, kp).json() == {"status": "on_list", "tx": None}
@@ -97,79 +92,69 @@ def test_submit_happy_path_status_and_leave(env):
     assert status(client, kp).json()["status"] == "not_joined"
 
 
-def test_wrong_frame_count_or_steps_and_malformed_body_400(env):
-    client, engine, rng, _, _ = env
+def test_malformed_body_400(env):
+    client, _, _, _, _ = env
     kp = Keypair()
-    frames = frames_for(engine, rng, unit(rng), "a")
-    assert err(submit(client, kp, frames[:2])) == "invalid_request"
-    assert submit(client, kp, frames + frames[:1]).status_code == 400
-    assert submit(client, kp, [frames[0], frames[0], frames[2]]).status_code == 400
+    body = signed(kp, "join", "ev1", CONSENT) | {"consent": {"version": CONSENT, "accepted": True}, "first_name": "Ola"}
+    assert err(client.post("/api/v1/events/ev1/attendance", json=body)) == "invalid_request"  # no image
     r = client.post("/api/v1/events/ev1/attendance", content=b"{not json", headers={"content-type": "application/json"})
     assert r.status_code == 400 and err(r) == "invalid_request" and "message" in r.json()["error"]
-    assert client.post("/api/v1/events/ev1/attendance/test", json={"step": "up", "image": "x"}).status_code == 400
+    assert client.post("/api/v1/events/ev1/attendance/test", json={}).status_code == 400
 
 
 def test_body_over_4mb_413(env):
     client, _, _, _, _ = env
-    r = client.post("/api/v1/events/ev1/attendance/test", json={"step": "straight", "image": "A" * (4 * 1024 * 1024)})
+    r = client.post("/api/v1/events/ev1/attendance/test", json={"image": "A" * (4 * 1024 * 1024)})
     assert r.status_code == 413 and err(r) == "too_large"
 
 
-def test_zero_or_two_faces_photo_rejected_with_frame_issues(env):
+def test_zero_or_two_faces_photo_rejected_with_issues(env):
     client, engine, rng, _, _ = env
-    kp = Keypair()
     p = unit(rng)
-    frames = frames_for(engine, rng, p, "z", left=[], right=[(BOX, 0.2, near(p, rng)), ([350, 100, 550, 340], 0.0, unit(rng))])
-    r = submit(client, kp, frames)
+    r = submit(client, Keypair(), photo_for(engine, rng, p, "none", scene=[]))
     assert r.status_code == 422
     e = r.json()["error"]
-    assert e["code"] == "photo_rejected"
-    assert e["message"].startswith("Photo 2: we can't find a face")
-    assert [(i["frame"], i["code"]) for i in e["issues"]] == [(1, "no_face"), (2, "multiple_faces")]
+    assert e["code"] == "photo_rejected" and e["message"].startswith("We can't find a face")
+    assert [i["code"] for i in e["issues"]] == ["no_face"]
+    two = [(BOX, 0.0, near(p, rng)), ([350, 100, 550, 340], 0.0, unit(rng))]
+    r = submit(client, Keypair(), photo_for(engine, rng, p, "two", scene=two))
+    assert err(r) == "photo_rejected" and [i["code"] for i in r.json()["error"]["issues"]] == ["multiple_faces"]
 
 
-def test_wrong_pose_rejected(env):
+def test_turned_head_rejected(env):
     client, engine, rng, _, _ = env
-    r = submit(client, Keypair(), frames_for(engine, rng, unit(rng), "w", yaws={"straight": 0.0, "left": 0.2, "right": 0.2}))
+    r = submit(client, Keypair(), photo_for(engine, rng, unit(rng), "w", scene=[(BOX, 0.3, unit(rng))]))
     assert err(r) == "photo_rejected"
-    assert [(i["frame"], i["code"]) for i in r.json()["error"]["issues"]] == [(1, "wrong_pose")]
-
-
-def test_not_same_person(env):
-    client, engine, rng, _, _ = env
-    p, q = unit(rng), unit(rng)
-    frames = frames_for(engine, rng, p, "s", right=[(BOX, 0.2, near(q, rng))])
-    r = submit(client, Keypair(), frames)
-    assert r.status_code == 422 and err(r) == "not_same_person"
+    assert [i["code"] for i in r.json()["error"]["issues"]] == ["wrong_pose"]
 
 
 def test_duplicate_face_of_other_wallet_409_rejoin_same_wallet_ok(env):
     client, engine, rng, _, _ = env
     p = unit(rng)
     k1, k2 = Keypair(), Keypair()
-    assert submit(client, k1, frames_for(engine, rng, p, "a")).status_code == 201
-    r = submit(client, k2, frames_for(engine, rng, p, "b"))
+    assert submit(client, k1, photo_for(engine, rng, p, "a")).status_code == 201
+    r = submit(client, k2, photo_for(engine, rng, p, "b"))
     assert r.status_code == 409 and err(r) == "face_already_registered"
-    assert submit(client, k1, frames_for(engine, rng, p, "c")).status_code == 201
+    assert submit(client, k1, photo_for(engine, rng, p, "c")).status_code == 201
 
 
 def test_consent_required(env):
     client, engine, rng, _, _ = env
-    frames = frames_for(engine, rng, unit(rng), "c")
-    r = submit(client, Keypair(), frames, accepted=False)
+    photo = photo_for(engine, rng, unit(rng), "c")
+    r = submit(client, Keypair(), photo, accepted=False)
     assert r.status_code == 422 and err(r) == "consent_required"
-    r = submit(client, Keypair(), frames, consent="1999-01-01")
+    r = submit(client, Keypair(), photo, consent="1999-01-01")
     assert r.status_code == 422 and err(r) == "consent_required"
 
 
 def test_unknown_event_404_and_ended_event_409(env):
     client, engine, rng, _, event = env
-    frames = frames_for(engine, rng, unit(rng), "e")
-    r = submit(client, Keypair(), frames, event_id="nope")
+    photo = photo_for(engine, rng, unit(rng), "e")
+    r = submit(client, Keypair(), photo, event_id="nope")
     assert r.status_code == 404 and err(r) == "event_not_found"
     assert err(client.get("/api/v1/events/nope/attendance/x")) == "event_not_found"
     client.post("/api/oracle/dev/events", json=event | {"end_ts": 1})
-    r = submit(client, Keypair(), frames)
+    r = submit(client, Keypair(), photo)
     assert r.status_code == 409 and err(r) == "event_ended"
 
 
@@ -200,21 +185,21 @@ def test_dev_endpoint_rejected_when_not_dev(env):
 def test_attendance_test_endpoint(env):
     client, engine, rng, _, _ = env
     good = engine.set(b"t-good", [(BOX, 0.0, unit(rng))])
-    r = client.post("/api/v1/events/ev1/attendance/test", json={"step": "straight", "image": b64(good)})
+    r = client.post("/api/v1/events/ev1/attendance/test", json={"image": b64(good)})
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is True and body["issues"] == []
     assert body["face"]["bbox"] == BOX and body["face"]["confidence"] == 0.9 and body["face"]["yaw"] == 0.0
     dark = engine.set(b"t-dark", [(BOX, 0.0, unit(rng))], image=textured(mean=30.0))
-    body = client.post("/api/v1/events/ev1/attendance/test", json={"step": "straight", "image": b64(dark)}).json()
+    body = client.post("/api/v1/events/ev1/attendance/test", json={"image": b64(dark)}).json()
     assert body["ok"] is False and [i["code"] for i in body["issues"]] == ["too_dark"]
     empty = engine.set(b"t-empty", [])
-    body = client.post("/api/v1/events/ev1/attendance/test", json={"step": "left", "image": b64(empty)}).json()
+    body = client.post("/api/v1/events/ev1/attendance/test", json={"image": b64(empty)}).json()
     assert body == {"ok": False, "issues": [{"code": "no_face", "message": "We can't find a face — look at the camera"}],
                     "face": None}
-    r = client.post("/api/v1/events/ev1/attendance/test", json={"step": "left", "image": b64(b"bad")})
+    r = client.post("/api/v1/events/ev1/attendance/test", json={"image": b64(b"bad")})
     assert r.status_code == 400 and err(r) == "invalid_request"
-    r = client.post("/api/v1/events/ev1/attendance/test", json={"step": "left", "image": "***"})
+    r = client.post("/api/v1/events/ev1/attendance/test", json={"image": "***"})
     assert r.status_code == 400
 
 
@@ -237,7 +222,7 @@ def test_camera_ws_bad_frame_errors_and_stays_open_then_stage_gets_payout(env):
     client, engine, rng, org, _ = env
     p = unit(rng)
     kp = Keypair()
-    assert submit(client, kp, frames_for(engine, rng, p, "a")).status_code == 201
+    assert submit(client, kp, photo_for(engine, rng, p, "a")).status_code == 201
     tokens = client.post("/api/v1/events/ev1/camera-token", json=signed(org, "camera-token")).json()
     frame = engine.set(b"scene", [(BOX, 0.0, near(p, rng)), ([350, 100, 550, 340], 0.0, unit(rng))])
     with client.websocket_connect(f"/api/v1/events/ev1/live?stage_token={tokens['stage_token']}") as stage:
@@ -299,7 +284,7 @@ def test_event_details_counts_status_and_consent(env):
     assert (d["going"], d["paid"], d["spots_left"], d["max_payouts"]) == (0, 0, 100, 100)
     assert d["consent"]["version"] == CONSENT and "face signature" in d["consent"]["text"]
     kp = Keypair()
-    assert submit(client, kp, frames_for(engine, rng, unit(rng), "a"), event_id="ev2").status_code == 201
+    assert submit(client, kp, photo_for(engine, rng, unit(rng), "a"), event_id="ev2").status_code == 201
     assert client.get("/api/v1/events/ev2").json()["going"] == 1
     # Display fields are optional: the minimal event from the fixture still answers, with nulls.
     d = client.get("/api/v1/events/ev1").json()

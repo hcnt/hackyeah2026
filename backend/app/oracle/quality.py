@@ -1,9 +1,7 @@
-"""Photo quality checks shared by `attendance/test` and `attendance` (submit).
+"""Photo quality checks shared by `attendance/test` and `attendance` (submit): one face, looking straight at
+the camera, sharp, well lit, big enough and inside the frame.
 
-Yaw sign convention: the yaw proxy in the UNMIRRORED image as the camera captured it, so negative = nose moved
-toward the image's left edge ("left from the camera's view"). A user who turns to their OWN left moves their
-nose toward the image's right edge, so a widget whose preview is mirrored must say "left" in camera terms
-(or send mirrored JPEGs consistently and swap the steps).
+Yaw proxy from the 5 SCRFD keypoints: (nose_x - eyes_mid_x) / eye_distance, about 0 for a frontal face.
 """
 
 from dataclasses import dataclass
@@ -12,7 +10,6 @@ import cv2
 import numpy as np
 
 from app.oracle.face import RawFace
-from app.oracle.liveness import yaw_proxy
 
 MIN_DET_SCORE = 0.75
 MIN_EYE_DISTANCE_PX = 60.0
@@ -21,9 +18,7 @@ MIN_LAPLACIAN_VAR = 60.0
 BLUR_FACE_SIZE = 112  # px, the size the recognition model sees
 MIN_BRIGHTNESS = 70.0
 MAX_BRIGHTNESS = 200.0
-STRAIGHT_MAX_ABS_YAW = 0.10
-TURN_MIN_ABS_YAW = 0.10
-TURN_MAX_ABS_YAW = 0.35
+STRAIGHT_MAX_ABS_YAW = 0.15
 
 ISSUE_MESSAGES = {
     "no_face": "We can't find a face — look at the camera",
@@ -34,11 +29,8 @@ ISSUE_MESSAGES = {
     "blurry": "Hold still — the photo is blurry",
     "too_dark": "Too dark — face a light",
     "too_bright": "Too bright — move away from the light",
-    "wrong_pose": "Turn your head as shown",
+    "wrong_pose": "Look straight at the camera",
 }
-
-STEPS = ("straight", "left", "right")
-
 
 @dataclass
 class PhotoCheck:
@@ -64,17 +56,20 @@ def _issue(code: str) -> dict:
     return {"code": code, "message": ISSUE_MESSAGES[code]}
 
 
-def pose_ok(step: str, yaw: float) -> bool:
-    if step == "straight":
-        return abs(yaw) < STRAIGHT_MAX_ABS_YAW
-    if step == "left":
-        return -TURN_MAX_ABS_YAW <= yaw <= -TURN_MIN_ABS_YAW
-    if step == "right":
-        return TURN_MIN_ABS_YAW <= yaw <= TURN_MAX_ABS_YAW
-    return False
+def yaw_proxy(kps: np.ndarray) -> float:
+    kps = np.asarray(kps, np.float64).reshape(5, 2)
+    left_eye, right_eye, nose = kps[0], kps[1], kps[2]
+    eye_distance = float(np.linalg.norm(right_eye - left_eye))
+    if eye_distance < 1e-6:
+        return 0.0
+    return float((nose[0] - (left_eye[0] + right_eye[0]) / 2) / eye_distance)
 
 
-def check_photo(img: np.ndarray, faces: list[RawFace], step: str) -> PhotoCheck:
+def pose_ok(yaw: float) -> bool:
+    return abs(yaw) < STRAIGHT_MAX_ABS_YAW
+
+
+def check_photo(img: np.ndarray, faces: list[RawFace]) -> PhotoCheck:
     """All issues found, in the order of the contract's table. With 2+ faces only `multiple_faces` is
     reported and `face` is the largest one."""
     if not faces:
@@ -113,6 +108,6 @@ def check_photo(img: np.ndarray, faces: list[RawFace], step: str) -> PhotoCheck:
             issues.append(_issue("too_dark"))
         elif brightness > MAX_BRIGHTNESS:
             issues.append(_issue("too_bright"))
-    if not pose_ok(step, yaw):
+    if not pose_ok(yaw):
         issues.append(_issue("wrong_pose"))
     return PhotoCheck(issues, face, yaw)

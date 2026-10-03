@@ -105,7 +105,6 @@ flowchart LR
     subgraph Oracle[FastAPI process, one worker]
       R[routes.py<br/>/api/v1]
       Q[quality.py<br/>photo checks]
-      L[liveness.py]
       SG[signatures.py<br/>ed25519 check]
       F[face.py<br/>SCRFD + ArcFace]
       G[(guestlist.py<br/>per-event AES key<br/>in memory)]
@@ -120,7 +119,6 @@ flowchart LR
     R -->|frames, payouts, WS| S
     R --> SG
     R --> Q --> F
-    R --> L
     R --> G
     R --> RT --> T
     RT --> F
@@ -133,11 +131,11 @@ flowchart LR
 
   <section>
     <span class="eyebrow">Flow 1</span>
-    <h2>Joining: from three photos to the guest list</h2>
+    <h2>Joining: from one photo to the guest list</h2>
     <ul class="tight">
       <li><b>Before:</b> the client loads <code>GET /events/{id}</code> for the event and the consent text, and calls <code>attendance/test</code> about twice a second while the camera is open. The test is stateless and stores nothing.</li>
-      <li><b>Submit</b> checks in this order: request shape → wallet signature (valid, within 5 min, never used) → event exists and is not over → consent accepted and version known → each photo passes the quality checks → all pairs of photos match at cosine ≥ 0.60 → head turn across the photos → face not already registered to another wallet in this event (cosine ≥ 0.50).</li>
-      <li><b>Stored:</b> the mean of the three normalised face signatures plus the first name, encrypted with the event's key, under the wallet that signed. The photos are dropped as soon as the signatures are made.</li>
+      <li><b>Submit</b> checks in this order: request shape → wallet signature (valid, within 5 min, never used) → event exists and is not over → consent accepted and version known → the photo passes the quality checks (including looking straight at the camera) → face not already registered to another wallet in this event (cosine ≥ 0.50).</li>
+      <li><b>Stored:</b> the normalised face signature plus the first name, encrypted with the event's key, under the wallet that signed. The photo is dropped as soon as the signature is made.</li>
     </ul>
   </section>
 
@@ -168,7 +166,7 @@ flowchart LR
         <tr><td class="m">tracker.py</td><td class="n">95</td><td>Tracks across frames and the 3-of-5 identification vote.</td></tr>
         <tr><td class="m">interfaces.py</td><td class="n">89</td><td><code>EventSource</code>, <code>PayoutSink</code>, their dev stand-ins and the single <code>install()</code> swap point.</td></tr>
         <tr><td class="m">signatures.py</td><td class="n">64</td><td>Signed-message format and ed25519 verification with expiry and replay protection.</td></tr>
-        <tr><td class="m">errors.py, cors.py, consent.py, liveness.py</td><td class="n">114</td><td>Error shape, CORS for <code>/api/v1</code> only, consent texts, head-turn check.</td></tr>
+        <tr><td class="m">errors.py, cors.py, consent.py</td><td class="n">85</td><td>Error shape, CORS for <code>/api/v1</code> only, consent texts.</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -181,11 +179,10 @@ flowchart LR
       <tbody>
         <tr><td class="m">MATCH_THRESHOLD</td><td class="n">0.40</td><td>When a face counts as an enrolled person. In the test photo the enrolled face scored 0.99 and strangers below 0.07.</td></tr>
         <tr><td class="m">VOTE 3 of 5</td><td class="n">3 / 5</td><td>How many recent matches identify a track.</td></tr>
-        <tr><td class="m">SAME_PERSON_MIN_COSINE</td><td class="n">0.60</td><td>The three join photos must match each other.</td></tr>
         <tr><td class="m">DUPLICATE_FACE_COSINE</td><td class="n">0.50</td><td>Rejects a face already registered to another wallet.</td></tr>
         <tr><td class="m">MIN_DET_SCORE</td><td class="n">0.75</td><td>Photo check: face detected clearly.</td></tr>
         <tr><td class="m">MIN_LAPLACIAN_VAR</td><td class="n">60</td><td>Photo check: sharpness, measured at 112 px. A sharp face scored 177–191, blurred 9–51.</td></tr>
-        <tr><td class="m">Yaw bands</td><td class="n">&lt;0.10 · 0.10–0.35</td><td>Photo check: straight, and left/right turn.</td></tr>
+        <tr><td class="m">STRAIGHT_MAX_ABS_YAW</td><td class="n">0.15</td><td>Photo check: looking straight at the camera.</td></tr>
         <tr><td class="m">min_seen_secs</td><td class="n">per event</td><td>How long someone must be identified before payout.</td></tr>
       </tbody>
     </table></div>
@@ -217,7 +214,7 @@ flowchart LR
     <div class="note warn">
       <h3>Known weaknesses</h3>
       <ul class="tight">
-        <li>Liveness is a head-turn check on client-sent photos; a photo plus its mirror image passes. Production answer: certified liveness at enrollment.</li>
+        <li>No liveness check: anyone can submit a photo of someone else. Production answer: a certified liveness provider in front of submit.</li>
         <li>The join signature is not tied to the photos, so a leaked signature could be used with another face within 5 minutes.</li>
         <li>No rate limit on the photo test endpoint (one face detection per call).</li>
         <li>All state is in memory in one process: a restart during an event means attendees join again.</li>
@@ -238,7 +235,7 @@ flowchart LR
         <tr><td class="n">5</td><td>Widget, camera page and stage screen against the API contract, signing with MetaMask's <code>signMessage</code></td><td>team</td><td>The oracle has no UI of its own now.</td></tr>
         <tr><td class="n">6</td><td>Decide CPU or GPU for the demo; if GPU, swap <code>onnxruntime</code> for <code>onnxruntime-gpu[cuda,cudnn]</code> and call <code>onnxruntime.preload_dlls()</code> at startup</td><td>oracle</td><td>The GPU is throttled by the laptop firmware; the CPU gives a steady 2–4 fps.</td></tr>
         <tr><td class="n">7</td><td>Demo run settings: <code>ENV=prod</code> (dev endpoints off), access log off, oracle logging configured</td><td>oracle</td><td>The hostname is public while the tunnel route is live.</td></tr>
-        <tr><td class="n">8</td><td>Optional hardening: server-chosen step order, photo hash inside the signed message, rate limit on the test endpoint</td><td>oracle</td><td>Closes the known weaknesses above.</td></tr>
+        <tr><td class="n">8</td><td>Optional hardening: certified liveness at join, photo hash inside the signed message, rate limit on the test endpoint</td><td>oracle</td><td>Closes the known weaknesses above.</td></tr>
       </tbody>
     </table></div>
   </section>

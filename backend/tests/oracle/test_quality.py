@@ -4,7 +4,7 @@ import pytest
 from fakes import kps_for, textured
 
 from app.oracle.face import RawFace
-from app.oracle.quality import check_photo, pose_ok
+from app.oracle.quality import check_photo, pose_ok, yaw_proxy
 
 BOX = [100.0, 100.0, 300.0, 340.0]  # eye distance 80 px with kps_for
 
@@ -13,12 +13,12 @@ def face(bbox=BOX, yaw=0.0, score=0.9) -> RawFace:
     return RawFace(bbox=list(bbox), kps=kps_for(bbox, yaw), det_score=score)
 
 
-def codes(img, faces, step="straight"):
-    return [i["code"] for i in check_photo(img, faces, step).issues]
+def codes(img, faces):
+    return [i["code"] for i in check_photo(img, faces).issues]
 
 
 def test_good_photo_has_no_issues():
-    c = check_photo(textured(), [face()], "straight")
+    c = check_photo(textured(), [face()])
     assert c.ok and c.face_json() == {"bbox": BOX, "confidence": 0.9, "yaw": 0.0}
 
 
@@ -32,11 +32,11 @@ def test_each_issue_code():
     assert codes(cv2.GaussianBlur(img, (0, 0), 6), [face()]) == ["blurry"]
     assert codes(textured(mean=30.0), [face()]) == ["too_dark"]
     assert codes(textured(mean=230.0), [face()]) == ["too_bright"]
-    assert codes(img, [face(yaw=0.2)], "straight") == ["wrong_pose"]
+    assert codes(img, [face(yaw=0.2)]) == ["wrong_pose"]
 
 
 def test_multiple_faces_reports_largest():
-    c = check_photo(textured(), [face(), face([350, 100, 600, 400])], "straight")
+    c = check_photo(textured(), [face(), face([350, 100, 600, 400])])
     assert c.face_json()["bbox"] == [350, 100, 600, 400]
 
 
@@ -45,10 +45,11 @@ def test_uniform_dark_image_is_dark_and_blurry():
     assert codes(img, [face()]) == ["blurry", "too_dark"]
 
 
-@pytest.mark.parametrize(
-    ("step", "yaw", "ok"),
-    [("straight", 0.09, True), ("straight", -0.11, False), ("left", -0.2, True), ("left", 0.2, False),
-     ("left", -0.36, False), ("right", 0.35, True), ("right", 0.05, False)],
-)
-def test_pose_bands(step, yaw, ok):
-    assert pose_ok(step, yaw) is ok
+@pytest.mark.parametrize(("yaw", "ok"), [(0.0, True), (0.14, True), (-0.14, True), (0.16, False), (-0.3, False)])
+def test_pose_must_be_straight(yaw, ok):
+    assert pose_ok(yaw) is ok
+
+
+def test_yaw_proxy_matches_synthetic_keypoints():
+    for yaw in (-0.3, 0.0, 0.25):
+        assert abs(yaw_proxy(kps_for(BOX, yaw)) - yaw) < 1e-9
