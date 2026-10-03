@@ -11,6 +11,6 @@ export default defineConfig({
   },
   server: {
     // Dev only: forward API calls to the local backend (uv run fastapi dev).
-    proxy: { '/api': 'http://localhost:8000' },
+    proxy: { '/api': process.env.API_PROXY ?? 'http://localhost:8000' },
   },
 })
