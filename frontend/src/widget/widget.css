@@ -42,11 +42,6 @@
 .an-card p { margin: 0; }
 .an-card button { font: inherit; color: inherit; }
 
-/* Header */
-.an-header { display: flex; flex-direction: column; gap: 2px; min-height: 40px; }
-.an-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
-.an-subtitle { font-size: 12px; line-height: 1.4; color: var(--muted); }
-
 /* Stepper */
 .an-stepper { display: flex; gap: 6px; height: 3px; }
 .an-segment { position: relative; flex: 1; border-radius: 3px; background: var(--line); overflow: hidden; }
@@ -62,12 +57,10 @@
 .an-body--center { align-items: center; }
 
 /* 1a · Reward */
-.an-reward { display: flex; flex-direction: column; gap: 4px; }
-.an-reward-label { font-size: 13px; color: var(--muted); }
-.an-reward-amount { font-size: 44px; font-weight: 700; line-height: 1.1; letter-spacing: -1.2px; color: var(--accent); }
-.an-progress { height: 6px; margin-top: 8px; border-radius: 6px; background: var(--soft); overflow: hidden; }
-.an-progress > div { height: 100%; border-radius: 6px; background: var(--accent); }
-.an-reward-spots { font-size: 11px; color: var(--muted); }
+.an-reward { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+.an-reward-label { font-size: 18px; font-weight: 500; color: var(--button); }
+.an-reward-label strong { font-weight: 700; color: var(--accent); }
+.an-reward-amount { font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.9px; color: var(--accent); }
 
 /* Buttons */
 .an-button {
@@ -111,25 +104,21 @@
 .an-picker-item[aria-checked='true'] .an-picker-logo { background: #ffffff; }
 .an-picker-logo img { width: 18px; height: 18px; }
 .an-picker-name { flex: 1; font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--ink); }
-.an-picker-check { flex: none; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--button); }
 
 /* 1b / 1c / 3a / 3b · Centered stages */
 .an-stage { min-height: 200px; }
 .an-ring { position: relative; display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; margin-top: 8px; border-radius: 999px; background: var(--soft); }
-.an-ring > svg { position: absolute; inset: 0; animation: an-spin 6s linear infinite; }
 .an-ring > img { position: relative; width: 44px; height: 44px; }
-@keyframes an-spin { to { transform: rotate(360deg); } }
 .an-ring + .an-heading { margin-top: 30px; }
 .an-badge { display: flex; align-items: center; justify-content: center; flex: none; border-radius: 999px; background: var(--success); }
 .an-badge--lg { width: 88px; height: 88px; margin-top: 8px; }
 .an-badge--md { width: 64px; height: 64px; margin-top: 8px; }
-.an-badge--sm { width: 48px; height: 48px; background: #e3edf8; }
 .an-heading { font-size: 20px; font-weight: 700; line-height: 1.4; letter-spacing: -0.4px; text-align: center; }
 .an-display { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; text-align: center; }
 
 /* 3a · Consent */
 .an-consent { display: flex; flex-direction: column; gap: 14px; }
-.an-consent-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 2px 0 6px; }
+.an-consent-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px 0; }
 .an-question { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; text-align: center; white-space: pre-line; }
 .an-consent-text { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }
 
@@ -166,4 +155,17 @@
 
 /* Footer */
 .an-footer { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 16px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+/* 1a · OnSight pill: a faint frosted chip that picks up the host page's background */
+.an-footer[data-branded='true'] { margin-top: 14px; }
+.an-brand-pill {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+  background: linear-gradient(to bottom, rgb(0 0 0 / 0.015), rgb(0 0 0 / 0.045));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.07);
+  font-size: 12px; font-weight: 500; line-height: 1.2; color: #8a8a8a;
+}
+.an-brand-pill strong { font-weight: 700; color: #404040; }
+.an-brand-mark {
+  display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 5px;
+  background: #404040; color: #ffffff; font-size: 10px; font-weight: 900; line-height: 1;
+}
 .an-card .an-link { padding: 0; border: 0; background: none; font-size: 11px; color: var(--muted); text-decoration: underline; cursor: pointer; }

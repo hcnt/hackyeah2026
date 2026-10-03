@@ -84,7 +84,7 @@ export function createApi(baseUrl: string, eventId: string) {
         body: init?.body ? JSON.stringify(init.body) : undefined,
       })
     } catch {
-      throw new ApiError(0, 'network', 'Could not reach Attend Now. Check your connection.')
+      throw new ApiError(0, 'network', 'Could not reach OnSight. Check your connection.')
     }
     const data = await res.json().catch(() => null)
     if (!res.ok) {

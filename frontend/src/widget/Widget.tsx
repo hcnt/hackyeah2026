@@ -1,18 +1,11 @@
-// The embeddable "Attend Now" widget, built to Penpot "Widget v1":
+// The embeddable OnSight widget, built to Penpot "Widget v1":
 //   1a sign up (split button + wallet picker) → 1b confirm in wallet → 1c wallet connected
 //   2a selfie (one photo)
 //   3a consent → sign "join" in the wallet → 3b you're in
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
 import { ApiError, createApi, type EventDetails, type StatusResponse } from './api'
-import {
-  ButtonCheck,
-  Check,
-  Chevron,
-  DashedRing,
-  SmallCheck,
-  UserCheck,
-} from './icons'
+import { ButtonCheck, Check, Chevron } from './icons'
 import { WALLET_LOGOS } from './assets'
 import Selfie from './Selfie'
 import {
@@ -60,7 +53,7 @@ const PHOTO_ERRORS = new Set(['photo_rejected', 'face_already_registered'])
 
 export type WidgetProps = {
   eventId: string
-  /** Origin of the Attend Now backend. Empty string means the page's own origin. */
+  /** Origin of the OnSight backend. Empty string means the page's own origin. */
   apiBase?: string
 }
 
@@ -92,7 +85,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
 
   if (!event) {
     return (
-      <Card stepper={null} header={null}>
+      <Card stepper={null}>
         {loadError ? <p className="an-error">{loadError}</p> : <p className="an-note">Loading event…</p>}
       </Card>
     )
@@ -201,7 +194,6 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
         return (
           <div className="an-body an-body--center an-stage">
             <div className="an-ring">
-              <DashedRing />
               <img src={WALLET_LOGOS.metamask} alt="" />
             </div>
             <p className="an-heading">Confirm in MetaMask</p>
@@ -234,9 +226,6 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
         return (
           <div className="an-consent">
             <div className="an-consent-stage">
-              <div className="an-badge an-badge--sm">
-                <UserCheck />
-              </div>
               <p className="an-question">{question}</p>
               <p className="an-consent-text">{rest.join('\n').trim()}</p>
             </div>
@@ -290,7 +279,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
   return (
     <Card
       stepper={STEPPER[stage.name]}
-      header={<EventHeader event={event} />}
+      branded={stage.name === 'signup'}
       footerExtra={
         stage.name === 'done' && status?.status === 'on_list' ? (
           <>
@@ -314,19 +303,19 @@ function walletErrorMessage(err: unknown): string {
 }
 
 function Card({
-  header,
   stepper,
+  branded = false,
   footerExtra,
   children,
 }: {
-  header: ReactNode
   stepper: [Fill, Fill, Fill] | null
+  /** Sign-up shows the OnSight pill; later steps keep the plain "Powered by" line. */
+  branded?: boolean
   footerExtra?: ReactNode
   children: ReactNode
 }) {
   return (
     <div className="an-card">
-      {header}
       {stepper && (
         <div className="an-stepper" aria-hidden>
           {stepper.map((fill, i) => (
@@ -335,26 +324,21 @@ function Card({
         </div>
       )}
       {children}
-      <div className="an-footer">
-        <span>Powered by Attend Now</span>
+      <div className="an-footer" data-branded={branded}>
+        {branded ? (
+          <span className="an-brand-pill">
+            <span className="an-brand-mark" aria-hidden>
+              O
+            </span>
+            <span>
+              Powered by <strong>OnSight</strong>
+            </span>
+          </span>
+        ) : (
+          <span>Powered by OnSight</span>
+        )}
         {footerExtra}
       </div>
-    </div>
-  )
-}
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso)
-  const day = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')
-  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  return `${day} · ${time}`
-}
-
-function EventHeader({ event }: { event: EventDetails }) {
-  return (
-    <div className="an-header">
-      <p className="an-title">{event.name ?? 'Event'}</p>
-      <p className="an-subtitle">{[formatWhen(event.starts_at), event.venue].filter(Boolean).join(' · ')}</p>
     </div>
   )
 }
@@ -363,21 +347,18 @@ function Reward({ event }: { event: EventDetails }) {
   if (event.reward_lamports == null) return null
   const sol = event.reward_lamports / 1_000_000_000
   const max = event.max_payouts
-  const left = event.spots_left
   return (
     <div className="an-reward">
-      <p className="an-reward-label">{max ? `First ${max} attendees earn` : 'Attendees earn'}</p>
+      <p className="an-reward-label">
+        {max ? (
+          <>
+            First <strong>{max}</strong> attendees earn
+          </>
+        ) : (
+          'Attendees earn'
+        )}
+      </p>
       <p className="an-reward-amount">{sol.toLocaleString('en-US', { maximumFractionDigits: 4 })} SOL</p>
-      {max != null && left != null && (
-        <>
-          <div className="an-progress">
-            <div style={{ width: `${((max - left) / max) * 100}%` }} />
-          </div>
-          <p className="an-reward-spots">
-            {left} / {max} spots left
-          </p>
-        </>
-      )}
     </div>
   )
 }
@@ -407,11 +388,6 @@ function WalletPicker({ onPick, onClose }: { onPick: () => void; onClose: () => 
                 <img src={WALLET_LOGOS[w.id]} alt="" />
               </span>
               <span className="an-picker-name">{w.name}</span>
-              {w.id === 'metamask' && (
-                <span className="an-picker-check">
-                  <SmallCheck />
-                </span>
-              )}
             </button>
           </li>
         ))}
@@ -426,7 +402,7 @@ function downloadIcs(event: EventDetails) {
   const ics = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Attend Now//Widget//EN',
+    'PRODID:-//OnSight//Widget//EN',
     'BEGIN:VEVENT',
     `UID:${event.event_id}@attendnow`,
     `DTSTAMP:${stamp(new Date().toISOString())}`,
