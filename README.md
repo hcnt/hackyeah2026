@@ -62,15 +62,14 @@ report pays, which covers its transaction fees and deposits.
 
 ### Where exactly the intermediary disappears
 
-`contracts/presence_pay/lib.rs`:
+In `report_sighting` (`contracts/presence_pay/lib.rs`). An oracle can only *report* that it sees a wallet; this
+instruction decides whether that pays. It accepts the report only from one of the event's oracles, only with the
+attendee's own signed join (`check_join_proof`), and only during the event. It pays only once enough different
+oracles have seen the person for long enough on the chain's clock, and only while the cap isn't reached. Then
+the reward goes straight from the escrow to the attendee in the same transaction. No person approves anything.
 
-- `report_sighting` (line 114): the oracle's report. Checks, in order: the signer is one of the event's
-  oracles, the attendee's signed join (`check_join_proof`, line 224), the time window. Then it records the
-  sighting, and pays only when enough different oracles reported (line 152) for long enough on the chain clock
-  (line 153), under the cap (line 160). Then the reward goes to the attendee and the fee to the reporting oracle
-  (lines 170-171).
-- `create_event` (line 39): locks the whole budget in the Event account and freezes the rules.
-- `withdraw_remaining` (line 183): the organizer gets the rest back, only before the start or after the end.
+The money side: `create_event` locks the whole budget and freezes the rules, and `withdraw_remaining` returns the
+rest to the organizer only before the start or after the end.
 
 ## How it works
 
