@@ -106,7 +106,7 @@
   <div class="roles">
     <div class="role money"><strong>Organizer or sponsor</strong><span class="muted">Creates the event, chooses the oracles and the rules, and locks the budget. Runs the stage screen at the venue.</span></div>
     <div class="role"><strong>Attendee</strong><span class="muted">Has a MetaMask Solana wallet. Joins through the widget on the organizer's page with one selfie and one signature.</span></div>
-    <div class="role"><strong>Oracles (1 to 3)</strong><span class="muted">Face-recognition services, like ours (OnSight). Each holds its own key and reports sightings to the program. They never move money.</span></div>
+    <div class="role"><strong>Oracles (1 to 3)</strong><span class="muted">Face-recognition services, like ours (OnSight). Each holds its own key and reports sightings to the program. They can't move money; the program pays an oracle 0.002 SOL when its report triggers a payout.</span></div>
     <div class="role"><strong>Camera phone</strong><span class="muted">Any phone at the pay lane or kiosk. Opens a link from a QR code and streams frames to every oracle.</span></div>
     <div class="role chain"><strong>presence_pay program</strong><span class="muted">Holds the budget, stores the rules, and makes every payout decision on the chain clock.</span></div>
   </div>
@@ -114,9 +114,9 @@
 
 <!-- 0 -->
 <section class="phase">
-  <div class="phase-head"><span class="num">0</span><h2>One-time setup</h2><span class="who">platform and oracles</span></div>
+  <div class="phase-head"><span class="num">0</span><h2>One-time setup</h2><span class="who">deployer and oracles</span></div>
   <ol class="steps">
-    <li><span class="tag on">on chain</span><div><b>Deploy the program</b> to devnet, then call <code>init_config(treasury, fee)</code>. The fee (0.002 SOL per paid attendee) goes to the platform treasury. Changing it later affects only new events.</div></li>
+    <li><span class="tag on">on chain</span><div><b>Deploy the program</b> to devnet. There are no settings to initialise: the fee (0.002 SOL per paid attendee) is a constant in the program, and there is no admin.</div></li>
     <li><span class="tag on">on chain</span><div><b>Each oracle registers itself</b> with <code>register_oracle(name, url)</code>, for example <code>OnSight</code> at <code>https://hackyeah.kindhome.io</code>. This creates a public directory entry, so a widget can find each oracle's API from the chain instead of trusting our server for it. The entry has no effect on payouts.</div></li>
   </ol>
 </section>
@@ -127,7 +127,7 @@
   <ol class="steps">
     <li><span class="tag on">on chain</span><div><code>create_event(event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs)</code> creates an Event account. Its address is the event's ID everywhere else (widget, oracle API, stage).</div></li>
     <li><span class="tag sol">SOL moves</span><div>The whole budget, <code>max_paid × (reward + fee)</code>, moves from the organizer into the Event account (escrow). From now on the organizer can't take it back while the event runs.</div></li>
-    <li><span class="tag on">on chain</span><div>The rules are frozen: which 1 to 3 oracle keys may report, how many different oracles must agree (<b>threshold</b>, M-of-N), the time window, the reward, the cap, and how long a person must be seen (<b>min_seen_secs</b>, measured on the chain clock).</div></li>
+    <li><span class="tag on">on chain</span><div>The rules are frozen: which 1 to 3 oracle keys may report, how many different oracles must agree (<b>threshold</b>, M-of-N), the time window, the reward, the fee, the cap, and how long a person must be seen (<b>min_seen_secs</b>, measured on the chain clock).</div></li>
   </ol>
   <p class="muted">Today this is <code>scripts/devnet_event.py</code>. An organizer UI is optional later work.</p>
 </section>
@@ -188,18 +188,18 @@ Time: 2026-10-03T12:00:00Z</div></div></li>
  │       signature= the attendee's signature from step 2
  └─ #1  presence_pay.report_sighting
          accounts: oracle, event, sighting PDA ["sighting", event, attendee],
-                   attendee, treasury, system program, Instructions sysvar</div>
+                   attendee, system program, Instructions sysvar</div>
   <p>If the signature in #0 is invalid, Solana rejects the whole transaction. Then the program runs these checks, in order:</p>
   <div class="checks">
     <div class="check"><b>1 · Listed oracle</b><span class="muted">The signer is one of the event's oracles (<code>NotOracle</code>).</span></div>
-    <div class="check"><b>2 · Inside the window</b><span class="muted"><code>start ≤ now ≤ end</code> on the chain clock.</span></div>
-    <div class="check"><b>3 · Attendee's consent</b><span class="muted">The previous instruction is an ed25519 check of the <i>attendee's</i> key over a join for <i>this</i> event and wallet (<code>BadJoinProof</code>).</span></div>
+    <div class="check"><b>2 · Attendee's consent</b><span class="muted">The previous instruction is an ed25519 check of the <i>attendee's</i> key over a join for <i>this</i> event and wallet (<code>BadJoinProof</code>).</span></div>
+    <div class="check"><b>3 · Inside the window</b><span class="muted"><code>start ≤ now ≤ end</code> on the chain clock.</span></div>
     <div class="check"><b>4 · Record the sighting</b><span class="muted">The first report creates the Sighting account (the oracle pays its rent). A gap of more than 60 s restarts the dwell time.</span></div>
     <div class="check"><b>5 · Enough oracles</b><span class="muted">The number of different oracles that reported (a bitmask) is at least <b>threshold</b>.</span></div>
     <div class="check"><b>6 · Seen long enough</b><span class="muted"><code>last_seen − first_seen ≥ min_seen_secs</code>, by the chain's clock, not the oracle's.</span></div>
     <div class="check"><b>7 · Under the cap, once</b><span class="muted"><code>paid_count &lt; max_paid</code>. The <code>paid</code> flag is set <i>before</i> the transfer, so a second payout is impossible.</span></div>
   </div>
-  <div class="note money"><b>Payout, inside the same report:</b> <code>reward</code> goes from the Event account to the attendee's wallet and <code>fee</code> goes to the treasury, and the program emits <code>AttendeePaid</code>. Until the rules are met, a report only updates the Sighting and nothing moves. Reports after the payout do nothing, so retrying is always safe.</div>
+  <div class="note money"><b>Payout, inside the same report:</b> <code>reward</code> goes from the Event account to the attendee's wallet and <code>fee</code> (0.002 SOL) goes to the oracle that sent this report, covering what it spends on transactions and deposits. The program also emits <code>AttendeePaid</code>. Until the rules are met, a report only updates the Sighting and nothing moves. Reports after the payout do nothing, so retrying is always safe.</div>
 </section>
 
 <!-- 6 -->
@@ -264,7 +264,7 @@ Time: 2026-10-03T12:00:00Z</div></div></li>
   <h2>Where the demo stands</h2>
   <ul>
     <li>Steps 2 to 6 run against the in-memory dev stand-in, and every program rule is tested in LiteSVM.</li>
-    <li>Next: deploy the program under a new ID, <code>init_config</code>, register the oracle, create an event, then run the live loop with a confirmed devnet payout and record it.</li>
+    <li>Next: deploy the program under a new ID, register the oracle, create an event, then run the live loop with a confirmed devnet payout and record it.</li>
   </ul>
 </section>
 
