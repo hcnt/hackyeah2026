@@ -111,13 +111,11 @@ positive for right, roughly −0.5…0.5 (straight is within ±0.15). `ok` is `t
   "signed_at": "2026-10-04T10:12:03Z",
   "signature": "<base58>",
   "consent": { "version": "2026-10-03", "accepted": true },
-  "first_name": "Ola",
   "image": "<base64 JPEG>"
 }
 ```
 
-`first_name`: 1–40 characters, shown on the stage screen when the person is recognised. The photo is checked like
-`test`. Submitting again for the same wallet replaces the earlier entry. There is no liveness check in this
+The photo is checked like `test`. Submitting again for the same wallet replaces the earlier entry. There is no liveness check in this
 version: production adds a certified liveness provider in front of submit.
 
 `201`:
@@ -185,14 +183,15 @@ Server to client only:
 
 ```json
 { "type": "frame", "jpeg": "<base64>", "width": 960, "height": 540,
-  "faces": [{ "bbox": [x1, y1, x2, y2], "state": "tracking", "name": "Ola", "seen_secs": 2.1 }] }
-{ "type": "payout", "wallet": "…", "name": "Ola", "tx": "…", "at": "2026-10-04T10:42:07Z" }
+  "faces": [{ "bbox": [x1, y1, x2, y2], "state": "tracking", "name": "7xKX…gAsU", "seen_secs": 2.1 }] }
+{ "type": "payout", "wallet": "…", "name": "7xKX…gAsU", "tx": "…", "at": "2026-10-04T10:42:07Z" }
 { "type": "stats", "going": 37, "paid": 21 }
 ```
 
 - `state` is `unknown`, `tracking` or `paid`. Unknown faces have `name: null` and `seen_secs: 0`; no score or
   identity is ever sent for them.
 - Frames arrive at most 5 per second.
+- `name` is the attendee's short wallet address (first 4 and last 4 characters); no personal name is collected.
 - `payout.name` is always a string.
 
 ### Close codes (both sockets)
@@ -261,7 +260,6 @@ export interface TestResponse {
 export interface Signed { wallet: string; signed_at: string; signature: string }
 export interface SubmitRequest extends Signed {
   consent: { version: string; accepted: true }
-  first_name: string
   image: string
 }
 export interface EventDetails {
@@ -310,4 +308,4 @@ export function signedMessage(
 - Face signatures are kept per event, encrypted with a key held only in memory, and destroyed when the event ends
   or the attendee leaves.
 - Faces of people who are not on the event's list are discarded immediately and never sent to any client.
-- Logs contain only event, wallet, transaction and status — never images, names or face signatures.
+- Logs contain only event, wallet, transaction and status — never images or face signatures.

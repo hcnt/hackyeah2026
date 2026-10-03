@@ -89,7 +89,6 @@ class Consent(BaseModel):
 
 class SubmitRequest(Signed):
     consent: Consent
-    first_name: str = Field(min_length=1, max_length=40)
     image: str
 
 
@@ -184,9 +183,6 @@ async def attendance_submit(
     event_id: str, request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> JSONResponse:
     body = await _body(request, SubmitRequest)
-    first_name = body.first_name.strip()
-    if not first_name:
-        raise invalid_request("first_name must not be blank.")
     image = _b64(body.image)
     state = get_state()
     state.signatures.verify(
@@ -204,7 +200,7 @@ async def attendance_submit(
     if other is not None and score >= DUPLICATE_FACE_COSINE:
         log.info("join event_id=%s wallet=%s status=duplicate_face", event_id, body.wallet)
         raise OracleError(409, "face_already_registered", "This face is already registered for this event.")
-    state.guestlists.put(event_id, info.end_ts, body.wallet, emb, first_name)
+    state.guestlists.put(event_id, info.end_ts, body.wallet, emb)
     log.info("join event_id=%s wallet=%s status=on_list", event_id, body.wallet)
     return JSONResponse({"status": "on_list", "event_id": event_id, "wallet": body.wallet}, status_code=201)
 

@@ -135,7 +135,7 @@ flowchart LR
     <ul class="tight">
       <li><b>Before:</b> the client loads <code>GET /events/{id}</code> for the event and the consent text, and calls <code>attendance/test</code> about twice a second while the camera is open. The test is stateless and stores nothing.</li>
       <li><b>Submit</b> checks in this order: request shape → wallet signature (valid, within 5 min, never used) → event exists and is not over → consent accepted and version known → the photo passes the quality checks (including looking straight at the camera) → face not already registered to another wallet in this event (cosine ≥ 0.50).</li>
-      <li><b>Stored:</b> the normalised face signature plus the first name, encrypted with the event's key, under the wallet that signed. The photo is dropped as soon as the signature is made.</li>
+      <li><b>Stored:</b> the normalised face signature, encrypted with the event's key, under the wallet that signed (the stage screen labels people by short wallet address; no name is collected). The photo is dropped as soon as the signature is made.</li>
     </ul>
   </section>
 
