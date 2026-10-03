@@ -128,7 +128,8 @@ If the oracles stop, nobody is paid and the organizer withdraws everything after
   (`solana program set-upgrade-authority <PROGRAM_ID> --final`). We plan to do that once the code is final.
 - **Oracle trust.** With threshold 1 (our demo), one oracle can report a registered person who didn't come.
   M-of-N reduces this; it doesn't remove it.
-- **A faked camera feed** (a photo held up) isn't caught. Production needs certified liveness and several cameras.
+- **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
+  didn't come. Production needs liveness detection.
 - **If the organizer loses their key**, the unspent budget stays locked forever.
 - **Biometrics and GDPR.** The lawful setting is a pay lane or kiosk people step into after explicit, separate
   consent, with a non-biometric alternative; scanning a whole room isn't.
