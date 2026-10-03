@@ -33,6 +33,9 @@ export interface EventDetails {
   going: number
   paid: number
   spots_left: number | null
+  /** The event's oracle keys and threshold. Convenience only: the widget discovers oracles from the chain. */
+  oracles?: string[]
+  threshold?: number
   consent: { version: string; text: string }
 }
 
@@ -72,7 +75,8 @@ export class ApiError extends Error {
   }
 }
 
-export function createApi(baseUrl: string, eventId: string) {
+/** `name` labels network errors ("Could not reach <name>"). */
+export function createApi(baseUrl: string, eventId: string, name = 'OnSight') {
   const root = `${baseUrl.replace(/\/$/, '')}/api/v1/events/${encodeURIComponent(eventId)}`
 
   async function call<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
@@ -84,7 +88,7 @@ export function createApi(baseUrl: string, eventId: string) {
         body: init?.body ? JSON.stringify(init.body) : undefined,
       })
     } catch {
-      throw new ApiError(0, 'network', 'Could not reach OnSight. Check your connection.')
+      throw new ApiError(0, 'network', `Could not reach ${name}. Check your connection.`)
     }
     const data = await res.json().catch(() => null)
     if (!res.ok) {
