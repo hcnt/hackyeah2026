@@ -3,6 +3,7 @@
 import numpy as np
 
 from app.oracle.face import RawFace, normalize
+from app.oracle.interfaces import SightingResult
 
 DIM = 512
 
@@ -85,18 +86,36 @@ class FakeClock:
 
 
 class RecordingSink:
-    """Records every pay() call with the fake-clock time; fails the first `fail_times` calls."""
+    """A stand-in for the program, written independently of the code under test: pays a wallet once its reports
+    span >= `min_seen` seconds of the fake clock (a gap > 60 s restarts it). Records every report() call with the
+    fake-clock time; fails the first `fail_times` calls."""
 
-    def __init__(self, clock: FakeClock, fail_times: int = 0) -> None:
+    def __init__(self, clock: FakeClock, min_seen: float = 0, fail_times: int = 0) -> None:
         self.clock = clock
+        self.min_seen = min_seen
         self.fail_times = fail_times
         self.calls: list[tuple[str, str, float]] = []
-        self.successes: list[tuple[str, str]] = []
+        self.successes: list[tuple[str, str]] = []  # payouts
+        self.paid_at: list[float] = []
+        self._first: dict[tuple[str, str], float] = {}
+        self._last: dict[tuple[str, str], float] = {}
+        self._tx: dict[tuple[str, str], str] = {}
 
-    async def pay(self, event_id: str, wallet: str) -> str:
-        self.calls.append((event_id, wallet, self.clock()))
+    async def report(self, event_id: str, wallet: str) -> SightingResult:
+        now = self.clock()
+        self.calls.append((event_id, wallet, now))
         if self.fail_times > 0:
             self.fail_times -= 1
             raise RuntimeError("chain unavailable")
-        self.successes.append((event_id, wallet))
-        return f"tx-{wallet}-{len(self.successes)}"
+        key = (event_id, wallet)
+        if key in self._tx:
+            return SightingResult(paid=True, tx=self._tx[key])
+        if key not in self._first or now - self._last[key] > 60:
+            self._first[key] = now
+        self._last[key] = now
+        if now - self._first[key] < self.min_seen:
+            return SightingResult(paid=False)
+        self.successes.append(key)
+        self.paid_at.append(now)
+        self._tx[key] = f"tx-{wallet}-{len(self.successes)}"
+        return SightingResult(paid=True, tx=self._tx[key])

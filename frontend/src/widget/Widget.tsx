@@ -2,9 +2,12 @@
 //   1a sign up (split button + wallet picker) → 1b confirm in wallet → 1c wallet connected
 //   2a selfie (one photo)
 //   3a consent → sign "join" in the wallet → 3b you're in
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+//
+// Multi-oracle: the event's oracles come from the chain (oracles.ts). The join is signed ONCE and the same body goes
+// to every oracle; it counts once `threshold` of them accepted. With a single oracle the UI is the same as before.
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
-import { ApiError, createApi, type EventDetails, type StatusResponse } from './api'
+import type { EventDetails, SubmitRequest } from './api'
 import { ButtonCheck, Check, Chevron } from './icons'
 import { WALLET_LOGOS } from './assets'
 import Selfie from './Selfie'
@@ -18,6 +21,17 @@ import {
   useSolanaWallets,
   type Connection,
 } from './wallet'
+import {
+  attendance,
+  discoverOracles,
+  failureText,
+  firstEvent,
+  hostOf,
+  toAll,
+  type Attendance,
+  type Oracle,
+  type OracleSet,
+} from './oracles'
 
 type Stage =
   | { name: 'signup' }
@@ -51,39 +65,64 @@ const PICKER = [
 const STATUS_POLL_MS = 10_000
 const PHOTO_ERRORS = new Set(['photo_rejected', 'face_already_registered'])
 
+/** Per-oracle state of the last join attempt (index-aligned with OracleSet.oracles; null = not sent). */
+type Progress = { state: 'sending' } | { state: 'ok' } | { state: 'failed'; message: string } | null
+
 export type WidgetProps = {
   eventId: string
-  /** Origin of the OnSight backend. Empty string means the page's own origin. */
+  /** Origin of the fallback OnSight backend (used when the chain read fails). Empty string = the page's origin. */
   apiBase?: string
+  /** Solana JSON-RPC endpoint for reading the event's oracles. Default: devnet. */
+  rpcUrl?: string
+  /** presence_pay program id. Default: DEFAULT_PROGRAM_ID in chain.ts. */
+  programId?: string
 }
 
-export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
-  const api = useMemo(() => createApi(apiBase, eventId), [apiBase, eventId])
+export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: WidgetProps) {
   const wallets = useSolanaWallets()
   const metamask = wallets.find(isMetaMask)
 
+  const [oracleSet, setOracleSet] = useState<OracleSet | null>(null)
+  /** The oracle whose event details and consent text are shown (the first to answer); also tests selfies. */
+  const [primary, setPrimary] = useState<Oracle | null>(null)
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [stage, setStage] = useState<Stage>({ name: 'signup' })
   const [conn, setConn] = useState<Connection | null>(null)
-  const [status, setStatus] = useState<StatusResponse | null>(null)
+  const [status, setStatus] = useState<Attendance | null>(null)
+  const [progress, setProgress] = useState<Progress[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
-    api.event().then(setEvent, (err: Error) => setLoadError(err.message))
-  }, [api])
+    let cancelled = false
+    discoverOracles({ eventId, apiBase, rpcUrl, programId })
+      .then(async (set) => {
+        const first = await firstEvent(set.oracles)
+        if (cancelled) return
+        setOracleSet(set)
+        setPrimary(first.oracle)
+        setEvent(first.event)
+      })
+      .catch((err: Error) => !cancelled && setLoadError(err.message))
+    return () => {
+      cancelled = true
+    }
+  }, [eventId, apiBase, rpcUrl, programId])
 
   // Once on the list, keep the status fresh so a payout shows up without a reload.
   useEffect(() => {
-    if (stage.name !== 'done' || !conn) return
-    const id = setInterval(() => api.status(conn.account.address).then(setStatus, () => {}), STATUS_POLL_MS)
+    if (stage.name !== 'done' || !conn || !oracleSet) return
+    const id = setInterval(() => attendance(oracleSet, conn.account.address).then(setStatus, () => {}), STATUS_POLL_MS)
     return () => clearInterval(id)
-  }, [api, stage.name, conn])
+  }, [oracleSet, stage.name, conn])
 
-  const onSelfieDone = useCallback((image: string) => setStage({ name: 'consent', image }), [])
+  const onSelfieDone = useCallback((image: string) => {
+    setProgress([])
+    setStage({ name: 'consent', image })
+  }, [])
 
-  if (!event) {
+  if (!event || !oracleSet || !primary) {
     return (
       <Card stepper={null}>
         {loadError ? <p className="an-error">{loadError}</p> : <p className="an-note">Loading event…</p>}
@@ -104,7 +143,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       // MetaMask asks only the first time; after that it reuses this site's stored connection silently.
       const c = await connect(wallet)
       setConn(c)
-      const s = await api.status(c.account.address)
+      const s = await attendance(oracleSet!, c.account.address)
       setStatus(s)
       setStage(s.status === 'not_joined' ? { name: 'connected' } : { name: 'done' })
     } catch (err) {
@@ -113,51 +152,84 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
   }
 
-  async function join(image: string) {
-    if (!conn || !event) return
+  /** Sign the join once and send the same body to `targets` (default: every oracle) in parallel. */
+  async function join(image: string, targets?: Oracle[]) {
+    if (!conn || !event || !oracleSet || !primary) return
+    const set = oracleSet
     setError(null)
     setStage({ name: 'signing', image })
+    let body: SubmitRequest
     try {
       const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
-      await api.submit({
-        ...signed,
-        consent: { version: event.consent.version, accepted: true },
-        image,
-      })
-      setStatus({ status: 'on_list', tx: null })
-      setStage({ name: 'done' })
-      api.event().then(setEvent, () => {})
+      body = { ...signed, consent: { version: event.consent.version, accepted: true }, image }
     } catch (err) {
-      if (isUserRejection(err)) {
-        setError('Signature cancelled in MetaMask.')
-        setStage({ name: 'consent', image })
-      } else if (err instanceof ApiError && PHOTO_ERRORS.has(err.code)) {
-        setError(`${err.message} Let's take the photo again.`)
-        setStage({ name: 'selfie' })
-      } else {
-        setError(walletErrorMessage(err))
-        setStage({ name: 'consent', image })
-      }
+      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
+      setStage({ name: 'consent', image })
+      return
+    }
+
+    const sendTo = targets ?? set.oracles
+    // A retry keeps the oracles that already accepted; a full send starts over.
+    const next: Progress[] = targets ? [...progress] : set.oracles.map(() => null)
+    for (const o of sendTo) next[set.oracles.indexOf(o)] = { state: 'sending' }
+    setProgress([...next])
+    const results = await toAll(sendTo, (api) => api.submit(body))
+    for (const r of results) {
+      next[set.oracles.indexOf(r.oracle)] = r.ok ? { state: 'ok' } : { state: 'failed', message: r.error.message }
+    }
+    setProgress([...next])
+
+    const accepted = next.filter((p) => p?.state === 'ok').length
+    if (accepted >= set.need) {
+      setStatus({ status: 'on_list', tx: null, onList: accepted })
+      setStage({ name: 'done' })
+      primary.api.event().then(setEvent, () => {})
+      return
+    }
+    const failed = results.filter((r) => !r.ok)
+    const photo = failed.find((r) => !r.ok && PHOTO_ERRORS.has(r.error.code))
+    if (photo && !photo.ok) {
+      setError(`${photo.error.message} Let's take the photo again.`)
+      setStage({ name: 'selfie' })
+    } else if (set.oracles.length === 1) {
+      setError(failed[0] && !failed[0].ok ? failed[0].error.message : 'The join failed.')
+      setStage({ name: 'consent', image })
+    } else {
+      setError(`${accepted} of ${set.need} needed oracles accepted. ${failureText(failed)}`)
+      setStage({ name: 'consent', image })
     }
   }
 
   async function leave() {
-    if (!conn || !event) return
+    if (!conn || !event || !oracleSet || !primary) return
     setError(null)
     try {
-      await api.leave(await signAction(conn, 'leave', event.event_id))
-      setStatus({ status: 'not_joined', tx: null })
+      const signed = await signAction(conn, 'leave', event.event_id)
+      const results = await toAll(oracleSet.oracles, (api) => api.leave(signed))
+      const failed = results.filter((r) => !r.ok)
+      if (failed.length === results.length && failed[0] && !failed[0].ok) throw failed[0].error
+      if (failed.length > 0) setError(`Could not leave at ${failureText(failed)}`)
+      setStatus({ status: 'not_joined', tx: null, onList: failed.length })
+      setProgress([])
       setStage({ name: 'connected' })
-      api.event().then(setEvent, () => {})
+      primary.api.event().then(setEvent, () => {})
     } catch (err) {
       setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
     }
   }
 
+  const multi = oracleSet.oracles.length > 1
+  const failedOracles = oracleSet.oracles.filter((_, i) => progress[i]?.state === 'failed')
+  const canRetry = multi && failedOracles.length > 0 && progress.some((p) => p?.state === 'ok')
+  const sending = multi && progress.some((p) => p?.state === 'sending')
+  // Name every oracle that will get the face signature, unless it is the one backend this widget always talked to.
+  const showProcessors =
+    oracleSet.fromChain && (multi || oracleSet.oracles[0].host !== hostOf(apiBase || window.location.origin))
+
   const errorLine = error && <p className="an-error" role="alert">{error}</p>
 
   function body(): ReactNode {
-    if (!event) return null
+    if (!event || !oracleSet || !primary) return null
     switch (stage.name) {
       case 'signup':
         return (
@@ -215,7 +287,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       case 'selfie':
         return (
           <>
-            <Selfie api={api} onDone={onSelfieDone} />
+            <Selfie api={primary.api} onDone={onSelfieDone} />
             {errorLine}
           </>
         )
@@ -228,16 +300,36 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
             <div className="an-consent-stage">
               <p className="an-question">{question}</p>
               <p className="an-consent-text">{rest.join('\n').trim()}</p>
+              {showProcessors && (
+                <p className="an-consent-text">
+                  Your face signature will be processed by:{' '}
+                  {oracleSet.oracles.map((o) => `${o.name} (${o.host})`).join(', ')}
+                </p>
+              )}
+              {oracleSet.unreachable > 0 && (
+                <p className="an-consent-text">
+                  {oracleSet.unreachable} of the event&apos;s oracles could not be found and won&apos;t get your join.
+                  {oracleSet.threshold > oracleSet.oracles.length &&
+                    ` A payout needs ${oracleSet.threshold}, so it cannot happen.`}
+                </p>
+              )}
             </div>
+            {multi && progress.some(Boolean) && <OracleProgress oracles={oracleSet.oracles} progress={progress} />}
             {errorLine}
             <button
               type="button"
               className="an-button"
               disabled={signing}
-              onClick={() => join(stage.image)}
+              onClick={() => (canRetry ? join(stage.image, failedOracles) : join(stage.image))}
             >
               {signing ? (
-                'Confirm in MetaMask…'
+                sending ? (
+                  'Sending to oracles…'
+                ) : (
+                  'Confirm in MetaMask…'
+                )
+              ) : canRetry ? (
+                `Retry ${failedOracles.map((o) => o.name).join(', ')}`
               ) : (
                 <>
                   <ButtonCheck />
@@ -255,6 +347,11 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
               <Check size={32} />
             </div>
             <p className="an-display">{status?.status === 'paid' ? 'You got paid.' : "You're in."}</p>
+            {multi && status && status.status !== 'paid' && (
+              <p className="an-note">
+                On the list with {status.onList} of {oracleSet.oracles.length} oracles
+              </p>
+            )}
             {errorLine}
             {status?.status === 'paid' && status.tx ? (
               <a
@@ -293,6 +390,30 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     >
       {body()}
     </Card>
+  )
+}
+
+function OracleProgress({ oracles, progress }: { oracles: Oracle[]; progress: Progress[] }) {
+  return (
+    <ul className="an-oracles" aria-live="polite">
+      {oracles.map((o, i) => {
+        const p = progress[i]
+        return (
+          <li key={o.key ?? i} className="an-oracle" data-state={p?.state ?? 'idle'}>
+            <span className="an-oracle-name">{o.name}</span>
+            <span className="an-oracle-state">
+              {p?.state === 'sending'
+                ? 'Sending…'
+                : p?.state === 'ok'
+                  ? 'On the list'
+                  : p?.state === 'failed'
+                    ? p.message
+                    : 'Not sent'}
+            </span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

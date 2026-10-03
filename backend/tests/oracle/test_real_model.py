@@ -31,7 +31,7 @@ def test_t1_enrol_one_face_exactly_one_payout_others_unknown():
     enrolled = engine.embed(crop, crop_faces)[0]
 
     clock = FakeClock(0.0)
-    sink = RecordingSink(clock)
+    sink = RecordingSink(clock, min_seen=1)  # the simulated program: 1 s dwell, as in the event
     state = OracleState(engine=engine, clock=clock, sink=lambda: sink)
     info = EventInfo(event_id="ev", organizer="org", start_ts=0, end_ts=4_000_000_000, min_seen_secs=1)
     rt = state.runtime_for(info)
@@ -47,7 +47,7 @@ def test_t1_enrol_one_face_exactly_one_payout_others_unknown():
         return outs
 
     outs = asyncio.run(run())
-    assert [(e, w) for e, w, _ in sink.calls] == [("ev", "W")]
+    assert sink.successes == [("ev", "W")]  # exactly one payout, after the dwell
     last = outs[-1]
     assert len(last) == 6
     states = sorted(f["state"] for f in last)

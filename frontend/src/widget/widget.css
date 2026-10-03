@@ -121,6 +121,13 @@
 .an-consent-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px 0; }
 .an-question { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; text-align: center; white-space: pre-line; }
 .an-consent-text { margin-top: -6px; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }
+/* Multi-oracle join: one row per oracle */
+.an-oracles { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.an-oracle { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 1.4; }
+.an-oracle-name { font-weight: 600; color: var(--ink); }
+.an-oracle-state { color: var(--muted); text-align: right; }
+.an-oracle[data-state='ok'] .an-oracle-state { color: var(--success); }
+.an-oracle[data-state='failed'] .an-oracle-state { color: var(--danger); }
 
 /* 3b · Done */
 .an-done { gap: 12px; }

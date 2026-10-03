@@ -133,6 +133,19 @@ async def _event(event_id: str) -> EventInfo:
     return info
 
 
+def own_oracle_pubkey() -> str | None:
+    """The key this oracle reports sightings with, or None when the installed sink has none (dev stand-in)."""
+    return getattr(providers.sighting_sink, "oracle_pubkey", None)
+
+
+def _listed_oracle(info: EventInfo) -> None:
+    """Joins only for events that list this oracle: another oracle's event would never pay on our reports, so the
+    face signature would be stored for nothing. Skipped when either side is unknown (dev stand-in)."""
+    me = own_oracle_pubkey()
+    if me and info.oracles and me not in info.oracles:
+        raise OracleError(409, "not_an_oracle_for_event", "This oracle is not one of the event's oracles.")
+
+
 def _not_ended(info: EventInfo) -> None:
     if info.end_ts < get_state().wall_clock():
         raise OracleError(409, "event_ended", "This event is over.")
@@ -191,6 +204,7 @@ async def attendance_submit(
     )
     info = await _event(event_id)
     _not_ended(info)
+    _listed_oracle(info)
     if body.consent.accepted is not True or body.consent.version not in settings.oracle_consent_versions:
         raise OracleError(422, "consent_required", "Please accept the current consent to join.")
 
@@ -243,6 +257,9 @@ async def event_details(event_id: str, settings: Annotated[Settings, Depends(get
         "min_seen_secs": info.min_seen_secs,
         "reward_lamports": info.reward_lamports,
         "max_payouts": info.max_payouts,
+        # Convenience only: clients discover the oracles (and their URLs) from the chain, not from us.
+        "oracles": info.oracles,
+        "threshold": info.threshold,
         "going": state.guestlists.count(event_id),
         "paid": paid,
         "spots_left": max(info.max_payouts - paid, 0) if info.max_payouts is not None else None,

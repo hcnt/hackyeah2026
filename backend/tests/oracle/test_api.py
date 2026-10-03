@@ -12,7 +12,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.config import Settings, get_settings
 from app.main import app
 from app.oracle import interfaces
-from app.oracle.interfaces import DevEventSource, DevPayoutSink
+from app.oracle.interfaces import DevEventSource, DevSightingSink
 from app.oracle.runtime import OracleState, set_state, short_wallet
 from app.oracle.signatures import build_message
 
@@ -45,9 +45,9 @@ def env():
     rng = np.random.default_rng(7)
     engine = FakeEngine()
     set_state(OracleState(engine=engine))
-    old = interfaces.providers.event_source, interfaces.providers.payout_sink
+    old = interfaces.providers.event_source, interfaces.providers.sighting_sink
     interfaces.providers.event_source = DevEventSource()
-    interfaces.providers.payout_sink = DevPayoutSink()
+    interfaces.providers.sighting_sink = DevSightingSink()
     org = Keypair()
     event = {"event_id": "ev1", "organizer": str(org.pubkey()), "start_ts": 0, "end_ts": 4_000_000_000,
              "min_seen_secs": 0}
@@ -55,7 +55,7 @@ def env():
         assert client.post("/api/oracle/dev/events", json=event).status_code == 200
         yield client, engine, rng, org, event
     app.dependency_overrides.clear()
-    interfaces.providers.event_source, interfaces.providers.payout_sink = old
+    interfaces.providers.event_source, interfaces.providers.sighting_sink = old
     set_state(None)
 
 
@@ -293,6 +293,11 @@ def test_event_details_counts_status_and_consent(env):
     # Display fields are optional: the minimal event from the fixture still answers, with nulls.
     d = client.get("/api/v1/events/ev1").json()
     assert d["name"] is None and d["spots_left"] is None
+    assert (d["oracles"], d["threshold"]) == ([], 1)  # the dev stand-in knows no oracles
+    multi = {**event, "event_id": "ev4", "oracles": [str(Keypair().pubkey()), str(Keypair().pubkey())], "threshold": 2}
+    assert client.post("/api/oracle/dev/events", json=multi).status_code == 200
+    d = client.get("/api/v1/events/ev4").json()
+    assert (d["oracles"], d["threshold"]) == (multi["oracles"], 2)
     ended = {**event, "event_id": "ev3", "start_ts": 0, "end_ts": 1}
     assert client.post("/api/oracle/dev/events", json=ended).status_code == 200
     d = client.get("/api/v1/events/ev3").json()
@@ -329,3 +334,35 @@ def test_slow_recognition_does_not_slow_the_video(env):
     # 10 frames at <= 10 fps take ~1 s; recognising each (0.4 s) in line would take >= 4 s.
     assert elapsed < 2.0, elapsed
     assert len(calls) < 10  # frames that arrived during recognition were skipped, not queued
+
+
+class KeyedSink(DevSightingSink):
+    """The dev sink with an oracle key, as the Solana sink carries one."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__()
+        self.oracle_pubkey = key
+
+
+def test_join_only_for_events_that_list_this_oracle(env):
+    client, engine, rng, _, event = env
+    me, other = str(Keypair().pubkey()), str(Keypair().pubkey())
+    interfaces.providers.sighting_sink = KeyedSink(me)
+    for eid, oracles in (("theirs", [other]), ("ours", [other, me]), ("unknown", [])):
+        body = {**event, "event_id": eid, "oracles": oracles, "threshold": 1}
+        assert client.post("/api/oracle/dev/events", json=body).status_code == 200
+
+    r = submit(client, Keypair(), photo_for(engine, rng, unit(rng), "t"), event_id="theirs")
+    assert r.status_code == 409 and err(r) == "not_an_oracle_for_event"
+    assert engine.embed_calls == []  # refused before the photo is analysed
+    assert client.get("/api/v1/events/theirs").json()["going"] == 0
+    assert submit(client, Keypair(), photo_for(engine, rng, unit(rng), "o"), event_id="ours").status_code == 201
+    # An event with no oracle list (dev stand-in) is not checked.
+    assert submit(client, Keypair(), photo_for(engine, rng, unit(rng), "u"), event_id="unknown").status_code == 201
+
+
+def test_join_check_skipped_when_the_sink_has_no_key(env):
+    client, engine, rng, _, event = env  # DevSightingSink: no oracle_pubkey
+    body = {**event, "event_id": "theirs", "oracles": [str(Keypair().pubkey())], "threshold": 1}
+    assert client.post("/api/oracle/dev/events", json=body).status_code == 200
+    assert submit(client, Keypair(), photo_for(engine, rng, unit(rng), "x"), event_id="theirs").status_code == 201

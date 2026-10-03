@@ -2,11 +2,19 @@
 
 Instructions are built by hand (Anchor discriminator = sha256("global:<name>")[:8] + Borsh args), so no anchorpy.
 Account layouts mirror contracts/presence_pay/lib.rs; changing them there means changing them here.
-Each Event carries its own oracle and treasury (fixed at creation); Config only holds defaults for new events.
+Each Event carries its own oracles (1-3, with an M-of-N threshold) and treasury, fixed at creation; Config only holds
+defaults for new events.
+
+The oracle is a sensor: it sends report_sighting ("I see wallet W now") and the PROGRAM decides when to pay (dwell
+time on the chain clock, oracle threshold, window, cap, once per wallet). There is no instruction that pays directly.
+
+Oracles also publish a registry entry (OracleInfo: name + API URL) so an attendee's widget can find every oracle of an
+event on the chain and send its join to each of them.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import struct
@@ -35,11 +43,16 @@ RPC_URL = _settings.solana_rpc_url
 CLUSTER = _settings.solana_cluster
 LAMPORTS_PER_SOL = 1_000_000_000
 
-# #[error_code] in lib.rs, numbered from 6000 by Anchor.
+# #[error_code] in lib.rs, numbered from 6000 by Anchor (new variants are appended, never renumbered).
 PROGRAM_ERRORS = [
     "BadTimes", "BadAmounts", "Overflow", "AlreadyStarted",
     "NotStarted", "Ended", "CapReached", "EventRunning",
+    "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl",
 ]
+MAX_ORACLES = 3
+SIGHTING_GAP_SECS = 60  # lib.rs: a longer gap between two reports restarts the dwell time
+MAX_ORACLE_NAME = 32  # lib.rs: OracleInfo.name, bytes
+MAX_ORACLE_URL = 128  # lib.rs: OracleInfo.url, bytes
 
 
 def _disc(namespace: str, name: str) -> bytes:
@@ -48,12 +61,18 @@ def _disc(namespace: str, name: str) -> bytes:
 
 CONFIG_DISC = _disc("account", "Config")
 EVENT_DISC = _disc("account", "Event")
-RECEIPT_DISC = _disc("account", "Receipt")
+SIGHTING_DISC = _disc("account", "Sighting")
+ORACLE_INFO_DISC = _disc("account", "OracleInfo")
+ATTENDEE_PAID_DISC = _disc("event", "AttendeePaid")
 
 _CONFIG_FMT = "<32s32sQB"  # admin, treasury, fee, bump
-_EVENT_FMT = "<32s32s32sQqqQQIIIB"  # organizer, oracle, treasury, event_id, start, end, reward, fee, max_paid, ...
+# organizer, oracles[3], oracle_count, threshold, treasury, event_id, start, end, reward, fee, max_paid, paid_count,
+# min_seen_secs, bump
+_EVENT_FMT = "<32s96sBB32sQqqQQIIIB"
+_SIGHTING_FMT = "<qqB?32sqB"  # first_seen, last_seen, reporters, paid, payer, event_end, bump
 EVENT_ORGANIZER_OFFSET = 8
-EVENT_ORACLE_OFFSET = 8 + 32
+EVENT_ORACLES_OFFSET = 8 + 32  # slot i at EVENT_ORACLES_OFFSET + 32 * i
+DEFAULT_PUBKEY = Pubkey.default()
 
 
 def load_keypair(path: str | Path) -> Keypair:
@@ -73,19 +92,23 @@ def explorer_address(addr: Pubkey | str) -> str:
     return f"https://explorer.solana.com/address/{addr}?cluster={CLUSTER}"
 
 
-# PDAs -----------------------------------------------------------------------------------------------
+# PDAs (program_id is a parameter only so tests can run a locally built copy under another id) -------------
 
 
-def config_pda() -> Pubkey:
-    return Pubkey.find_program_address([b"config"], PROGRAM_ID)[0]
+def config_pda(program_id: Pubkey = PROGRAM_ID) -> Pubkey:
+    return Pubkey.find_program_address([b"config"], program_id)[0]
 
 
-def event_pda(organizer: Pubkey, event_id: int) -> Pubkey:
-    return Pubkey.find_program_address([b"event", bytes(organizer), event_id.to_bytes(8, "little")], PROGRAM_ID)[0]
+def event_pda(organizer: Pubkey, event_id: int, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
+    return Pubkey.find_program_address([b"event", bytes(organizer), event_id.to_bytes(8, "little")], program_id)[0]
 
 
-def receipt_pda(event: Pubkey, attendee: Pubkey) -> Pubkey:
-    return Pubkey.find_program_address([b"paid", bytes(event), bytes(attendee)], PROGRAM_ID)[0]
+def sighting_pda(event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
+    return Pubkey.find_program_address([b"sighting", bytes(event), bytes(attendee)], program_id)[0]
+
+
+def oracle_info_pda(oracle: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
+    return Pubkey.find_program_address([b"oracle", bytes(oracle)], program_id)[0]
 
 
 # Account data ---------------------------------------------------------------------------------------
@@ -111,7 +134,8 @@ class Config:
 class Event:
     address: Pubkey
     organizer: Pubkey
-    oracle: Pubkey  # the only key that may pay out for this event, chosen by the organizer
+    oracles: list[Pubkey]  # the keys allowed to report sightings (1-3), chosen by the organizer
+    threshold: int  # how many DIFFERENT oracles must report a wallet before the program pays
     treasury: Pubkey  # receives the fee, frozen from Config at creation
     event_id: int
     start: int  # unix seconds
@@ -120,34 +144,110 @@ class Event:
     fee: int  # lamports, frozen at creation
     max_paid: int
     paid_count: int
-    min_seen_secs: int
+    min_seen_secs: int  # dwell time the program requires, on the chain clock
     balance: int  # lamports in the vault, account rent included
 
     @classmethod
     def decode(cls, address: Pubkey, data: bytes, balance: int) -> Event:
         if data[:8] != EVENT_DISC or len(data) < 8 + struct.calcsize(_EVENT_FMT):
             raise ValueError("not an Event account")
-        org, oracle, treasury, eid, start, end, reward, fee, max_paid, paid, min_seen, _ = struct.unpack_from(
-            _EVENT_FMT, data, 8
+        (org, oracles, count, threshold, treasury, eid, start, end, reward, fee, max_paid, paid, min_seen, _) = (
+            struct.unpack_from(_EVENT_FMT, data, 8)
         )
+        if not 1 <= count <= MAX_ORACLES:
+            raise ValueError("not an Event account")
+        slots = [Pubkey(oracles[32 * i : 32 * (i + 1)]) for i in range(count)]
         return cls(
-            address, Pubkey(org), Pubkey(oracle), Pubkey(treasury), eid, start, end, reward, fee, max_paid, paid,
+            address, Pubkey(org), slots, threshold, Pubkey(treasury), eid, start, end, reward, fee, max_paid, paid,
             min_seen, balance,
         )
+
+
+@dataclass
+class Sighting:
+    """One wallet's presence at one event, as the program records it from the oracles' reports."""
+
+    first_seen: int  # start of the current run of reports (chain clock)
+    last_seen: int
+    reporters: int  # bitmask over the event's oracle slots
+    paid: bool
+    payer: Pubkey  # the oracle that paid the rent; only it can close the account after the end
+    event_end: int
+
+    @classmethod
+    def decode(cls, data: bytes) -> Sighting:
+        if data[:8] != SIGHTING_DISC or len(data) < 8 + struct.calcsize(_SIGHTING_FMT):
+            raise ValueError("not a Sighting account")
+        first, last, reporters, paid, payer, event_end, _ = struct.unpack_from(_SIGHTING_FMT, data, 8)
+        return cls(first, last, reporters, paid, Pubkey(payer), event_end)
+
+
+def _borsh_string(value: str) -> bytes:
+    raw = value.encode()
+    return struct.pack("<I", len(raw)) + raw
+
+
+def _read_borsh_string(data: bytes, offset: int, max_len: int) -> tuple[str, int]:
+    if offset + 4 > len(data):
+        raise ValueError("truncated string")
+    (n,) = struct.unpack_from("<I", data, offset)
+    if n > max_len or offset + 4 + n > len(data):
+        raise ValueError("bad string length")
+    return data[offset + 4 : offset + 4 + n].decode(), offset + 4 + n
+
+
+@dataclass
+class OracleInfo:
+    """An oracle's registry entry (PDA ["oracle", oracle]): the name shown to attendees and its API base URL, where
+    the widget sends joins. Published by the oracle itself; has no effect on payouts."""
+
+    oracle: Pubkey
+    name: str
+    url: str
+
+    @classmethod
+    def decode(cls, data: bytes) -> OracleInfo:
+        if data[:8] != ORACLE_INFO_DISC or len(data) < 8 + 32:
+            raise ValueError("not an OracleInfo account")
+        try:
+            name, off = _read_borsh_string(data, 40, MAX_ORACLE_NAME)
+            url, off = _read_borsh_string(data, off, MAX_ORACLE_URL)
+        except (UnicodeDecodeError, ValueError) as e:
+            raise ValueError("not an OracleInfo account") from e
+        if off >= len(data):  # bump follows the url
+            raise ValueError("not an OracleInfo account")
+        return cls(Pubkey(data[8:40]), name, url)
+
+    def encode(self, bump: int = 255) -> bytes:
+        """Account data as the program writes it (Borsh, no padding); for tests and fakes."""
+        return ORACLE_INFO_DISC + bytes(self.oracle) + _borsh_string(self.name) + _borsh_string(self.url) + bytes([bump])
+
+
+def attendee_paid(logs: list[str] | None, event: Pubkey, attendee: Pubkey) -> bool:
+    """True when the transaction logs carry the program's AttendeePaid event for this event and wallet."""
+    want = ATTENDEE_PAID_DISC + bytes(event) + bytes(attendee)
+    for line in logs or []:
+        if line.startswith("Program data: "):
+            try:
+                if base64.b64decode(line.removeprefix("Program data: ")).startswith(want):
+                    return True
+            except ValueError:
+                continue
+    return False
 
 
 # Instruction builders (pure, so they are testable without a network) ------------------------------------
 
 
-def pay_attendee_ix(oracle: Pubkey, ev: Event, attendee: Pubkey) -> Instruction:
-    """pay_attendee: the treasury is the event's own (the program checks has_one = oracle, treasury on the Event)."""
+def report_sighting_ix(oracle: Pubkey, ev: Event, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
+    """report_sighting: "oracle sees attendee now". The treasury is the event's own (has_one = treasury)."""
     return Instruction(
-        PROGRAM_ID,
-        _disc("global", "pay_attendee"),
+        program_id,
+        _disc("global", "report_sighting"),
         [
             AccountMeta(oracle, is_signer=True, is_writable=True),
             AccountMeta(ev.address, is_signer=False, is_writable=True),
-            AccountMeta(receipt_pda(ev.address, attendee), is_signer=False, is_writable=True),
+            AccountMeta(sighting_pda(ev.address, attendee, program_id), is_signer=False, is_writable=True),
             AccountMeta(attendee, is_signer=False, is_writable=True),
             AccountMeta(ev.treasury, is_signer=False, is_writable=True),
             AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -155,42 +255,103 @@ def pay_attendee_ix(oracle: Pubkey, ev: Event, attendee: Pubkey) -> Instruction:
     )
 
 
-def close_receipt_ix(oracle: Pubkey, event: Pubkey, attendee: Pubkey) -> Instruction:
+def close_sighting_ix(payer: Pubkey, event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
     return Instruction(
-        PROGRAM_ID,
-        _disc("global", "close_receipt"),
+        program_id,
+        _disc("global", "close_sighting"),
         [
-            AccountMeta(oracle, is_signer=True, is_writable=True),
-            AccountMeta(receipt_pda(event, attendee), is_signer=False, is_writable=True),
+            AccountMeta(payer, is_signer=True, is_writable=True),
+            AccountMeta(sighting_pda(event, attendee, program_id), is_signer=False, is_writable=True),
         ],
     )
 
 
 def create_event_ix(
-    organizer: Pubkey, event_id: int, oracle: Pubkey, start: int, end: int, reward: int, max_paid: int,
-    min_seen_secs: int,
+    organizer: Pubkey, event_id: int, oracles: list[Pubkey], threshold: int, start: int, end: int, reward: int,
+    max_paid: int, min_seen_secs: int, program_id: Pubkey = PROGRAM_ID,
 ) -> Instruction:
+    # Borsh: Vec<Pubkey> = u32 length + the keys.
     data = (
         _disc("global", "create_event")
-        + struct.pack("<Q", event_id)
-        + bytes(oracle)
-        + struct.pack("<qqQII", start, end, reward, max_paid, min_seen_secs)
+        + struct.pack("<QI", event_id, len(oracles))
+        + b"".join(bytes(o) for o in oracles)
+        + struct.pack("<BqqQII", threshold, start, end, reward, max_paid, min_seen_secs)
     )
     return Instruction(
-        PROGRAM_ID,
+        program_id,
         data,
         [
             AccountMeta(organizer, is_signer=True, is_writable=True),
-            AccountMeta(config_pda(), is_signer=False, is_writable=False),
-            AccountMeta(event_pda(organizer, event_id), is_signer=False, is_writable=True),
+            AccountMeta(config_pda(program_id), is_signer=False, is_writable=False),
+            AccountMeta(event_pda(organizer, event_id, program_id), is_signer=False, is_writable=True),
             AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
         ],
     )
 
 
+def register_oracle_ix(oracle: Pubkey, name: str, url: str, program_id: Pubkey = PROGRAM_ID) -> Instruction:
+    return Instruction(
+        program_id,
+        _disc("global", "register_oracle") + _borsh_string(name) + _borsh_string(url),
+        [
+            AccountMeta(oracle, is_signer=True, is_writable=True),
+            AccountMeta(oracle_info_pda(oracle, program_id), is_signer=False, is_writable=True),
+            AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+        ],
+    )
+
+
+def update_oracle_ix(
+    oracle: Pubkey, name: str, url: str, program_id: Pubkey = PROGRAM_ID, info: Pubkey | None = None
+) -> Instruction:
+    """`info` defaults to the oracle's own entry; tests pass someone else's to check has_one."""
+    return Instruction(
+        program_id,
+        _disc("global", "update_oracle") + _borsh_string(name) + _borsh_string(url),
+        [
+            AccountMeta(oracle, is_signer=True, is_writable=False),
+            AccountMeta(info or oracle_info_pda(oracle, program_id), is_signer=False, is_writable=True),
+        ],
+    )
+
+
+def close_oracle_ix(oracle: Pubkey, program_id: Pubkey = PROGRAM_ID, info: Pubkey | None = None) -> Instruction:
+    return Instruction(
+        program_id,
+        _disc("global", "close_oracle"),
+        [
+            AccountMeta(oracle, is_signer=True, is_writable=True),
+            AccountMeta(info or oracle_info_pda(oracle, program_id), is_signer=False, is_writable=True),
+        ],
+    )
+
+
+def init_config_ix(admin: Pubkey, treasury: Pubkey, fee: int, program_id: Pubkey = PROGRAM_ID) -> Instruction:
+    return Instruction(
+        program_id,
+        _disc("global", "init_config") + bytes(treasury) + struct.pack("<Q", fee),
+        [
+            AccountMeta(admin, is_signer=True, is_writable=True),
+            AccountMeta(config_pda(program_id), is_signer=False, is_writable=True),
+            AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+        ],
+    )
+
+
+def withdraw_remaining_ix(organizer: Pubkey, event: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
+    return Instruction(
+        program_id,
+        _disc("global", "withdraw_remaining"),
+        [
+            AccountMeta(organizer, is_signer=True, is_writable=True),
+            AccountMeta(event, is_signer=False, is_writable=True),
+        ],
+    )
+
+
 class PresenceError(Exception):
-    """A program or transaction error with a readable code: AlreadyPaid, Unauthorized, NoEvent, NotStarted, Ended,
-    CapReached, ... or TransactionFailed for anything unrecognised."""
+    """A program or transaction error with a readable code: NoEvent, NotOracle, NotStarted, Ended, CapReached,
+    Unauthorized, ... or TransactionFailed for anything unrecognised."""
 
     def __init__(self, code: str, detail: str = "") -> None:
         super().__init__(f"{code}: {detail}" if detail else code)
@@ -198,11 +359,8 @@ class PresenceError(Exception):
 
 
 def _program_error(text: str) -> PresenceError:
-    # A failed `init` of the Receipt (the System Program's AccountAlreadyInUse, custom error 0).
-    if "already in use" in text or "Custom(0)" in text:
-        return PresenceError("AlreadyPaid", "this wallet was already paid for this event")
     if "ConstraintHasOne" in text or "Custom(2001)" in text:
-        return PresenceError("Unauthorized", "the signer or treasury is not the one stored in the Event/Receipt/Config")
+        return PresenceError("Unauthorized", "the signer or treasury is not the one stored in the Event/Sighting/Config")
     for i, name in enumerate(PROGRAM_ERRORS):
         code = 6000 + i
         if f"custom program error: {hex(code)}" in text or f"Custom({code})" in text or f"Error Code: {name}" in text:
@@ -211,6 +369,8 @@ def _program_error(text: str) -> PresenceError:
 
 
 # Client ---------------------------------------------------------------------------------------------
+
+PAYOUT_TX_SCAN = 25  # at most this many transactions on a Sighting are inspected to find the payout
 
 
 class PresenceChain:
@@ -243,24 +403,72 @@ class PresenceChain:
             return None
 
     async def list_events(self, organizer: Pubkey | None = None, oracle: Pubkey | None = None) -> list[Event]:
-        filters: list = [MemcmpOpts(offset=0, bytes=base58.b58encode(EVENT_DISC).decode())]
+        """Events of this program, optionally only an organizer's and/or those listing `oracle` in any slot
+        (one memcmp query per oracle slot, merged)."""
+        base: list = [MemcmpOpts(offset=0, bytes=base58.b58encode(EVENT_DISC).decode())]
         if organizer:
-            filters.append(MemcmpOpts(offset=EVENT_ORGANIZER_OFFSET, bytes=str(organizer)))
-        if oracle:
-            filters.append(MemcmpOpts(offset=EVENT_ORACLE_OFFSET, bytes=str(oracle)))
-        resp = await self.client.get_program_accounts(PROGRAM_ID, encoding="base64", filters=filters)
-        return [Event.decode(a.pubkey, bytes(a.account.data), a.account.lamports) for a in resp.value]
+            base.append(MemcmpOpts(offset=EVENT_ORGANIZER_OFFSET, bytes=str(organizer)))
+        queries = (
+            [[*base, MemcmpOpts(offset=EVENT_ORACLES_OFFSET + 32 * i, bytes=str(oracle))] for i in range(MAX_ORACLES)]
+            if oracle
+            else [base]
+        )
+        found: dict[Pubkey, Event] = {}
+        for filters in queries:
+            resp = await self.client.get_program_accounts(PROGRAM_ID, encoding="base64", filters=filters)
+            for a in resp.value:
+                ev = Event.decode(a.pubkey, bytes(a.account.data), a.account.lamports)
+                if oracle is None or oracle in ev.oracles:  # a stale slot beyond oracle_count never matches
+                    found[a.pubkey] = ev
+        return list(found.values())
+
+    async def get_sighting(self, event: Pubkey, attendee: Pubkey) -> Sighting | None:
+        acc = (await self.client.get_account_info(sighting_pda(event, attendee))).value
+        if acc is None or acc.owner != PROGRAM_ID:
+            return None
+        return Sighting.decode(bytes(acc.data))
 
     async def is_paid(self, event: Pubkey, attendee: Pubkey) -> bool:
-        return (await self.client.get_account_info(receipt_pda(event, attendee))).value is not None
+        s = await self.get_sighting(event, attendee)
+        return s is not None and s.paid
+
+    async def tx_paid(self, sig: Signature, event: Pubkey, attendee: Pubkey) -> bool:
+        """Whether transaction `sig` is the one in which the program paid `attendee` for `event`."""
+        resp = await self.client.get_transaction(sig, commitment=Confirmed, max_supported_transaction_version=0)
+        tx = resp.value
+        meta = tx.transaction.meta if tx is not None else None
+        return meta is not None and meta.err is None and attendee_paid(meta.log_messages, event, attendee)
 
     async def payout_tx(self, event: Pubkey, attendee: Pubkey) -> Signature | None:
-        """The transaction that paid `attendee` for `event` (the one that created its Receipt), if any."""
+        """The transaction in which the program paid `attendee` for `event` (the report_sighting whose logs carry
+        AttendeePaid), if paid and visible. Reports after the payout are no-ops, so it is among the oldest."""
         if not await self.is_paid(event, attendee):
             return None
-        sigs = (await self.client.get_signatures_for_address(receipt_pda(event, attendee), limit=1000)).value
-        ok = [s for s in sigs if s.err is None]
-        return ok[-1].signature if ok else None  # newest first -> the oldest successful one is the payout
+        sigs = (await self.client.get_signatures_for_address(sighting_pda(event, attendee), limit=1000)).value
+        ok = [s.signature for s in reversed(sigs) if s.err is None]  # oldest first
+        for sig in ok[:PAYOUT_TX_SCAN]:
+            if await self.tx_paid(sig, event, attendee):
+                return sig
+        return None
+
+    async def get_oracle_info(self, oracle: Pubkey) -> OracleInfo | None:
+        return (await self.get_oracle_infos([oracle]))[0]
+
+    async def get_oracle_infos(self, oracles: list[Pubkey]) -> list[OracleInfo | None]:
+        """Registry entries of `oracles`, in order (None for an oracle that has not registered), in one RPC call."""
+        if not oracles:
+            return []
+        accs = (await self.client.get_multiple_accounts([oracle_info_pda(o) for o in oracles])).value
+        out: list[OracleInfo | None] = []
+        for o, acc in zip(oracles, accs, strict=True):
+            info = None
+            if acc is not None and acc.owner == PROGRAM_ID:
+                try:
+                    info = OracleInfo.decode(bytes(acc.data))
+                except ValueError:
+                    info = None
+            out.append(info if info is not None and info.oracle == o else None)
+        return out
 
     async def get_balance(self, address: Pubkey) -> int:
         return (await self.client.get_balance(address)).value
@@ -286,29 +494,38 @@ class PresenceChain:
 
     # Oracle instructions ----------------------------------------------------------------------------
 
-    async def pay_attendee(
+    async def report_sighting(
         self, oracle: Keypair, event: Pubkey, attendee: Pubkey, ev: Event | None = None
     ) -> Signature:
-        """Pay `attendee` the event's reward. Raises PresenceError("AlreadyPaid") when already paid,
-        PresenceError("NoEvent") when there is no such Event and PresenceError("Unauthorized") when `oracle` is not
-        the event's oracle. Pass `ev` when the caller has just read the event, to save an RPC call."""
-        if await self.is_paid(event, attendee):
-            raise PresenceError("AlreadyPaid", "this wallet was already paid for this event")
+        """Report "`oracle` sees `attendee` now"; the program pays once its rules hold. Raises
+        PresenceError("NoEvent") when there is no such Event, PresenceError("NotOracle") when `oracle` is not one of
+        the event's oracles, and the program's errors (NotStarted, Ended, CapReached, ...). A report for a wallet
+        already paid is a successful no-op. Pass `ev` when the caller has just read the event, to save an RPC call."""
         if ev is None:
             ev = await self.get_event(event)
         if ev is None or ev.address != event:
             raise PresenceError("NoEvent", f"no presence_pay Event at {event}")
-        if ev.oracle != oracle.pubkey():
-            raise PresenceError("Unauthorized", f"the event's oracle is {ev.oracle}, not {oracle.pubkey()}")
-        return await self._send([pay_attendee_ix(oracle.pubkey(), ev, attendee)], oracle)
+        if oracle.pubkey() not in ev.oracles:
+            raise PresenceError("NotOracle", f"{oracle.pubkey()} is not one of the event's oracles")
+        return await self._send([report_sighting_ix(oracle.pubkey(), ev, attendee)], oracle)
 
-    async def close_receipts(self, oracle: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
-        """After the event's end: close Receipts (rent back to the oracle), 10 per transaction."""
+    async def close_sightings(self, payer: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
+        """After the event's end: close Sightings whose rent `payer` paid (rent back to it), 10 per transaction."""
         sigs = []
         for i in range(0, len(attendees), 10):
-            ixs = [close_receipt_ix(oracle.pubkey(), event, a) for a in attendees[i : i + 10]]
-            sigs.append(await self._send(ixs, oracle))
+            ixs = [close_sighting_ix(payer.pubkey(), event, a) for a in attendees[i : i + 10]]
+            sigs.append(await self._send(ixs, payer))
         return sigs
+
+    async def register_oracle(self, oracle: Keypair, name: str, url: str) -> Signature:
+        """Publish this oracle's name and API URL in the registry (once; it pays the rent)."""
+        return await self._send([register_oracle_ix(oracle.pubkey(), name, url)], oracle)
+
+    async def update_oracle(self, oracle: Keypair, name: str, url: str) -> Signature:
+        return await self._send([update_oracle_ix(oracle.pubkey(), name, url)], oracle)
+
+    async def close_oracle(self, oracle: Keypair) -> Signature:
+        return await self._send([close_oracle_ix(oracle.pubkey())], oracle)
 
     # Organizer instructions (signed by the organizer's wallet in the web app; here for tests and demos)
 
@@ -316,42 +533,29 @@ class PresenceChain:
         self,
         organizer: Keypair,
         event_id: int,
-        oracle: Pubkey,
+        oracles: list[Pubkey],
+        threshold: int,
         start: int,
         end: int,
         reward: int,
         max_paid: int,
         min_seen_secs: int,
     ) -> tuple[Pubkey, Signature]:
-        """Create and fund an Event whose payouts only `oracle` can sign. Treasury and fee come from Config."""
+        """Create and fund an Event whose sightings only `oracles` can report; the program pays once `threshold`
+        of them reported a wallet for `min_seen_secs`. Treasury and fee come from Config."""
         event = event_pda(organizer.pubkey(), event_id)
-        ix = create_event_ix(organizer.pubkey(), event_id, oracle, start, end, reward, max_paid, min_seen_secs)
+        ix = create_event_ix(
+            organizer.pubkey(), event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs
+        )
         return event, await self._send([ix], organizer)
 
     async def withdraw_remaining(self, organizer: Keypair, event: Pubkey) -> Signature:
-        ix = Instruction(
-            PROGRAM_ID,
-            _disc("global", "withdraw_remaining"),
-            [
-                AccountMeta(organizer.pubkey(), is_signer=True, is_writable=True),
-                AccountMeta(event, is_signer=False, is_writable=True),
-            ],
-        )
-        return await self._send([ix], organizer)
+        return await self._send([withdraw_remaining_ix(organizer.pubkey(), event)], organizer)
 
     # Admin instructions -----------------------------------------------------------------------------
 
     async def init_config(self, admin: Keypair, treasury: Pubkey, fee: int) -> Signature:
-        ix = Instruction(
-            PROGRAM_ID,
-            _disc("global", "init_config") + bytes(treasury) + struct.pack("<Q", fee),
-            [
-                AccountMeta(admin.pubkey(), is_signer=True, is_writable=True),
-                AccountMeta(config_pda(), is_signer=False, is_writable=True),
-                AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
-            ],
-        )
-        return await self._send([ix], admin)
+        return await self._send([init_config_ix(admin.pubkey(), treasury, fee)], admin)
 
     async def update_config(self, admin: Keypair, treasury: Pubkey, fee: int) -> Signature:
         """Change the treasury/fee for events created from now on; existing events keep theirs."""

@@ -1,4 +1,4 @@
-"""Oracle state in this process: per-event runtime (camera trackers, stage clients), payout ledger, tokens.
+"""Oracle state in this process: per-event runtime (camera trackers, stage clients), sighting/payout ledger, tokens.
 
 Everything here runs on the event loop; model inference is pushed to threads with asyncio.to_thread.
 Logs carry only event_id, wallet / track id, tx signature and status.
@@ -17,47 +17,54 @@ from typing import Any
 
 from app.oracle.face import MATCH_THRESHOLD, FaceEngine, InsightFaceEngine
 from app.oracle.guestlist import GuestLists
-from app.oracle.interfaces import EventInfo, PayoutRejected, PayoutSink, providers
+from app.oracle.interfaces import EventInfo, SightingRejected, SightingSink, providers
 from app.oracle.signatures import SignatureVerifier
 from app.oracle.tracker import Tracker
 
 log = logging.getLogger("app.oracle")
 
-PAYOUT_RETRY_SECS = 5.0
+# A recognised wallet is reported to the sighting sink at once and then every SIGHTING_INTERVAL_SECS while it stays
+# recognised and unpaid; a failed report is retried on the same cadence. The program decides when that pays.
+SIGHTING_INTERVAL_SECS = 2.0
 STAGE_MIN_FRAME_INTERVAL = 0.1  # <= 10 fps per stage client
 CAMERA_MIN_FRAME_INTERVAL = 0.1  # the camera's ack is paced to <= 10 fps
 STAGE_STATS_INTERVAL = 3.0
 
 
-# Payouts -------------------------------------------------------------------------------------------
+# Sightings and payouts -----------------------------------------------------------------------------
 
 
 @dataclass
 class PayoutRecord:
-    status: str  # "pending" | "paid" | "failed" | "rejected"
+    status: str  # "pending" (report in flight) | "reporting" | "failed" | "paid" | "rejected"
     tx: str | None = None
-    retry_after: float = 0.0
+    next_at: float = 0.0  # no new report before this (monotonic clock)
 
 
 class PayoutLedger:
-    """Per-event payout state. `try_begin` is a synchronous check-and-set on the event loop, so at most
-    one pay() is in flight per wallet, and none starts once the wallet is paid."""
+    """Per-event sighting state. `try_begin` is a synchronous check-and-set on the event loop, so at most one
+    report is in flight per wallet, none starts before the interval since the last one, and none once the wallet is
+    paid or rejected."""
 
     def __init__(self) -> None:
         self.records: dict[str, PayoutRecord] = {}
 
     def try_begin(self, wallet: str, now: float) -> bool:
         rec = self.records.get(wallet)
-        if rec is not None and (rec.status in ("pending", "paid", "rejected") or now < rec.retry_after):
+        if rec is not None and (rec.status in ("pending", "paid", "rejected") or now < rec.next_at):
             return False
         self.records[wallet] = PayoutRecord(status="pending")
         return True
 
+    def reported(self, wallet: str, started: float) -> None:
+        """The report landed but the program has not paid yet: report again one interval after this one began."""
+        self.records[wallet] = PayoutRecord(status="reporting", next_at=started + SIGHTING_INTERVAL_SECS)
+
     def succeed(self, wallet: str, tx: str) -> None:
         self.records[wallet] = PayoutRecord(status="paid", tx=tx)
 
-    def fail(self, wallet: str, now: float) -> None:
-        self.records[wallet] = PayoutRecord(status="failed", retry_after=now + PAYOUT_RETRY_SECS)
+    def fail(self, wallet: str, started: float) -> None:
+        self.records[wallet] = PayoutRecord(status="failed", next_at=started + SIGHTING_INTERVAL_SECS)
 
     def reject(self, wallet: str) -> None:
         self.records[wallet] = PayoutRecord(status="rejected")
@@ -108,7 +115,7 @@ class EventRuntime:
         return self.info.end_ts < self.state.wall_clock()
 
     async def process_frame(self, camera_token: str, img: Any, jpeg: bytes | None = None) -> list[dict]:
-        """Detect, track, identify, maybe trigger payouts. Returns the stage face list for this frame."""
+        """Detect, track, identify, report sightings. Returns the stage face list for this frame."""
         engine = self.state.engine
         guests = self.state.guestlists
         faces = await asyncio.to_thread(engine.detect, img)
@@ -130,10 +137,10 @@ class EventRuntime:
             if wallet is None:
                 out.append({"bbox": _round_box(t.bbox), "state": "unknown", "name": None, "seen_secs": 0.0})
                 continue
-            seen = t.seen_secs(now)
-            # The program rejects payouts before the event's start, so don't send them.
-            if seen >= self.info.min_seen_secs and self.state.wall_clock() >= self.info.start_ts:
-                self._maybe_pay(wallet, now)
+            seen = t.seen_secs(now)  # display only: the program measures the dwell time on the chain clock
+            # The program rejects sightings outside the event's window, so don't send them.
+            if self.info.start_ts <= self.state.wall_clock() <= self.info.end_ts:
+                self._maybe_report(wallet, now)
             state = "paid" if self.ledger.paid_tx(wallet) else "tracking"
             out.append(
                 {
@@ -188,30 +195,32 @@ class EventRuntime:
         while any(t in self._latest or self._new_frame[t].is_set() for t in self._new_frame):
             await asyncio.sleep(0.01)
 
-    def _maybe_pay(self, wallet: str, now: float) -> None:
+    def _maybe_report(self, wallet: str, now: float) -> None:
         if not self.ledger.try_begin(wallet, now):
             return
-        name = short_wallet(wallet)
-        log.info("payout event_id=%s wallet=%s status=pending", self.event_id, wallet)
-        task = asyncio.create_task(self._pay(wallet, name))
+        task = asyncio.create_task(self._report(wallet, short_wallet(wallet), now))
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
-    async def _pay(self, wallet: str, name: str) -> None:
+    async def _report(self, wallet: str, name: str, started: float) -> None:
         try:
-            tx = await self.state.sink().pay(self.event_id, wallet)
-        except PayoutRejected as e:
+            result = await self.state.sink().report(self.event_id, wallet)
+        except SightingRejected as e:
             self.ledger.reject(wallet)
-            log.warning("payout event_id=%s wallet=%s status=rejected reason=%s", self.event_id, wallet, e)
+            log.warning("sighting event_id=%s wallet=%s status=rejected reason=%s", self.event_id, wallet, e)
             return
-        except Exception as e:  # noqa: BLE001 - any sink failure means "retry later"
-            self.ledger.fail(wallet, self.state.clock())
-            log.warning("payout event_id=%s wallet=%s status=failed error=%s", self.event_id, wallet, type(e).__name__)
+        except Exception as e:  # noqa: BLE001 - any sink failure means "retry on the next interval"
+            self.ledger.fail(wallet, started)
+            log.warning("sighting event_id=%s wallet=%s status=failed error=%s", self.event_id, wallet, type(e).__name__)
             return
-        self.ledger.succeed(wallet, tx)
-        log.info("payout event_id=%s wallet=%s tx=%s status=paid", self.event_id, wallet, tx)
+        if not result.paid or result.tx is None:
+            self.ledger.reported(wallet, started)
+            log.info("sighting event_id=%s wallet=%s status=reported", self.event_id, wallet)
+            return
+        self.ledger.succeed(wallet, result.tx)
+        log.info("payout event_id=%s wallet=%s tx=%s status=paid", self.event_id, wallet, result.tx)
         at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-        self._push_event({"type": "payout", "wallet": wallet, "name": name, "tx": tx, "at": at})
+        self._push_event({"type": "payout", "wallet": wallet, "name": name, "tx": result.tx, "at": at})
 
     async def wait_payouts(self) -> None:
         while self._tasks:
@@ -264,7 +273,7 @@ class OracleState:
         guestlists: GuestLists | None = None,
         clock: Callable[[], float] = time.monotonic,
         wall_clock: Callable[[], float] = time.time,
-        sink: Callable[[], PayoutSink] = lambda: providers.payout_sink,
+        sink: Callable[[], SightingSink] = lambda: providers.sighting_sink,
     ) -> None:
         self.engine: FaceEngine = engine or InsightFaceEngine()
         self.wall_clock = wall_clock

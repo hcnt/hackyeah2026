@@ -3,7 +3,9 @@
 //   <attend-now-widget event-id="EVENT_ID"></attend-now-widget>
 //   <script src="https://hackyeah.kindhome.io/widget.js" async></script>
 //
-// The API origin defaults to wherever widget.js was loaded from; override it with api-base="…".
+// The widget reads the event's oracles from Solana (rpc-url="…", default devnet; program-id="…", default the
+// presence_pay id in chain.ts) and sends the join to each of them. api-base="…" is the fallback oracle when that read
+// fails; it defaults to wherever widget.js was loaded from.
 import type { Root } from 'react-dom/client'
 import { mountWidget } from './mount'
 
@@ -13,7 +15,7 @@ const scriptOrigin = (() => {
 })()
 
 class AttendNowWidget extends HTMLElement {
-  static observedAttributes = ['event-id', 'api-base']
+  static observedAttributes = ['event-id', 'api-base', 'rpc-url', 'program-id']
   private root: Root | null = null
 
   connectedCallback() {
@@ -33,7 +35,12 @@ class AttendNowWidget extends HTMLElement {
     const eventId = this.getAttribute('event-id')
     if (!eventId) return
     this.root?.unmount()
-    this.root = mountWidget(this, { eventId, apiBase: this.getAttribute('api-base') ?? scriptOrigin })
+    this.root = mountWidget(this, {
+      eventId,
+      apiBase: this.getAttribute('api-base') ?? scriptOrigin,
+      rpcUrl: this.getAttribute('rpc-url') ?? undefined,
+      programId: this.getAttribute('program-id') ?? undefined,
+    })
   }
 }
 

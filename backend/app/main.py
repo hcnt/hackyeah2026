@@ -13,18 +13,18 @@ from app.oracle.routes import router as oracle_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # With an oracle key, events come from and payouts go to the presence_pay program on Solana; without one
-    # the oracle keeps its in-memory dev event source and payout sink.
+    # With an oracle key, events come from and sightings go to the presence_pay program on Solana; without one
+    # the oracle keeps its in-memory dev event source and sighting sink (which simulates the program rules).
     settings = get_settings()
     key = settings.oracle_keypair.get_secret_value() if settings.oracle_keypair else ""
     if not key:
         yield
         return
-    from app.chain.adapters import ChainEventSource, SolanaPayoutSink
+    from app.chain.adapters import ChainEventSource, SolanaSightingSink
     from app.chain.presence_chain import PresenceChain, keypair_from_json
 
     chain = PresenceChain(settings.solana_rpc_url)
-    install(event_source=ChainEventSource(chain), payout_sink=SolanaPayoutSink(chain, keypair_from_json(key)))
+    install(event_source=ChainEventSource(chain), sighting_sink=SolanaSightingSink(chain, keypair_from_json(key)))
     try:
         yield
     finally:
