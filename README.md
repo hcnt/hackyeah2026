@@ -1,22 +1,27 @@
-# OnSight: pay people for showing up, without a middleman
+# OnSight: seen on site, paid on chain
 
 Superteam Poland challenge "Finance Without Intermediaries", HackYeah 2026.
 
-An organizer or sponsor locks a reward budget in a Solana program. Attendees opt in with their wallet and one
-selfie, through a widget on the event's own page. At the venue, a phone camera at a pay lane streams to
+**Attendance giveaways without a middleman.** An attendance giveaway is a sponsor's promise to reward the people
+who actually come to an event: "the first 100 people at the venue get 0.01 SOL", a coffee, a T-shirt. It isn't a
+draw: everyone who shows up gets it, until the budget runs out. It's how free events fight no-shows, and today
+it only works if everyone trusts whoever holds the prizes and the guest list.
+
+With OnSight, an organizer or sponsor locks the giveaway budget in a Solana program. Attendees opt in with their
+wallet and one selfie, through a widget on the event's own page. At the venue, a phone camera at a pay lane streams to
 face-recognition **oracles**. The oracles only report "I see this wallet now". The **program** decides who gets
 paid, and pays each attendee once, straight from the escrow to their wallet.
 
 **Who it's for:** organizers and sponsors of free events (meetups, hackathons, product launches, conference side
-events) who want sign-ups to actually come, and their attendees. Attendees never see blockchain terms beyond
-"connect your wallet and sign".
+events) who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see
+blockchain terms beyond "connect your wallet and sign".
 
 ## Design rationale
 
-### The financial relationship
+### The financial relationship: an attendance giveaway
 
-A sponsor wants people in the room and is willing to pay for it: "the first 100 people who come get 0.01 SOL", a
-coffee, a T-shirt. Today that promise runs through intermediaries:
+A sponsor wants people in the room and is willing to pay for it, so the event announces an attendance giveaway:
+"the first 100 people who come get 0.01 SOL". Today that promise runs through intermediaries:
 
 - **The attendee trusts the organizer** to really pay out after the event, to the people who really came, and
   not to change the rules ("we ran out", "only the first 50").
