@@ -14,7 +14,6 @@ export interface TestResponse {
 export interface Signed { wallet: string; signed_at: string; signature: string }
 export interface SubmitRequest extends Signed {
   consent: { version: string; accepted: true }
-  first_name: string
   /** One base64 JPEG (no data: prefix) of the face looking straight at the camera. */
   image: string
 }
