@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Api, Frame, Step } from './api'
+import { SILHOUETTE } from './assets'
+import { FaceGuide } from './icons'
 
 const STEPS: Step[] = ['straight', 'left', 'right']
 const PROMPT: Record<Step, string> = {
@@ -24,18 +26,23 @@ function grab(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | null
 type Props = { api: Api; onDone: (frames: Frame[]) => void }
 
 /**
- * Opens the camera and tests a frame about twice a second against the oracle. Each frame that
- * passes for the current head angle is kept; after straight, left and right it hands them back.
+ * Penpot 2a. The camera runs in the viewfinder; about twice a second the current frame is tested against the
+ * oracle so the caption can coach the user. The shutter takes the photo for the current head angle; after
+ * straight, left and right the frames go back to the widget.
  */
 export default function Selfie({ api, onDone }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const frames = useRef<Frame[]>([])
   const [stepIndex, setStepIndex] = useState(0)
   const [hint, setHint] = useState<string | null>(null)
+  const [looksOk, setLooksOk] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [flash, setFlash] = useState(0)
+  const [ready, setReady] = useState(false)
   const [cameraError, setCameraError] = useState<string | null>(() =>
     navigator.mediaDevices ? null : 'This browser has no camera access (it needs HTTPS).',
   )
-  const [ready, setReady] = useState(false)
-  const frames = useRef<Frame[]>([])
 
   useEffect(() => {
     let stream: MediaStream | null = null
@@ -63,51 +70,81 @@ export default function Selfie({ api, onDone }: Props) {
     }
   }, [])
 
+  const canvas = () => (canvasRef.current ??= document.createElement('canvas'))
+  const step = STEPS[Math.min(stepIndex, STEPS.length - 1)]
+
+  // Live coaching: test the current frame without keeping it.
   useEffect(() => {
-    if (!ready || stepIndex >= STEPS.length) return
-    const step = STEPS[stepIndex]
-    const canvas = document.createElement('canvas')
-    let busy = false
+    if (!ready || busy || stepIndex >= STEPS.length) return
+    let inFlight = false
     let stopped = false
     const id = setInterval(async () => {
-      if (busy || stopped || !videoRef.current) return
-      const image = grab(videoRef.current, canvas)
+      if (inFlight || stopped || !videoRef.current) return
+      const image = grab(videoRef.current, canvas())
       if (!image) return
-      busy = true
+      inFlight = true
       try {
         const res = await api.test({ step, image })
         if (stopped) return
-        if (res.ok) {
-          stopped = true
-          frames.current = [...frames.current, { step, image }]
-          setHint(null)
-          if (stepIndex + 1 === STEPS.length) onDone(frames.current)
-          else setStepIndex(stepIndex + 1)
-        } else {
-          setHint(res.issues[0]?.message ?? null)
-        }
-      } catch (err) {
-        setHint((err as Error).message)
+        setLooksOk(res.ok)
+        setHint(res.ok ? null : (res.issues[0]?.message ?? null))
+      } catch {
+        // Coaching is best effort; the shutter reports real errors.
       } finally {
-        busy = false
+        inFlight = false
       }
     }, TEST_INTERVAL_MS)
     return () => {
       stopped = true
       clearInterval(id)
     }
-  }, [api, ready, stepIndex, onDone])
+  }, [api, ready, busy, step, stepIndex])
 
-  if (cameraError) return <p className="an-error">{cameraError}</p>
+  async function shoot() {
+    if (!videoRef.current || busy) return
+    const image = grab(videoRef.current, canvas())
+    if (!image) return
+    setBusy(true)
+    setFlash((n) => n + 1)
+    try {
+      const res = await api.test({ step, image })
+      if (!res.ok) {
+        setLooksOk(false)
+        setHint(res.issues[0]?.message ?? 'Try again')
+        return
+      }
+      frames.current = [...frames.current, { step, image }]
+      setHint(null)
+      setLooksOk(false)
+      if (stepIndex + 1 === STEPS.length) onDone(frames.current)
+      else setStepIndex(stepIndex + 1)
+    } catch (err) {
+      setHint((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
-  const step = STEPS[Math.min(stepIndex, STEPS.length - 1)]
+  const caption = cameraError ?? (!ready ? 'Opening camera…' : (hint ?? `${stepIndex + 1}/3 · ${PROMPT[step]}`))
+
   return (
-    <div className="an-selfie">
-      <video ref={videoRef} autoPlay playsInline muted />
-      <p className="an-strong">
-        {stepIndex + 1}/{STEPS.length} · {PROMPT[step]}
-      </p>
-      <p className="an-muted" aria-live="polite">{ready ? (hint ?? 'Checking…') : 'Opening camera…'}</p>
+    <div className="an-body an-body--center an-selfie">
+      <div className="an-viewfinder">
+        {!ready && <img className="an-silhouette" src={SILHOUETTE} alt="" />}
+        <video ref={videoRef} autoPlay playsInline muted hidden={!ready} />
+        <FaceGuide ok={ready && looksOk} />
+        <div className="an-flash" key={flash} data-on={flash > 0} />
+        <p className="an-caption" aria-live="polite">{caption}</p>
+      </div>
+      <button
+        type="button"
+        className="an-shutter"
+        aria-label={`Take photo: ${PROMPT[step]}`}
+        disabled={!ready || busy || !!cameraError}
+        onClick={shoot}
+      >
+        <span />
+      </button>
     </div>
   )
 }
