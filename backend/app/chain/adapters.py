@@ -64,7 +64,7 @@ class ChainEventSource:
 
 
 class SolanaPayoutSink:
-    """Sends pay_attendee signed by the oracle key."""
+    """Sends pay_attendee signed by the oracle key, only for events whose on-chain oracle is that key."""
 
     def __init__(self, chain: PresenceChain, oracle: Keypair) -> None:
         self.chain = chain
@@ -74,8 +74,15 @@ class SolanaPayoutSink:
         event, attendee = _pubkey(event_id), _pubkey(wallet)
         if event is None or attendee is None:
             raise PayoutRejected("event_id or wallet is not a valid address")
+        ev = await self.chain.get_event(event)
+        if ev is None:
+            # No account (never created, or closed by withdraw_remaining) or not an Event of this program.
+            raise PayoutRejected("no presence_pay Event at this address")
+        if ev.oracle != self.oracle.pubkey():
+            # The organizer chose another oracle for this event: the program would reject our signature anyway.
+            raise PayoutRejected(f"event oracle {ev.oracle} is not this oracle's key {self.oracle.pubkey()}")
         try:
-            return str(await self.chain.pay_attendee(self.oracle, event, attendee))
+            return str(await self.chain.pay_attendee(self.oracle, event, attendee, ev))
         except PresenceError as e:
             if e.code == "AlreadyPaid":
                 # Idempotent: e.g. an earlier attempt landed but its confirmation timed out.

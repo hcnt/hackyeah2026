@@ -2,6 +2,7 @@
 
 Instructions are built by hand (Anchor discriminator = sha256("global:<name>")[:8] + Borsh args), so no anchorpy.
 Account layouts mirror contracts/presence_pay/lib.rs; changing them there means changing them here.
+Each Event carries its own oracle and treasury (fixed at creation); Config only holds defaults for new events.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
 import base58
 from solana.rpc.async_api import AsyncClient
@@ -48,8 +50,10 @@ CONFIG_DISC = _disc("account", "Config")
 EVENT_DISC = _disc("account", "Event")
 RECEIPT_DISC = _disc("account", "Receipt")
 
-_CONFIG_FMT = "<32s32s32sQB"
-_EVENT_FMT = "<32sQqqQQIIIB"
+_CONFIG_FMT = "<32s32sQB"  # admin, treasury, fee, bump
+_EVENT_FMT = "<32s32s32sQqqQQIIIB"  # organizer, oracle, treasury, event_id, start, end, reward, fee, max_paid, ...
+EVENT_ORGANIZER_OFFSET = 8
+EVENT_ORACLE_OFFSET = 8 + 32
 
 
 def load_keypair(path: str | Path) -> Keypair:
@@ -89,8 +93,9 @@ def receipt_pda(event: Pubkey, attendee: Pubkey) -> Pubkey:
 
 @dataclass
 class Config:
+    """Defaults copied into each Event at creation; changing them never touches existing events."""
+
     admin: Pubkey
-    oracle: Pubkey
     treasury: Pubkey
     fee: int
 
@@ -98,14 +103,16 @@ class Config:
     def decode(cls, data: bytes) -> Config:
         if data[:8] != CONFIG_DISC:
             raise ValueError("not a Config account")
-        admin, oracle, treasury, fee, _ = struct.unpack_from(_CONFIG_FMT, data, 8)
-        return cls(Pubkey(admin), Pubkey(oracle), Pubkey(treasury), fee)
+        admin, treasury, fee, _ = struct.unpack_from(_CONFIG_FMT, data, 8)
+        return cls(Pubkey(admin), Pubkey(treasury), fee)
 
 
 @dataclass
 class Event:
     address: Pubkey
     organizer: Pubkey
+    oracle: Pubkey  # the only key that may pay out for this event, chosen by the organizer
+    treasury: Pubkey  # receives the fee, frozen from Config at creation
     event_id: int
     start: int  # unix seconds
     end: int  # unix seconds
@@ -120,12 +127,69 @@ class Event:
     def decode(cls, address: Pubkey, data: bytes, balance: int) -> Event:
         if data[:8] != EVENT_DISC or len(data) < 8 + struct.calcsize(_EVENT_FMT):
             raise ValueError("not an Event account")
-        org, eid, start, end, reward, fee, max_paid, paid, min_seen, _ = struct.unpack_from(_EVENT_FMT, data, 8)
-        return cls(address, Pubkey(org), eid, start, end, reward, fee, max_paid, paid, min_seen, balance)
+        org, oracle, treasury, eid, start, end, reward, fee, max_paid, paid, min_seen, _ = struct.unpack_from(
+            _EVENT_FMT, data, 8
+        )
+        return cls(
+            address, Pubkey(org), Pubkey(oracle), Pubkey(treasury), eid, start, end, reward, fee, max_paid, paid,
+            min_seen, balance,
+        )
+
+
+# Instruction builders (pure, so they are testable without a network) ------------------------------------
+
+
+def pay_attendee_ix(oracle: Pubkey, ev: Event, attendee: Pubkey) -> Instruction:
+    """pay_attendee: the treasury is the event's own (the program checks has_one = oracle, treasury on the Event)."""
+    return Instruction(
+        PROGRAM_ID,
+        _disc("global", "pay_attendee"),
+        [
+            AccountMeta(oracle, is_signer=True, is_writable=True),
+            AccountMeta(ev.address, is_signer=False, is_writable=True),
+            AccountMeta(receipt_pda(ev.address, attendee), is_signer=False, is_writable=True),
+            AccountMeta(attendee, is_signer=False, is_writable=True),
+            AccountMeta(ev.treasury, is_signer=False, is_writable=True),
+            AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+        ],
+    )
+
+
+def close_receipt_ix(oracle: Pubkey, event: Pubkey, attendee: Pubkey) -> Instruction:
+    return Instruction(
+        PROGRAM_ID,
+        _disc("global", "close_receipt"),
+        [
+            AccountMeta(oracle, is_signer=True, is_writable=True),
+            AccountMeta(receipt_pda(event, attendee), is_signer=False, is_writable=True),
+        ],
+    )
+
+
+def create_event_ix(
+    organizer: Pubkey, event_id: int, oracle: Pubkey, start: int, end: int, reward: int, max_paid: int,
+    min_seen_secs: int,
+) -> Instruction:
+    data = (
+        _disc("global", "create_event")
+        + struct.pack("<Q", event_id)
+        + bytes(oracle)
+        + struct.pack("<qqQII", start, end, reward, max_paid, min_seen_secs)
+    )
+    return Instruction(
+        PROGRAM_ID,
+        data,
+        [
+            AccountMeta(organizer, is_signer=True, is_writable=True),
+            AccountMeta(config_pda(), is_signer=False, is_writable=False),
+            AccountMeta(event_pda(organizer, event_id), is_signer=False, is_writable=True),
+            AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+        ],
+    )
 
 
 class PresenceError(Exception):
-    """A program or transaction error with a readable code: AlreadyPaid, Unauthorized, NotStarted, Ended,
+    """A program or transaction error with a readable code: AlreadyPaid, Unauthorized, NoEvent, NotStarted, Ended,
     CapReached, ... or TransactionFailed for anything unrecognised."""
 
     def __init__(self, code: str, detail: str = "") -> None:
@@ -138,7 +202,7 @@ def _program_error(text: str) -> PresenceError:
     if "already in use" in text or "Custom(0)" in text:
         return PresenceError("AlreadyPaid", "this wallet was already paid for this event")
     if "ConstraintHasOne" in text or "Custom(2001)" in text:
-        return PresenceError("Unauthorized", "the signer is not the oracle/admin stored in Config")
+        return PresenceError("Unauthorized", "the signer or treasury is not the one stored in the Event/Receipt/Config")
     for i, name in enumerate(PROGRAM_ERRORS):
         code = 6000 + i
         if f"custom program error: {hex(code)}" in text or f"Custom({code})" in text or f"Error Code: {name}" in text:
@@ -156,7 +220,7 @@ class PresenceChain:
     async def close(self) -> None:
         await self.client.close()
 
-    async def __aenter__(self) -> PresenceChain:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -178,10 +242,12 @@ class PresenceChain:
         except ValueError:
             return None
 
-    async def list_events(self, organizer: Pubkey | None = None) -> list[Event]:
+    async def list_events(self, organizer: Pubkey | None = None, oracle: Pubkey | None = None) -> list[Event]:
         filters: list = [MemcmpOpts(offset=0, bytes=base58.b58encode(EVENT_DISC).decode())]
         if organizer:
-            filters.append(MemcmpOpts(offset=8, bytes=str(organizer)))
+            filters.append(MemcmpOpts(offset=EVENT_ORGANIZER_OFFSET, bytes=str(organizer)))
+        if oracle:
+            filters.append(MemcmpOpts(offset=EVENT_ORACLE_OFFSET, bytes=str(oracle)))
         resp = await self.client.get_program_accounts(PROGRAM_ID, encoding="base64", filters=filters)
         return [Event.decode(a.pubkey, bytes(a.account.data), a.account.lamports) for a in resp.value]
 
@@ -220,44 +286,27 @@ class PresenceChain:
 
     # Oracle instructions ----------------------------------------------------------------------------
 
-    async def pay_attendee(self, oracle: Keypair, event: Pubkey, attendee: Pubkey) -> Signature:
-        """Pay `attendee` the event's reward. Raises PresenceError("AlreadyPaid") when already paid."""
+    async def pay_attendee(
+        self, oracle: Keypair, event: Pubkey, attendee: Pubkey, ev: Event | None = None
+    ) -> Signature:
+        """Pay `attendee` the event's reward. Raises PresenceError("AlreadyPaid") when already paid,
+        PresenceError("NoEvent") when there is no such Event and PresenceError("Unauthorized") when `oracle` is not
+        the event's oracle. Pass `ev` when the caller has just read the event, to save an RPC call."""
         if await self.is_paid(event, attendee):
             raise PresenceError("AlreadyPaid", "this wallet was already paid for this event")
-        cfg = await self.get_config()
-        if cfg is None:
-            raise PresenceError("TransactionFailed", "program Config not initialised")
-        ix = Instruction(
-            PROGRAM_ID,
-            _disc("global", "pay_attendee"),
-            [
-                AccountMeta(oracle.pubkey(), is_signer=True, is_writable=True),
-                AccountMeta(config_pda(), is_signer=False, is_writable=False),
-                AccountMeta(event, is_signer=False, is_writable=True),
-                AccountMeta(receipt_pda(event, attendee), is_signer=False, is_writable=True),
-                AccountMeta(attendee, is_signer=False, is_writable=True),
-                AccountMeta(cfg.treasury, is_signer=False, is_writable=True),
-                AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
-            ],
-        )
-        return await self._send([ix], oracle)
+        if ev is None:
+            ev = await self.get_event(event)
+        if ev is None or ev.address != event:
+            raise PresenceError("NoEvent", f"no presence_pay Event at {event}")
+        if ev.oracle != oracle.pubkey():
+            raise PresenceError("Unauthorized", f"the event's oracle is {ev.oracle}, not {oracle.pubkey()}")
+        return await self._send([pay_attendee_ix(oracle.pubkey(), ev, attendee)], oracle)
 
     async def close_receipts(self, oracle: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
         """After the event's end: close Receipts (rent back to the oracle), 10 per transaction."""
         sigs = []
         for i in range(0, len(attendees), 10):
-            ixs = [
-                Instruction(
-                    PROGRAM_ID,
-                    _disc("global", "close_receipt"),
-                    [
-                        AccountMeta(oracle.pubkey(), is_signer=True, is_writable=True),
-                        AccountMeta(config_pda(), is_signer=False, is_writable=False),
-                        AccountMeta(receipt_pda(event, a), is_signer=False, is_writable=True),
-                    ],
-                )
-                for a in attendees[i : i + 10]
-            ]
+            ixs = [close_receipt_ix(oracle.pubkey(), event, a) for a in attendees[i : i + 10]]
             sigs.append(await self._send(ixs, oracle))
         return sigs
 
@@ -267,24 +316,16 @@ class PresenceChain:
         self,
         organizer: Keypair,
         event_id: int,
+        oracle: Pubkey,
         start: int,
         end: int,
         reward: int,
         max_paid: int,
         min_seen_secs: int,
     ) -> tuple[Pubkey, Signature]:
+        """Create and fund an Event whose payouts only `oracle` can sign. Treasury and fee come from Config."""
         event = event_pda(organizer.pubkey(), event_id)
-        data = _disc("global", "create_event") + struct.pack("<QqqQII", event_id, start, end, reward, max_paid, min_seen_secs)
-        ix = Instruction(
-            PROGRAM_ID,
-            data,
-            [
-                AccountMeta(organizer.pubkey(), is_signer=True, is_writable=True),
-                AccountMeta(config_pda(), is_signer=False, is_writable=False),
-                AccountMeta(event, is_signer=False, is_writable=True),
-                AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
-            ],
-        )
+        ix = create_event_ix(organizer.pubkey(), event_id, oracle, start, end, reward, max_paid, min_seen_secs)
         return event, await self._send([ix], organizer)
 
     async def withdraw_remaining(self, organizer: Keypair, event: Pubkey) -> Signature:
@@ -300,10 +341,23 @@ class PresenceChain:
 
     # Admin instructions -----------------------------------------------------------------------------
 
-    async def update_config(self, admin: Keypair, oracle: Pubkey, treasury: Pubkey, fee: int) -> Signature:
+    async def init_config(self, admin: Keypair, treasury: Pubkey, fee: int) -> Signature:
         ix = Instruction(
             PROGRAM_ID,
-            _disc("global", "update_config") + bytes(oracle) + bytes(treasury) + struct.pack("<Q", fee),
+            _disc("global", "init_config") + bytes(treasury) + struct.pack("<Q", fee),
+            [
+                AccountMeta(admin.pubkey(), is_signer=True, is_writable=True),
+                AccountMeta(config_pda(), is_signer=False, is_writable=True),
+                AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+            ],
+        )
+        return await self._send([ix], admin)
+
+    async def update_config(self, admin: Keypair, treasury: Pubkey, fee: int) -> Signature:
+        """Change the treasury/fee for events created from now on; existing events keep theirs."""
+        ix = Instruction(
+            PROGRAM_ID,
+            _disc("global", "update_config") + bytes(treasury) + struct.pack("<Q", fee),
             [
                 AccountMeta(admin.pubkey(), is_signer=True, is_writable=False),
                 AccountMeta(config_pda(), is_signer=False, is_writable=True),
