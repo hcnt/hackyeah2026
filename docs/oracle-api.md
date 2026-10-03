@@ -13,6 +13,7 @@ page and the stage screen. Wallet connection is the client's job; the oracle onl
 ## Widget flow
 
 ```
+event details ──▶ show event + consent text ──yes──▶
 open camera ──▶ test (≈2×/s) ──ok──▶ capture "straight", "left", "right"
                     │                          │
                  issues → show hint            ▼
@@ -43,6 +44,39 @@ rejects the call unless:
 The signed join message is kept as the record of consent until the event's face data is deleted.
 
 ## Endpoints
+
+### Event details
+
+`GET /events/{event_id}` — no signature. What a client shows before "I'm going", including the consent text it
+must display. Show `consent.text` as given and sign `consent.version`.
+
+`200`:
+
+```json
+{
+  "event_id": "…",
+  "name": "HackYeah Day 2 Opening",
+  "venue": "Tauron Arena",
+  "organizer": "Hx3d…Qp71",
+  "starts_at": "2026-10-04T08:00:00Z",
+  "ends_at": "2026-10-04T16:00:00Z",
+  "status": "live",
+  "joining_open": true,
+  "min_seen_secs": 3,
+  "reward_lamports": 50000000,
+  "max_payouts": 100,
+  "going": 37,
+  "paid": 21,
+  "spots_left": 79,
+  "consent": { "version": "2026-10-03", "text": "Use your face to get paid at this event?\n\nWe create …" }
+}
+```
+
+- `status` is `upcoming`, `live` or `ended`, worked out from the times when the request is made.
+- `joining_open` is `true` until the event ends (joining before it starts is allowed).
+- `name`, `venue`, `reward_lamports`, `max_payouts` and `spots_left` may be `null` when the event source doesn't
+  provide them. 1 SOL = 1 000 000 000 lamports.
+- `consent.text` uses `\n` for line breaks; the first line is the heading.
 
 ### Test a photo
 
@@ -237,6 +271,24 @@ export interface SubmitRequest extends Signed {
   first_name: string
   frames: { step: Step; image: string }[]
 }
+export interface EventDetails {
+  event_id: string
+  name: string | null
+  venue: string | null
+  organizer: string
+  starts_at: string
+  ends_at: string
+  status: 'upcoming' | 'live' | 'ended'
+  joining_open: boolean
+  min_seen_secs: number
+  reward_lamports: number | null
+  max_payouts: number | null
+  going: number
+  paid: number
+  spots_left: number | null
+  consent: { version: string; text: string }
+}
+
 export type AttendanceStatus = 'not_joined' | 'on_list' | 'paid'
 export interface StatusResponse { status: AttendanceStatus; tx: string | null }
 
