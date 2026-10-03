@@ -1,10 +1,10 @@
 // The embeddable "Attend Now" widget, built to Penpot "Widget v1":
 //   1a sign up (split button + wallet picker) → 1b confirm in wallet → 1c wallet connected
-//   2a selfie (straight, left, right) → 2d first name
+//   2a selfie (one photo) → 2d first name
 //   3a consent → sign "join" in the wallet → 3b you're in
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
-import { ApiError, createApi, type EventDetails, type Frame, type StatusResponse } from './api'
+import { ApiError, createApi, type EventDetails, type StatusResponse } from './api'
 import {
   ButtonCheck,
   Check,
@@ -31,9 +31,9 @@ type Stage =
   | { name: 'connecting' }
   | { name: 'connected' }
   | { name: 'selfie' }
-  | { name: 'details'; frames: Frame[] }
-  | { name: 'consent'; frames: Frame[]; firstName: string }
-  | { name: 'signing'; frames: Frame[]; firstName: string }
+  | { name: 'details'; image: string }
+  | { name: 'consent'; image: string; firstName: string }
+  | { name: 'signing'; image: string; firstName: string }
   | { name: 'done' }
 
 type Fill = 'empty' | 'half' | 'full'
@@ -58,7 +58,7 @@ const PICKER = [
 ] as const
 
 const STATUS_POLL_MS = 10_000
-const PHOTO_ERRORS = new Set(['photo_rejected', 'not_same_person', 'liveness_failed', 'face_already_registered'])
+const PHOTO_ERRORS = new Set(['photo_rejected', 'face_already_registered'])
 
 export type WidgetProps = {
   eventId: string
@@ -90,7 +90,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     return () => clearInterval(id)
   }, [api, stage.name, conn])
 
-  const onSelfieDone = useCallback((frames: Frame[]) => setStage({ name: 'details', frames }), [])
+  const onSelfieDone = useCallback((image: string) => setStage({ name: 'details', image }), [])
 
   if (!event) {
     return (
@@ -122,17 +122,17 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
   }
 
-  async function join(frames: Frame[], firstName: string) {
+  async function join(image: string, firstName: string) {
     if (!conn || !event) return
     setError(null)
-    setStage({ name: 'signing', frames, firstName })
+    setStage({ name: 'signing', image, firstName })
     try {
       const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
       await api.submit({
         ...signed,
         consent: { version: event.consent.version, accepted: true },
         first_name: firstName,
-        frames,
+        image,
       })
       setStatus({ status: 'on_list', tx: null })
       setStage({ name: 'done' })
@@ -140,13 +140,13 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     } catch (err) {
       if (isUserRejection(err)) {
         setError('Signature cancelled in MetaMask.')
-        setStage({ name: 'consent', frames, firstName })
+        setStage({ name: 'consent', image, firstName })
       } else if (err instanceof ApiError && PHOTO_ERRORS.has(err.code)) {
-        setError(`${err.message} Let's take the photos again.`)
+        setError(`${err.message} Let's take the photo again.`)
         setStage({ name: 'selfie' })
       } else {
         setError(walletErrorMessage(err))
-        setStage({ name: 'consent', frames, firstName })
+        setStage({ name: 'consent', image, firstName })
       }
     }
   }
@@ -231,7 +231,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
           </>
         )
       case 'details':
-        return <Details onSubmit={(firstName) => setStage({ name: 'consent', frames: stage.frames, firstName })} />
+        return <Details onSubmit={(firstName) => setStage({ name: 'consent', image: stage.image, firstName })} />
       case 'consent':
       case 'signing': {
         const [question, ...rest] = event.consent.text.split('\n')
@@ -250,7 +250,7 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
               type="button"
               className="an-button"
               disabled={signing}
-              onClick={() => join(stage.frames, stage.firstName)}
+              onClick={() => join(stage.image, stage.firstName)}
             >
               {signing ? (
                 'Confirm in MetaMask…'

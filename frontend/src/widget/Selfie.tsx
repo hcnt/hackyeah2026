@@ -1,29 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Api, Frame, Step, TestResponse } from './api'
+import type { Api, TestResponse } from './api'
 import { SILHOUETTE } from './assets'
 import { FaceGuide } from './icons'
 
-// The oracle names turns from the camera's point of view (`left` = nose toward the image's left edge), while
-// the preview is mirrored and the prompts speak to the user. Turning to your own left is the oracle's `right`.
-const STEPS: { step: Step; prompt: string; side?: 'left' | 'right' }[] = [
-  { step: 'straight', prompt: 'Look straight at the camera' },
-  { step: 'right', prompt: 'Turn your head slightly to your left', side: 'left' },
-  { step: 'left', prompt: 'Turn your head slightly to your right', side: 'right' },
-]
-const TOO_FAR_YAW = 0.35 // the oracle accepts a turn of |yaw| 0.10–0.35
-
-/** Coaching text for a failed test. Our own wording per issue code (the oracle's `wrong_pose` text says
- * "as shown", which only makes sense next to a picture). */
-function hintFor(res: TestResponse, current: (typeof STEPS)[number]): string {
-  const issue = res.issues[0]
-  if (!issue) return current.prompt
-  if (issue.code !== 'wrong_pose') return issue.message
-  if (!current.side) return 'Look straight at the camera'
-  const yaw = res.face?.yaw ?? 0
-  const towardSide = current.step === 'left' ? yaw < 0 : yaw > 0
-  if (towardSide && Math.abs(yaw) > TOO_FAR_YAW) return 'Not that far — turn back a little'
-  return `Turn your head a bit more to your ${current.side}`
-}
+const PROMPT = 'Look straight at the camera'
 const TEST_INTERVAL_MS = 500
 const MAX_SIDE = 1280
 
@@ -38,18 +18,20 @@ function grab(video: HTMLVideoElement, canvas: HTMLCanvasElement): string | null
   return canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 }
 
-type Props = { api: Api; onDone: (frames: Frame[]) => void }
+/** Coaching text for a failed test: the oracle's ready-made message for the first issue. */
+function hintFor(res: TestResponse): string {
+  return res.issues[0]?.message ?? PROMPT
+}
+
+type Props = { api: Api; onDone: (image: string) => void }
 
 /**
  * Penpot 2a. The camera runs in the viewfinder; about twice a second the current frame is tested against the
- * oracle so the caption can coach the user. The shutter takes the photo for the current head angle; after
- * straight, left and right the frames go back to the widget.
+ * oracle so the caption can coach the user. The shutter takes the one photo the oracle needs.
  */
 export default function Selfie({ api, onDone }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const frames = useRef<Frame[]>([])
-  const [stepIndex, setStepIndex] = useState(0)
   const [hint, setHint] = useState<string | null>(null)
   const [looksOk, setLooksOk] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -86,12 +68,10 @@ export default function Selfie({ api, onDone }: Props) {
   }, [])
 
   const canvas = () => (canvasRef.current ??= document.createElement('canvas'))
-  const current = STEPS[Math.min(stepIndex, STEPS.length - 1)]
-  const step = current.step
 
   // Live coaching: test the current frame without keeping it.
   useEffect(() => {
-    if (!ready || busy || stepIndex >= STEPS.length) return
+    if (!ready || busy) return
     let inFlight = false
     let stopped = false
     const id = setInterval(async () => {
@@ -100,10 +80,10 @@ export default function Selfie({ api, onDone }: Props) {
       if (!image) return
       inFlight = true
       try {
-        const res = await api.test({ step, image })
+        const res = await api.test(image)
         if (stopped) return
         setLooksOk(res.ok)
-        setHint(res.ok ? null : hintFor(res, current))
+        setHint(res.ok ? null : hintFor(res))
       } catch {
         // Coaching is best effort; the shutter reports real errors.
       } finally {
@@ -114,7 +94,7 @@ export default function Selfie({ api, onDone }: Props) {
       stopped = true
       clearInterval(id)
     }
-  }, [api, ready, busy, step, stepIndex, current])
+  }, [api, ready, busy])
 
   async function shoot() {
     if (!videoRef.current || busy) return
@@ -123,17 +103,10 @@ export default function Selfie({ api, onDone }: Props) {
     setBusy(true)
     setFlash((n) => n + 1)
     try {
-      const res = await api.test({ step, image })
-      if (!res.ok) {
-        setLooksOk(false)
-        setHint(hintFor(res, current))
-        return
-      }
-      frames.current = [...frames.current, { step, image }]
-      setHint(null)
+      const res = await api.test(image)
+      if (res.ok) return onDone(image)
       setLooksOk(false)
-      if (stepIndex + 1 === STEPS.length) onDone(frames.current)
-      else setStepIndex(stepIndex + 1)
+      setHint(hintFor(res))
     } catch (err) {
       setHint((err as Error).message)
     } finally {
@@ -141,7 +114,7 @@ export default function Selfie({ api, onDone }: Props) {
     }
   }
 
-  const caption = cameraError ?? (!ready ? 'Opening camera…' : (hint ?? `${stepIndex + 1}/3 · ${current.prompt}`))
+  const caption = cameraError ?? (!ready ? 'Opening camera…' : (hint ?? PROMPT))
 
   return (
     <div className="an-body an-body--center an-selfie">
@@ -155,7 +128,7 @@ export default function Selfie({ api, onDone }: Props) {
       <button
         type="button"
         className="an-shutter"
-        aria-label={`Take photo: ${current.prompt}`}
+        aria-label="Take photo"
         disabled={!ready || busy || !!cameraError}
         onClick={shoot}
       >

@@ -1,10 +1,9 @@
 // Client for the oracle API v1. Types mirror docs/oracle-api.md.
 
-export type Step = 'straight' | 'left' | 'right'
 export type IssueCode =
   | 'no_face' | 'multiple_faces' | 'low_confidence' | 'too_small' | 'out_of_frame'
   | 'blurry' | 'too_dark' | 'too_bright' | 'wrong_pose'
-export interface Issue { code: IssueCode; message: string; frame?: number }
+export interface Issue { code: IssueCode; message: string }
 
 export interface TestResponse {
   ok: boolean
@@ -13,11 +12,11 @@ export interface TestResponse {
 }
 
 export interface Signed { wallet: string; signed_at: string; signature: string }
-export interface Frame { step: Step; image: string }
 export interface SubmitRequest extends Signed {
   consent: { version: string; accepted: true }
   first_name: string
-  frames: Frame[]
+  /** One base64 JPEG (no data: prefix) of the face looking straight at the camera. */
+  image: string
 }
 
 export interface EventDetails {
@@ -98,7 +97,7 @@ export function createApi(baseUrl: string, eventId: string) {
 
   return {
     event: () => call<EventDetails>(''),
-    test: (frame: Frame) => call<TestResponse>('/attendance/test', { method: 'POST', body: frame }),
+    test: (image: string) => call<TestResponse>('/attendance/test', { method: 'POST', body: { image } }),
     submit: (body: SubmitRequest) =>
       call<{ status: 'on_list'; event_id: string; wallet: string }>('/attendance', { method: 'POST', body }),
     leave: (body: Signed) =>
