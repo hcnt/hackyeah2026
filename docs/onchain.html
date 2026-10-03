@@ -114,7 +114,7 @@
     <thead><tr><th>Account</th><th>Address (PDA seeds)</th><th>What it stores</th><th>Size → deposit</th><th>Paid by, when</th><th>Closed by</th></tr></thead>
     <tbody>
       <tr><td><b>OracleInfo</b><br><span class="muted">1 per oracle</span></td><td><code>["oracle", oracle key]</code></td><td>oracle key, name (≤ 32 B), API URL (≤ 128 B)</td><td>209 B → 2,345,520</td><td>the oracle, at <code>register_oracle</code></td><td>never (calling <code>register_oracle</code> again updates it)</td></tr>
-      <tr><td><b>Event</b><br><span class="muted">1 per event</span></td><td><code>["event", organizer, event_id]</code></td><td>organizer, 1–3 oracle keys, threshold, start, end, reward, fee, max_paid, paid_count, min_seen_secs. <b>Also holds the budget</b> as its balance (it's the escrow).</td><td>191 B → 2,220,240</td><td>organizer, at <code>create_event</code></td><td>organizer (<code>withdraw_remaining</code>): deposit and unspent budget back</td></tr>
+      <tr><td><b>Event</b><br><span class="muted">1 per event</span></td><td><code>["event", organizer, event_id]</code></td><td>organizer, 1–3 oracle keys, threshold, start, end, reward, fee, max_paid, paid_count, min_seen_secs, <b>name</b> (≤ 64 B) and <b>venue</b> (≤ 64 B, optional). <b>Also holds the budget</b> as its balance (it's the escrow).</td><td>327 B → 3,166,800</td><td>organizer, at <code>create_event</code></td><td>organizer (<code>withdraw_remaining</code>): deposit and unspent budget back</td></tr>
       <tr><td><b>Sighting</b><br><span class="muted">1 per attendee per event, only if seen</span></td><td><code>["sighting", event, attendee]</code></td><td>first_seen, last_seen (chain clock), reporters (which oracles, as bits), paid, payer (oracle that paid the deposit), event_end</td><td>67 B → 1,357,200</td><td>the oracle sending the first report for that wallet</td><td>that oracle (<code>close_sighting</code>), only after the event's end, deposit back to it</td></tr>
     </tbody>
   </table>
@@ -142,7 +142,7 @@
     <div class="tablewrap"><table>
       <thead><tr><th>Transaction</th><th>Signer</th><th>What changes on chain</th><th>SOL</th></tr></thead>
       <tbody>
-        <tr><td><code>create_event(id, [oracle], 1, start, end, 10,000,000, 3, 3)</code></td><td>organizer</td><td>Event created with frozen terms, including the fee (the program's constant)</td><td>organizer −36,000,000 budget (3 × (10,000,000 + 2,000,000)) −2,220,240 deposit −5,000 fee = <b>−38,225,240</b></td></tr>
+        <tr><td><code>create_event(id, [oracle], 1, start, end, 10,000,000, 3, 3, "HackYeah 2026", "Tauron Arena")</code></td><td>organizer</td><td>Event created with frozen terms, including the fee (the program's constant), the name and the venue</td><td>organizer −36,000,000 budget (3 × (10,000,000 + 2,000,000)) −3,166,800 deposit −5,000 fee = <b>−39,171,800</b></td></tr>
       </tbody>
     </table></div>
   </div>
@@ -173,7 +173,7 @@
       <thead><tr><th>Transaction</th><th>Signer</th><th>What changes on chain</th><th>SOL</th></tr></thead>
       <tbody>
         <tr><td><code>close_sighting</code></td><td>the oracle that paid the deposit</td><td>Sighting deleted. Reports are no longer possible after the end, so the paid flag isn't needed.</td><td>oracle +1,357,200 −5,000 fee</td></tr>
-        <tr><td><code>withdraw_remaining</code></td><td>organizer</td><td>Event deleted</td><td>organizer +26,220,240 (2 unpaid × 12,000,000 + the 2,220,240 deposit) −5,000 fee</td></tr>
+        <tr><td><code>withdraw_remaining</code></td><td>organizer</td><td>Event deleted</td><td>organizer +27,166,800 (2 unpaid × 12,000,000 + the 3,166,800 deposit) −5,000 fee</td></tr>
       </tbody>
     </table></div>
     <p class="muted">Both are optional; nothing breaks if nobody sends them. Deleting an account doesn't delete history: every transaction above stays visible forever.</p>
@@ -239,7 +239,7 @@
   <ul>
     <li><b>Failed reports still cost the 10,000 fee</b>, for example a report sent before the start (<code>NotStarted</code>).</li>
     <li><b>The reward must be at least 890,880 lamports</b> (~0.00089 SOL) when the attendee's wallet is empty. A brand-new wallet must receive at least that minimum deposit, or Solana refuses the transfer.</li>
-    <li><b>Reading is free.</b> The widget, stage and oracle read Event, Sighting and OracleInfo through RPC without signing anything.</li>
+    <li><b>Reading is free.</b> The widget, stage and oracle read Event, Sighting and OracleInfo through RPC without signing anything. The widget shows the event's name, reward, times and spots left straight from the Event account, so an oracle can't misstate the terms.</li>
     <li><b>Everything on chain is public:</b> event terms, oracle keys and URLs, and for each attendee seen their wallet, the times, which oracles reported, the payout, and their signed join message (inside the report transaction).</li>
     <li><b>Never on chain:</b> photos, face data, names, and the wallets of people who joined but weren't seen.</li>
   </ul>

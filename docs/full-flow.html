@@ -125,7 +125,7 @@
 <section class="phase">
   <div class="phase-head"><span class="num">1</span><h2>Organizer creates the event</h2><span class="who">organizer's wallet</span></div>
   <ol class="steps">
-    <li><span class="tag on">on chain</span><div><code>create_event(event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs)</code> creates an Event account. Its address is the event's ID everywhere else (widget, oracle API, stage).</div></li>
+    <li><span class="tag on">on chain</span><div><code>create_event(event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs, name, venue)</code> creates an Event account. Its address is the event's ID everywhere else (widget, oracle API, stage).</div></li>
     <li><span class="tag sol">SOL moves</span><div>The whole budget, <code>max_paid × (reward + fee)</code>, moves from the organizer into the Event account (escrow). From now on the organizer can't take it back while the event runs.</div></li>
     <li><span class="tag on">on chain</span><div>The rules are frozen: which 1 to 3 oracle keys may report, how many different oracles must agree (<b>threshold</b>, M-of-N), the time window, the reward, the fee, the cap, and how long a person must be seen (<b>min_seen_secs</b>, measured on the chain clock).</div></li>
   </ol>
@@ -136,8 +136,8 @@
 <section class="phase">
   <div class="phase-head"><span class="num">2</span><h2>Attendee joins (before or at the event)</h2><span class="who">widget on the organizer's page → every oracle</span></div>
   <ol class="steps">
-    <li><span class="tag on">read</span><div>The widget <code>&lt;attend-now-widget event-id=…&gt;</code> reads the Event from the chain (oracle keys, threshold, reward, window), then each oracle's registry entry to get its URL.</div></li>
-    <li><span class="tag off">off chain</span><div>The attendee connects MetaMask (Solana) and takes one selfie. <code>POST attendance/test</code> checks quality (one face, frontal, sharp, lit, big enough) and gives instant hints. It goes to one oracle only: the first of the event's oracles to answer when the widget loads, which also supplies the event details and consent text shown. It's only a convenience: on join every oracle checks the photo again. Nothing is stored at this step.</div></li>
+    <li><span class="tag on">read</span><div>The widget <code>&lt;attend-now-widget event-id=…&gt;</code> reads the Event from the chain (name, venue, reward, times, spots left, oracle keys, threshold) and shows those terms itself, then reads each oracle's registry entry to get its URL. From the oracles it only takes the consent text and the "going" count.</div></li>
+    <li><span class="tag off">off chain</span><div>The attendee connects MetaMask (Solana) and takes one selfie. <code>POST attendance/test</code> checks quality (one face, frontal, sharp, lit, big enough) and gives instant hints. It goes to one oracle only: the first of the event's oracles to answer when the widget loads, which also supplies the consent text. It's only a convenience: on join every oracle checks the photo again. Nothing is stored at this step.</div></li>
     <li><span class="tag off">off chain</span><div>They accept the consent and <b>sign one message</b> with their wallet. It's a message signature, not a transaction, so it costs nothing and needs no SOL:
       <div class="tx" style="margin-top:8px">Attend Now
 Action: join

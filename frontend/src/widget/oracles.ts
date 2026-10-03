@@ -2,7 +2,7 @@
 // wallet, so every one of them needs the join (photo + signed message). Which oracles, and where they live, comes from
 // the chain (chain.ts), not from our API.
 import { ApiError, createApi, type Api, type AttendanceStatus, type EventDetails } from './api'
-import { DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL, readEventOracles } from './chain'
+import { DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL, readEventOracles, type EventMeta } from './chain'
 
 export interface Oracle {
   /** Base58 key from the Event account; null in single-oracle fallback mode. */
@@ -22,6 +22,8 @@ export interface OracleSet {
   unreachable: number
   /** False in single-oracle fallback mode (api-base). */
   fromChain: boolean
+  /** The event's terms as stored on the chain; null in fallback mode or when they don't decode. */
+  meta: EventMeta | null
 }
 
 export type Settled<T> = { oracle: Oracle; ok: true; value: T } | { oracle: Oracle; ok: false; error: ApiError }
@@ -60,6 +62,7 @@ export async function discoverOracles(opts: {
         threshold: chain.threshold,
         unreachable: chain.unregistered.length,
         fromChain: true,
+        meta: chain.meta,
       }
     }
   } catch {
@@ -71,6 +74,7 @@ export async function discoverOracles(opts: {
     threshold: 1,
     unreachable: 0,
     fromChain: false,
+    meta: null,
   }
 }
 
@@ -96,6 +100,36 @@ export async function firstEvent(oracles: Oracle[]): Promise<{ oracle: Oracle; e
     return await Promise.any(oracles.map((oracle) => oracle.api.event().then((event) => ({ oracle, event }))))
   } catch (err) {
     throw (err as AggregateError).errors?.[0] ?? err
+  }
+}
+
+function isoSeconds(unix: number): string {
+  return new Date(unix * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+/**
+ * The oracle's event details with every term the chain holds (name, venue, organizer, times, reward, cap, counters)
+ * replaced by the on-chain value, so a dishonest oracle cannot show different terms. Status and joining_open are
+ * derived from the chain times and `nowMs` the same way the oracle derives them. Without meta: `event` unchanged.
+ * Kept from the oracle: consent, going, and anything else the chain doesn't have.
+ */
+export function withChainTerms(event: EventDetails, meta: EventMeta | null, nowMs = Date.now()): EventDetails {
+  if (!meta) return event
+  const now = nowMs / 1000
+  return {
+    ...event,
+    name: meta.name,
+    venue: meta.venue,
+    organizer: meta.organizer,
+    starts_at: isoSeconds(meta.start),
+    ends_at: isoSeconds(meta.end),
+    status: meta.end < now ? 'ended' : meta.start <= now ? 'live' : 'upcoming',
+    joining_open: meta.end >= now,
+    min_seen_secs: meta.minSeenSecs,
+    reward_lamports: meta.rewardLamports,
+    max_payouts: meta.maxPaid,
+    paid: meta.paidCount,
+    spots_left: Math.max(meta.maxPaid - meta.paidCount, 0),
   }
 }
 

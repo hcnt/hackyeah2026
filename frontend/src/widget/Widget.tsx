@@ -28,6 +28,7 @@ import {
   firstEvent,
   hostOf,
   toAll,
+  withChainTerms,
   type Attendance,
   type Oracle,
   type OracleSet,
@@ -83,7 +84,8 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   const metamask = wallets.find(isMetaMask)
 
   const [oracleSet, setOracleSet] = useState<OracleSet | null>(null)
-  /** The oracle whose event details and consent text are shown (the first to answer); also tests selfies. */
+  /** The oracle whose consent text is shown (the first to answer); also tests selfies. Event terms come from the
+   *  chain when it could be read (withChainTerms), from this oracle only in single-oracle fallback mode. */
   const [primary, setPrimary] = useState<Oracle | null>(null)
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
         if (cancelled) return
         setOracleSet(set)
         setPrimary(first.oracle)
-        setEvent(first.event)
+        setEvent(withChainTerms(first.event, set.meta))
       })
       .catch((err: Error) => !cancelled && setLoadError(err.message))
     return () => {
@@ -183,7 +185,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     if (accepted >= set.need) {
       setStatus({ status: 'on_list', tx: null, onList: accepted })
       setStage({ name: 'done' })
-      primary.api.event().then(setEvent, () => {})
+      primary.api.event().then((e) => setEvent(withChainTerms(e, set.meta)), () => {})
       return
     }
     const failed = results.filter((r) => !r.ok)
@@ -329,6 +331,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
               <Check size={32} />
             </div>
             <p className="an-display">{status?.status === 'paid' ? 'You got paid.' : "You're in."}</p>
+            {event.name && <p className="an-note">{event.name}</p>}
             {multi && status && status.status !== 'paid' && (
               <p className="an-note">
                 On the list with {status.onList} of {oracleSet.oracles.length} oracles
