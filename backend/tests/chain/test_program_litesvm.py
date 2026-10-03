@@ -114,11 +114,15 @@ class Chain:
 
     # program --------------------------------------------------------------------------------------
 
-    def create_event(self, oracles=None, threshold=1, min_seen=3, max_paid=3, start=START, end=END):
+    def create_event(
+        self, oracles=None, threshold=1, min_seen=3, max_paid=3, start=START, end=END, name="HackYeah 2026",
+        venue="Kraków",
+    ):
         oracles = [self.oracle.pubkey()] if oracles is None else oracles
         eid, self.next_id = self.next_id, self.next_id + 1
         ix = create_event_ix(
-            self.organizer.pubkey(), eid, oracles, threshold, start, end, REWARD, max_paid, min_seen, self.pid
+            self.organizer.pubkey(), eid, oracles, threshold, start, end, REWARD, max_paid, min_seen, name, venue,
+            program_id=self.pid,
         )
         return self.send([ix], self.organizer), event_pda(self.organizer.pubkey(), eid, self.pid)
 
@@ -159,6 +163,9 @@ def rent(chain: Chain, address: Pubkey) -> int:
     return chain.svm.minimum_balance_for_rent_exemption(len(chain.svm.get_account(address).data))
 
 
+EVENT_ACCOUNT_LEN = 8 + 183 + 2 * (4 + 64)  # 8 + Event::INIT_SPACE: the strings are allocated at their max length
+
+
 def test_create_event_funds_escrow_and_freezes_terms(chain):
     res, ev_addr = chain.create_event(oracles=[chain.oracle.pubkey(), chain.oracle2.pubkey()], threshold=2)
     chain.ok(res)
@@ -166,6 +173,67 @@ def test_create_event_funds_escrow_and_freezes_terms(chain):
     assert ev.oracles == [chain.oracle.pubkey(), chain.oracle2.pubkey()] and ev.threshold == 2
     assert (ev.fee, ev.reward, ev.max_paid, ev.paid_count) == (FEE, REWARD, 3, 0)
     assert ev.balance == rent(chain, ev_addr) + 3 * (REWARD + FEE)
+    assert (ev.name, ev.venue) == ("HackYeah 2026", "Kraków")
+
+
+# Event name and venue ------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "venue"),
+    [
+        ("HackYeah 2026", "Kraków"),
+        ("Zażółć gęślą jaźń 🎉", "Tauron Arena, Kraków"),
+        ("x", ""),  # an empty venue is fine
+        ("n" * 64, "v" * 64),  # exactly 64 bytes each
+        ("ą" * 32, "ś" * 32),  # 64 bytes, 32 characters
+        ("a" * 62 + "ł", ""),  # 64 bytes with a trailing 2-byte character
+    ],
+)
+def test_name_and_venue_are_stored_and_decoded(chain, name, venue):
+    res, ev_addr = chain.create_event(name=name, venue=venue)
+    chain.ok(res)
+    ev = chain.event(ev_addr)
+    assert (ev.name, ev.venue) == (name, venue)
+    data = bytes(chain.svm.get_account(ev_addr).data)
+    assert len(data) == EVENT_ACCOUNT_LEN  # fixed size whatever the text, zero padding after it
+    assert data[8 + 183 + 4 + len(name.encode()) + 4 + len(venue.encode()) :] == bytes(
+        128 - len(name.encode()) - len(venue.encode())
+    )
+    # fixed-size fields did not move
+    assert (ev.organizer, ev.oracles, ev.reward, ev.max_paid) == (
+        chain.organizer.pubkey(), [chain.oracle.pubkey()], REWARD, 3,
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "venue"),
+    [
+        ("", "Kraków"),  # empty name
+        ("n" * 65, ""),  # 65-byte name
+        ("ą" * 32 + "a", ""),  # 65 bytes but 33 characters: the limit is in bytes
+        ("HackYeah", "v" * 65),  # 65-byte venue
+        ("Hack\nYeah", ""),  # control character in the name
+        ("Hack\tYeah", ""),
+        ("HackYeah", "Kra\x00ków"),  # control character in the venue
+        ("HackYeah", "Kraków\x7f"),  # DEL
+        ("HackYeah", "Kraków\u0085"),  # C1 control (NEL)
+    ],
+)
+def test_bad_name_or_venue_is_bad_event_text_and_creates_nothing(chain, name, venue):
+    before = chain.balance(chain.organizer.pubkey())
+    res, ev_addr = chain.create_event(name=name, venue=venue)
+    assert chain.code(res) == "BadEventText"
+    assert chain.svm.get_account(ev_addr) is None or chain.balance(ev_addr) == 0
+    assert chain.balance(chain.organizer.pubkey()) == before - TX_FEE  # no budget left the organizer
+
+
+def test_event_account_size_and_rent(chain):
+    res, ev_addr = chain.create_event()
+    chain.ok(res)
+    size = len(chain.svm.get_account(ev_addr).data)
+    assert size == EVENT_ACCOUNT_LEN == 327
+    assert rent(chain, ev_addr) == chain.svm.minimum_balance_for_rent_exemption(327)
 
 
 @pytest.mark.parametrize(

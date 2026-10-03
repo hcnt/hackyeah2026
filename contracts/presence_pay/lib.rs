@@ -17,6 +17,9 @@ pub const SIGHTING_GAP_SECS: i64 = 60;
 /// Rejestr oracli: maksymalna długość nazwy i adresu API (w bajtach UTF-8).
 pub const MAX_ORACLE_NAME: usize = 32;
 pub const MAX_ORACLE_URL: usize = 128;
+/// Nazwa i miejsce eventu (w bajtach UTF-8), ustawiane przez organizatora; widget, scena i oracle czytają je stąd.
+pub const MAX_EVENT_NAME: usize = 64;
+pub const MAX_EVENT_VENUE: usize = 64;
 /// Opłata za każdego wypłaconego uczestnika (0.002 SOL). Dostaje ją oracle, którego zgłoszenie wywołało wypłatę:
 /// to on płaci za transakcje i depozyt konta Sighting. Nie ma osobnego treasury ani konta Config.
 pub const FEE_LAMPORTS: u64 = 2_000_000;
@@ -30,8 +33,8 @@ pub mod presence_pay {
 
     /// Organizator tworzy event z warunkami i wpłaca cały budżet do konta eventu (vault).
     /// Organizator wybiera 1..=3 oracli i próg `threshold` (ilu RÓŻNYCH oracli musi zgłosić portfel).
-    /// Oracle, próg, opłata (FEE_LAMPORTS z chwili utworzenia), nagroda, limit, czasy i min_seen_secs są zamrożone na
-    /// cały event; zmiana terminu = anulowanie (withdraw_remaining przed startem) i nowy event.
+    /// Oracle, próg, opłata (FEE_LAMPORTS z chwili utworzenia), nagroda, limit, czasy, min_seen_secs, nazwa i miejsce są
+    /// zamrożone na cały event; zmiana = anulowanie (withdraw_remaining przed startem) i nowy event.
     #[allow(clippy::too_many_arguments)]
     pub fn create_event(
         ctx: Context<CreateEvent>,
@@ -43,8 +46,11 @@ pub mod presence_pay {
         reward: u64,
         max_paid: u32,
         min_seen_secs: u32,
+        name: String,
+        venue: String,
     ) -> Result<()> {
         require!(end > start, PresenceError::BadTimes);
+        check_event_text(&name, &venue)?;
         require!(reward > 0 && max_paid > 0, PresenceError::BadAmounts);
         require!(!oracles.is_empty() && oracles.len() <= MAX_ORACLES, PresenceError::BadOracles);
         for (i, o) in oracles.iter().enumerate() {
@@ -89,6 +95,8 @@ pub mod presence_pay {
         ev.paid_count = 0;
         ev.min_seen_secs = min_seen_secs;
         ev.bump = ctx.bumps.event;
+        ev.name = name;
+        ev.venue = venue;
         Ok(())
     }
 
@@ -237,6 +245,13 @@ fn check_join_proof(instructions: &AccountInfo, event: &Pubkey, attendee: &Pubke
     Ok(())
 }
 
+fn check_event_text(name: &str, venue: &str) -> Result<()> {
+    require!(!name.is_empty() && name.len() <= MAX_EVENT_NAME, PresenceError::BadEventText);
+    require!(venue.len() <= MAX_EVENT_VENUE, PresenceError::BadEventText);
+    require!(!name.chars().chain(venue.chars()).any(char::is_control), PresenceError::BadEventText);
+    Ok(())
+}
+
 fn check_oracle_info(name: &str, url: &str) -> Result<()> {
     require!(!name.is_empty() && name.len() <= MAX_ORACLE_NAME, PresenceError::BadName);
     require!(!name.chars().any(char::is_control), PresenceError::BadName);
@@ -268,6 +283,11 @@ pub struct Event {
     pub paid_count: u32,
     pub min_seen_secs: u32, // wymagany czas obecności, liczony przez program na zegarze łańcucha
     pub bump: u8,
+    // Teksty na końcu, żeby pola o stałej długości miały stałe offsety (filtry memcmp, dekodery w backendzie i widgecie).
+    #[max_len(MAX_EVENT_NAME)]
+    pub name: String, // 1..=64 bajtów, np. "HackYeah 2026"
+    #[max_len(MAX_EVENT_VENUE)]
+    pub venue: String, // 0..=64 bajtów, pusty = brak
 }
 
 /// Obecność jednego portfela na jednym evencie. `paid` = ochrona przed podwójną wypłatą.
@@ -409,4 +429,6 @@ pub enum PresenceError {
     BadUrl,
     #[msg("Report must follow an ed25519 check of the attendee's signed join message for this event")]
     BadJoinProof,
+    #[msg("Event name must be 1 to 64 bytes, venue at most 64, no control characters")]
+    BadEventText,
 }

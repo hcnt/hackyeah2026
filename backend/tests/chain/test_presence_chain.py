@@ -12,6 +12,7 @@ from solders.system_program import ID as SYSTEM_PROGRAM_ID
 from solders.sysvar import INSTRUCTIONS as INSTRUCTIONS_SYSVAR
 
 from app.chain.presence_chain import (
+    EVENT_NAME_OFFSET,
     EVENT_ORACLES_OFFSET,
     FEE_LAMPORTS,
     PROGRAM_ERRORS,
@@ -58,20 +59,35 @@ def disc(namespace: str, name: str) -> bytes:
     return hashlib.sha256(f"{namespace}:{name}".encode()).digest()[:8]
 
 
-def event_bytes(oracles: list[Pubkey] | None = None, threshold: int = 1) -> bytes:
+FIXED_EVENT_LEN = 8 + 32 + 96 + 2 + 8 * 5 + 4 * 3 + 1
+EVENT_ACCOUNT_LEN = FIXED_EVENT_LEN + (4 + 64) * 2  # 8 + Event::INIT_SPACE: both strings at their max length
+
+
+def borsh(text: str) -> bytes:
+    raw = text.encode()
+    return struct.pack("<I", len(raw)) + raw
+
+
+def event_bytes(
+    oracles: list[Pubkey] | None = None, threshold: int = 1, name: str = "HackYeah 2026", venue: str = "Kraków",
+    pad: bool = True,
+) -> bytes:
     # lib.rs order: organizer, oracles[3], oracle_count, threshold, event_id, start, end, reward, fee, max_paid,
-    # paid_count, min_seen_secs, bump
+    # paid_count, min_seen_secs, bump, name, venue; the account is allocated for the max lengths, the tail is zeros.
     oracles = [ORACLE, ORACLE2] if oracles is None else oracles
     slots = b"".join(bytes(o) for o in oracles) + bytes(32) * (3 - len(oracles))
-    return disc("account", "Event") + (
+    raw = disc("account", "Event") + (
         bytes(ORGANIZER) + slots + bytes([len(oracles), threshold])
         + struct.pack("<QqqQQIIIB", 7, 1_000, 2_000, 10_000_000, 2_000_000, 3, 1, 5, 254)
+        + borsh(name) + borsh(venue)
     )
+    return raw + bytes(EVENT_ACCOUNT_LEN - len(raw)) if pad else raw
 
 
 def test_event_decode_reads_oracle_slots_threshold_and_fee():
     data = event_bytes(threshold=2)
-    assert len(data) == 8 + 32 + 96 + 2 + 8 * 5 + 4 * 3 + 1
+    assert len(data) == EVENT_ACCOUNT_LEN == 8 + 183 + 136
+    assert EVENT_NAME_OFFSET == FIXED_EVENT_LEN
     assert data[EVENT_ORACLES_OFFSET : EVENT_ORACLES_OFFSET + 32] == bytes(ORACLE)
     assert data[EVENT_ORACLES_OFFSET + 32 : EVENT_ORACLES_OFFSET + 64] == bytes(ORACLE2)
     ev = Event.decode(ADDRESS, data, balance=123)
@@ -81,11 +97,38 @@ def test_event_decode_reads_oracle_slots_threshold_and_fee():
     assert (ev.reward, ev.fee, ev.max_paid, ev.paid_count, ev.min_seen_secs, ev.balance) == (
         10_000_000, 2_000_000, 3, 1, 5, 123,
     )
+    assert (ev.name, ev.venue) == ("HackYeah 2026", "Kraków")
+
+
+@pytest.mark.parametrize(
+    ("name", "venue"),
+    [("HackYeah 2026", "Kraków"), ("x", ""), ("Zażółć gęślą jaźń", "Łódź, ul. Piotrkowska 1"), ("n" * 64, "v" * 64),
+     ("ą" * 32, "ś" * 32)],
+)
+def test_event_decode_reads_name_and_venue_from_their_length_prefixes(name, venue):
+    for pad in (True, False):  # zero padding after short strings, or an exact-length account
+        ev = Event.decode(ADDRESS, event_bytes(name=name, venue=venue, pad=pad), 0)
+        assert (ev.name, ev.venue) == (name, venue)
+        assert (ev.event_id, ev.min_seen_secs) == (7, 5)  # fixed fields unaffected
+
+
+def _with_tail(tail: bytes) -> bytes:
+    return event_bytes(pad=False)[:FIXED_EVENT_LEN] + tail
 
 
 @pytest.mark.parametrize(
     "data",
-    [b"", event_bytes()[:-1], disc("account", "Config") + event_bytes()[8:], event_bytes(oracles=[])],
+    [
+        b"",
+        event_bytes(pad=False)[:FIXED_EVENT_LEN - 1],
+        disc("account", "Config") + event_bytes()[8:],
+        event_bytes(oracles=[]),
+        _with_tail(b""),  # no name at all
+        _with_tail(struct.pack("<I", 65) + b"x" * 65 + borsh("") + bytes(200)),  # name > 64 bytes
+        _with_tail(borsh("x") + struct.pack("<I", 65) + b"v" * 65 + bytes(200)),  # venue > 64 bytes
+        _with_tail(borsh("x") + struct.pack("<I", 5) + b"ab"),  # venue truncated
+        _with_tail(struct.pack("<I", 2) + b"\xff\xfe" + borsh("") + bytes(200)),  # bad UTF-8
+    ],
 )
 def test_event_decode_rejects_short_foreign_or_oracleless_data(data):
     with pytest.raises(ValueError):
@@ -133,13 +176,15 @@ def test_close_sighting_ix():
 
 
 def test_create_event_ix_borsh_layout():
-    ix = create_event_ix(ORGANIZER, 7, [ORACLE, ORACLE2], 2, 1_000, 2_000, 10_000_000, 3, 5)
+    ix = create_event_ix(ORGANIZER, 7, [ORACLE, ORACLE2], 2, 1_000, 2_000, 10_000_000, 3, 5, "HackYeah", "Kraków")
     data = bytes(ix.data)
     assert data[:8] == disc("global", "create_event")
     assert struct.unpack_from("<QI", data, 8) == (7, 2)  # event_id, Vec length
     assert data[20:52] == bytes(ORACLE) and data[52:84] == bytes(ORACLE2)
     assert struct.unpack_from("<BqqQII", data, 84) == (2, 1_000, 2_000, 10_000_000, 3, 5)
-    assert len(data) == 84 + 1 + 8 + 8 + 8 + 4 + 4
+    strings = 84 + 1 + 8 + 8 + 8 + 4 + 4
+    # name and venue are the last two args: Borsh Strings, length in BYTES ("Kraków" is 7 bytes, 6 characters)
+    assert data[strings:] == struct.pack("<I", 8) + b"HackYeah" + struct.pack("<I", 7) + "Kraków".encode()
     assert [m.pubkey for m in ix.accounts] == [ORGANIZER, event_pda(ORGANIZER, 7), SYSTEM_PROGRAM_ID]
 
 
@@ -147,8 +192,10 @@ def test_program_error_codes_are_appended():
     # lib.rs PresenceError in declaration order (AlreadyStarted was removed with update_event_times).
     assert PROGRAM_ERRORS == [
         "BadTimes", "BadAmounts", "Overflow", "NotStarted", "Ended", "CapReached", "EventRunning",
-        "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof",
+        "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof", "BadEventText",
     ]
+    assert _program_error("Custom(6013)").code == "BadEventText"
+    assert _program_error("custom program error: 0x177d").code == "BadEventText"  # 0x177d = 6013
     assert _program_error("Custom(6012)").code == "BadJoinProof"
     assert _program_error("custom program error: 0x177c").code == "BadJoinProof"  # 0x177c = 6012
     assert _program_error("Program log: AnchorError ... Error Code: BadJoinProof. Error Number: 6012.").code == (

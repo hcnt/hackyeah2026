@@ -22,11 +22,13 @@ _MSG = build_message("join", str(EVENT), WALLET, "2026-10-03T12:00:00Z", "2026-1
 PROOF = JoinProof(message=_MSG, signature=bytes(range(64)))  # the sink does not check it; the program does
 
 
-def chain_event(address: Pubkey = EVENT, oracles: list[Pubkey] | None = None) -> Event:
+def chain_event(
+    address: Pubkey = EVENT, oracles: list[Pubkey] | None = None, name: str = "HackYeah 2026", venue: str = "Kraków"
+) -> Event:
     return Event(
         address=address, organizer=ORGANIZER, oracles=[ORACLE_PK] if oracles is None else oracles, threshold=1,
         event_id=1, start=1_000, end=2_000, reward=10_000_000, fee=2_000_000, max_paid=3,
-        paid_count=0, min_seen_secs=3, balance=0,
+        paid_count=0, min_seen_secs=3, balance=0, name=name, venue=venue,
     )
 
 
@@ -89,8 +91,14 @@ def test_event_maps_chain_fields():
     assert (info.event_id, info.organizer) == (str(EVENT), str(ORGANIZER))
     assert (info.start_ts, info.end_ts, info.min_seen_secs) == (1_000, 2_000, 3)
     assert (info.reward_lamports, info.max_payouts) == (10_000_000, 3)
-    assert info.name is None and info.venue is None
+    assert (info.name, info.venue) == ("HackYeah 2026", "Kraków")  # from the Event account
     assert (info.oracles, info.threshold) == ([str(ORACLE_PK)], 1)
+
+
+def test_event_with_empty_venue_maps_to_none():
+    chain = FakeChain(events={EVENT: chain_event(name="n" * 64, venue="")})
+    info = asyncio.run(ChainEventSource(chain).get(str(EVENT)))
+    assert (info.name, info.venue) == ("n" * 64, None)
 
 
 def test_event_maps_all_oracles_and_threshold():

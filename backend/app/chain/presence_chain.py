@@ -51,12 +51,14 @@ LAMPORTS_PER_SOL = 1_000_000_000
 # #[error_code] in lib.rs, numbered from 6000 by Anchor (new variants are appended, never renumbered).
 PROGRAM_ERRORS = [
     "BadTimes", "BadAmounts", "Overflow", "NotStarted", "Ended", "CapReached", "EventRunning",
-    "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof",
+    "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof", "BadEventText",
 ]
 MAX_ORACLES = 3
 SIGHTING_GAP_SECS = 60  # lib.rs: a longer gap between two reports restarts the dwell time
 MAX_ORACLE_NAME = 32  # lib.rs: OracleInfo.name, bytes
 MAX_ORACLE_URL = 128  # lib.rs: OracleInfo.url, bytes
+MAX_EVENT_NAME = 64  # lib.rs: Event.name, 1..=64 bytes
+MAX_EVENT_VENUE = 64  # lib.rs: Event.venue, 0..=64 bytes (empty = none)
 FEE_LAMPORTS = 2_000_000  # lib.rs: per paid attendee, to the oracle whose report paid; frozen into Event.fee
 
 
@@ -70,8 +72,10 @@ ORACLE_INFO_DISC = _disc("account", "OracleInfo")
 ATTENDEE_PAID_DISC = _disc("event", "AttendeePaid")
 
 # organizer, oracles[3], oracle_count, threshold, event_id, start, end, reward, fee, max_paid, paid_count,
-# min_seen_secs, bump
+# min_seen_secs, bump; then name and venue as Borsh strings (the account is sized for both at their max length, so
+# the tail is zero padding: read the length prefixes, never assume the full width)
 _EVENT_FMT = "<32s96sBBQqqQQIIIB"
+EVENT_NAME_OFFSET = 8 + struct.calcsize(_EVENT_FMT)  # every fixed-size field keeps its offset
 _SIGHTING_FMT = "<qqB?32sqB"  # first_seen, last_seen, reporters, paid, payer, event_end, bump
 EVENT_ORGANIZER_OFFSET = 8
 EVENT_ORACLES_OFFSET = 8 + 32  # slot i at EVENT_ORACLES_OFFSET + 32 * i
@@ -129,19 +133,27 @@ class Event:
     paid_count: int
     min_seen_secs: int  # dwell time the program requires, on the chain clock
     balance: int  # lamports in the vault, account rent included
+    name: str = ""  # set by the organizer, 1..=64 bytes UTF-8
+    venue: str = ""  # 0..=64 bytes UTF-8, empty = none
 
     @classmethod
     def decode(cls, address: Pubkey, data: bytes, balance: int) -> Event:
-        if data[:8] != EVENT_DISC or len(data) < 8 + struct.calcsize(_EVENT_FMT):
+        if data[:8] != EVENT_DISC or len(data) < EVENT_NAME_OFFSET:
             raise ValueError("not an Event account")
         (org, oracles, count, threshold, eid, start, end, reward, fee, max_paid, paid, min_seen, _) = (
             struct.unpack_from(_EVENT_FMT, data, 8)
         )
         if not 1 <= count <= MAX_ORACLES:
             raise ValueError("not an Event account")
+        try:
+            name, off = _read_borsh_string(data, EVENT_NAME_OFFSET, MAX_EVENT_NAME)
+            venue, _ = _read_borsh_string(data, off, MAX_EVENT_VENUE)
+        except (UnicodeDecodeError, ValueError) as e:
+            raise ValueError("not an Event account") from e
         slots = [Pubkey(oracles[32 * i : 32 * (i + 1)]) for i in range(count)]
         return cls(
             address, Pubkey(org), slots, threshold, eid, start, end, reward, fee, max_paid, paid, min_seen, balance,
+            name, venue,
         )
 
 
@@ -273,14 +285,18 @@ def close_sighting_ix(payer: Pubkey, event: Pubkey, attendee: Pubkey, program_id
 
 def create_event_ix(
     organizer: Pubkey, event_id: int, oracles: list[Pubkey], threshold: int, start: int, end: int, reward: int,
-    max_paid: int, min_seen_secs: int, program_id: Pubkey = PROGRAM_ID,
+    max_paid: int, min_seen_secs: int, name: str, venue: str, program_id: Pubkey = PROGRAM_ID,
 ) -> Instruction:
-    # Borsh: Vec<Pubkey> = u32 length + the keys.
+    """create_event. The program checks name (1..=64 bytes) and venue (0..=64 bytes), no control characters
+    (BadEventText); this builder does not, so tests can send what the program must refuse."""
+    # Borsh: Vec<Pubkey> = u32 length + the keys; String = u32 length + UTF-8.
     data = (
         _disc("global", "create_event")
         + struct.pack("<QI", event_id, len(oracles))
         + b"".join(bytes(o) for o in oracles)
         + struct.pack("<BqqQII", threshold, start, end, reward, max_paid, min_seen_secs)
+        + _borsh_string(name)
+        + _borsh_string(venue)
     )
     return Instruction(
         program_id,
@@ -502,12 +518,15 @@ class PresenceChain:
         reward: int,
         max_paid: int,
         min_seen_secs: int,
+        name: str,
+        venue: str = "",
     ) -> tuple[Pubkey, Signature]:
         """Create and fund an Event whose sightings only `oracles` can report; the program pays once `threshold`
-        of them reported a wallet for `min_seen_secs`. The fee is the program's FEE_LAMPORTS, frozen in the Event."""
+        of them reported a wallet for `min_seen_secs`. The fee is the program's FEE_LAMPORTS, frozen in the Event.
+        `name` (1..=64 bytes) and `venue` (0..=64 bytes) are stored on chain; else BadEventText."""
         event = event_pda(organizer.pubkey(), event_id)
         ix = create_event_ix(
-            organizer.pubkey(), event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs
+            organizer.pubkey(), event_id, oracles, threshold, start, end, reward, max_paid, min_seen_secs, name, venue
         )
         return event, await self._send([ix], organizer)
 

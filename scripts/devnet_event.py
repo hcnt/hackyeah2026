@@ -2,11 +2,13 @@
 
     cd backend && uv run python ../scripts/devnet_event.py [--reward 0.01] [--max 3] [--hours 2] [--min-seen 3]
         [--oracle <pubkey> [--oracle <pubkey> ...]] [--threshold 1] [--program <program id>]
+        [--name "OnSight demo"] [--venue ""]
 
 The organizer chooses the event's oracles (1-3, default: our backend's oracle key) and how many of them must report a
 wallet (--threshold). Oracles only report sightings; the program pays once `threshold` of them saw the wallet for
 `--min-seen` seconds. The fee per paid attendee is the program's FEE_LAMPORTS (0.002 SOL), frozen into the event;
-it goes to the oracle whose report paid.
+it goes to the oracle whose report paid. The event's --name (1-64 bytes) and --venue (0-64 bytes, empty = none) are
+stored on chain.
 
 A test organizer keypair is kept at ~/.config/attend-now/organizer-devnet.json (created on first run, never in the
 repo) and topped up from the devnet faucet when it runs low. The event starts now, so sightings count at once.
@@ -19,6 +21,7 @@ import json
 import struct
 import sys
 import time
+import unicodedata
 import urllib.request
 from pathlib import Path
 
@@ -39,6 +42,23 @@ DEFAULT_ORACLE = "5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt"
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000
 FEE_LAMPORTS = 2_000_000  # lib.rs FEE_LAMPORTS: per paid attendee, frozen into the Event at creation
+MAX_EVENT_NAME = 64  # lib.rs: bytes of UTF-8
+MAX_EVENT_VENUE = 64
+
+
+def borsh_string(value: str) -> bytes:
+    raw = value.encode()
+    return struct.pack("<I", len(raw)) + raw
+
+
+def text_error(label: str, value: str, min_len: int, max_len: int) -> str | None:
+    """The program's BadEventText rule, checked before anything is sent."""
+    n = len(value.encode())
+    if not min_len <= n <= max_len:
+        return f"{label} must be {min_len} to {max_len} bytes of UTF-8 (got {n})"
+    if any(unicodedata.category(c) == "Cc" for c in value):
+        return f"{label} must not contain control characters"
+    return None
 
 
 def rpc(method: str, params: list) -> dict:
@@ -99,7 +119,12 @@ def main() -> None:
     ap.add_argument("--threshold", type=int, default=1, help="how many different oracles must report a wallet")
     ap.add_argument("--program", type=Pubkey.from_string, default=Pubkey.from_string(DEFAULT_PROGRAM),
                     help="presence_pay program id (default: the OLD id until the new deploy)")
+    ap.add_argument("--name", default="OnSight demo", help="event name shown to attendees (1-64 bytes)")
+    ap.add_argument("--venue", default="", help="event venue (0-64 bytes, empty = none)")
     args = ap.parse_args()
+    for err in (text_error("--name", args.name, 1, MAX_EVENT_NAME), text_error("--venue", args.venue, 0, MAX_EVENT_VENUE)):
+        if err:
+            sys.exit(err)
     program: Pubkey = args.program
     oracles: list[Pubkey] = args.oracles or [Pubkey.from_string(DEFAULT_ORACLE)]
     if not 1 <= len(oracles) <= 3 or len(set(oracles)) != len(oracles):
@@ -119,12 +144,15 @@ def main() -> None:
     start = int(time.time()) - 60
     end = start + 60 + int(args.hours * 3600)
     # create_event(event_id u64, oracles Vec<Pubkey>, threshold u8, start i64, end i64, reward u64, max_paid u32,
-    # min_seen_secs u32); a Borsh Vec is a u32 length followed by the items.
+    # min_seen_secs u32, name String, venue String); a Borsh Vec is a u32 length followed by the items, a String a
+    # u32 byte length followed by the UTF-8.
     data = (
         hashlib.sha256(b"global:create_event").digest()[:8]
         + struct.pack("<QI", event_id, len(oracles))
         + b"".join(bytes(o) for o in oracles)
         + struct.pack("<BqqQII", args.threshold, start, end, reward, args.max, args.min_seen)
+        + borsh_string(args.name)
+        + borsh_string(args.venue)
     )
     ix = Instruction(
         program,
@@ -141,6 +169,7 @@ def main() -> None:
     wait_confirmed(sig)
 
     print(f"Event created: {event}")
+    print(f"  name {args.name!r}, venue {args.venue or '(none)'!r}")
     print(f"  reward {reward / LAMPORTS} SOL × {args.max}, fee {fee / LAMPORTS} SOL, min seen {args.min_seen} s")
     print(f"  oracles {', '.join(map(str, oracles))}, threshold {args.threshold} (program {program})")
     print(f"  ends {time.strftime('%H:%M', time.localtime(end))}; budget {budget / LAMPORTS:.4f} SOL in escrow")

@@ -27,6 +27,8 @@ describe("presence_pay", () => {
   const reward = new BN(10_000_000); // 0.01 SOL (oszczędzamy devnetowe SOL)
   const maxPaid = 3;
   const minSeen = 3; // sekundy obecności na zegarze łańcucha
+  const eventName = "HackYeah 2026 🎉"; // 1..=64 bajtów UTF-8 (emoji = 4 bajty)
+  const eventVenue = "Tauron Arena, Kraków"; // 0..=64 bajtów, pusty = brak
   const now = Math.floor(Date.now() / 1000);
 
   const eventId = new BN(now); // unikalne przy każdym uruchomieniu
@@ -80,10 +82,10 @@ describe("presence_pay", () => {
         .preInstructions([joinProof(ev, who)])
     );
   const createEvent = (id: BN, oracles: web3.PublicKey[], threshold: number, start: number, end: number,
-    max = maxPaid, seen = minSeen) =>
+    max = maxPaid, seen = minSeen, name = eventName, venue = eventVenue) =>
     send(
       program.methods
-        .createEvent(id, oracles, threshold, new BN(start), new BN(end), reward, max, seen)
+        .createEvent(id, oracles, threshold, new BN(start), new BN(end), reward, max, seen, name, venue)
         .accounts({ organizer: me, event: eventPda(id), systemProgram: sys } as any)
     );
 
@@ -98,8 +100,35 @@ describe("presence_pay", () => {
       assert.equal(ev.threshold, 1);
       assert.ok(ev.oracles[0].equals(me));
       assert.ok(ev.fee.eq(fee));
+      assert.equal(ev.name, eventName);
+      assert.equal(ev.venue, eventVenue);
       assert.equal(await conn.getBalance(event, "confirmed"), rent + budget);
     });
+  });
+
+  it("nazwa i miejsce: pusty venue jest OK, zła nazwa / za długi venue / znak sterujący = BadEventText", async () => {
+    const id6 = new BN(now + 6);
+    const name64 = "ą".repeat(32); // dokładnie 64 bajty (32 znaki po 2 bajty)
+    await createEvent(id6, [me], 1, now + 3600, now + 7200, 1, 0, name64, "");
+    await eventually(async () => {
+      const ev = await program.account.event.fetch(eventPda(id6), "confirmed");
+      assert.equal(ev.name, name64);
+      assert.equal(ev.venue, "");
+    });
+    // Sprzątanie: event jeszcze się nie zaczął, więc anulowanie zwraca budżet.
+    await send(program.methods.withdrawRemaining().accounts({ organizer: me, event: eventPda(id6) } as any));
+
+    const bad: [string, string][] = [
+      ["", eventVenue], // pusta nazwa
+      ["n".repeat(65), ""], // 65 bajtów
+      [eventName, "v".repeat(65)], // venue 65 bajtów
+      ["Hack\nYeah", ""], // znak sterujący
+    ];
+    for (const [i, [name, venue]] of bad.entries()) {
+      const id = new BN(now + 10 + i);
+      await expectFail(createEvent(id, [me], 1, now - 60, now + 600, 1, 0, name, venue), "BadEventText");
+      assert.equal(await conn.getAccountInfo(eventPda(id), "confirmed"), null); // nic nie powstało
+    }
   });
 
   it("zły próg / zduplikowane oracle są odrzucane", async () => {

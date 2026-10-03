@@ -30,7 +30,7 @@ def _pubkey(value: str) -> Pubkey | None:
 
 
 class ChainEventSource:
-    """Event facts read from the Event account whose address is the event_id. Name and venue are not on-chain."""
+    """Event facts read from the Event account whose address is the event_id, name and venue included (set by the organizer)."""
 
     def __init__(
         self, chain: PresenceChain, ttl: float = EVENT_CACHE_SECS, clock: Callable[[], float] = time.monotonic
@@ -61,6 +61,8 @@ class ChainEventSource:
             max_payouts=ev.max_paid,
             oracles=[str(o) for o in ev.oracles],
             threshold=ev.threshold,
+            name=ev.name or None,
+            venue=ev.venue or None,
         )
         self._cache[event_id] = (self.clock(), info)
         return info

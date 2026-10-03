@@ -3,7 +3,8 @@
 //
 // Layouts mirror contracts/presence_pay/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
 //   Event:      organizer 32 | oracles 3×32 | oracle_count u8 | threshold u8 | event_id u64 | start i64 | end i64 |
-//               reward u64 | fee u64 | max_paid u32 | paid_count u32 | min_seen_secs u32 | bump u8
+//               reward u64 | fee u64 | max_paid u32 | paid_count u32 | min_seen_secs u32 | bump u8 |
+//               name (u32 LE length + UTF-8, ≤ 64) | venue (u32 LE length + UTF-8, ≤ 64)
 //   OracleInfo: oracle 32 | name (u32 LE length + UTF-8) | url (u32 LE length + UTF-8) | bump u8   (PDA ["oracle", key])
 import bs58 from 'bs58'
 
@@ -18,6 +19,8 @@ const EVENT_ORACLES_OFFSET = 8 + 32
 const EVENT_COUNT_OFFSET = EVENT_ORACLES_OFFSET + 32 * MAX_ORACLES
 const MAX_NAME = 32
 const MAX_URL = 128
+const MAX_EVENT_NAME = 64
+const MAX_EVENT_VENUE = 64
 
 export interface OracleEntry {
   /** The oracle's key (base58), as listed in the Event. */
@@ -34,7 +37,7 @@ export interface EventOracles {
   oracles: OracleEntry[]
   /** Oracles listed on the event without a (valid) registry entry: the widget cannot reach them. */
   unregistered: string[]
-  /** Organizer, times and payout counters of the Event account (null if the account is too short to hold them). */
+  /** Organizer, times, payout counters, name and venue of the Event account (null if they don't decode). */
   meta: EventMeta | null
 }
 
@@ -47,6 +50,9 @@ export interface EventMeta {
   maxPaid: number
   paidCount: number
   minSeenSecs: number
+  name: string
+  /** null when the event has no venue. */
+  venue: string | null
 }
 
 export class ChainError extends Error {}
@@ -169,12 +175,19 @@ export function decodeEventOracles(data: Uint8Array, disc: Uint8Array): { oracle
 }
 
 // Event: … threshold u8 | event_id u64 | start i64 | end i64 | reward u64 | fee u64 | max_paid u32 | paid_count u32 |
-// min_seen_secs u32 | bump u8. EVENT_META_OFFSET points at `start` (event_id is skipped).
+// min_seen_secs u32 | bump u8 | name | venue. EVENT_META_OFFSET points at `start` (event_id is skipped).
 const EVENT_META_OFFSET = EVENT_COUNT_OFFSET + 2 + 8
+const EVENT_TEXT_OFFSET = EVENT_META_OFFSET + 44 + 1
 
-/** Organizer, times and counters of an Event account's data (already checked by decodeEventOracles). */
+/**
+ * Organizer, times, counters, name and venue of an Event account's data (already checked by decodeEventOracles).
+ * Null when the account is too short or the strings are out of bounds / not UTF-8 (e.g. the older layout without them).
+ */
 export function decodeEventMeta(data: Uint8Array): EventMeta | null {
-  if (data.length < EVENT_META_OFFSET + 44) return null
+  if (data.length < EVENT_TEXT_OFFSET) return null
+  const name = readString(data, EVENT_TEXT_OFFSET, MAX_EVENT_NAME)
+  const venue = name && readString(data, name[1], MAX_EVENT_VENUE)
+  if (!name || !venue || name[0] === '') return null
   const view = new DataView(data.buffer, data.byteOffset, data.length)
   const at = EVENT_META_OFFSET
   return {
@@ -185,6 +198,8 @@ export function decodeEventMeta(data: Uint8Array): EventMeta | null {
     maxPaid: view.getUint32(at + 32, true),
     paidCount: view.getUint32(at + 36, true),
     minSeenSecs: view.getUint32(at + 40, true),
+    name: name[0],
+    venue: venue[0] || null,
   }
 }
 

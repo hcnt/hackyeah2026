@@ -40,11 +40,14 @@ Files: `lib.rs` (the program), `idl.json` (interface for clients), `anchor.test.
 
 | Account | PDA seeds | Fields |
 |---|---|---|
-| `Event` | `["event", organizer, event_id as u64 LE]` | `organizer`, `oracles` (`[Pubkey; 3]`, unused slots = default key), `oracle_count`, `threshold`, `event_id`, `start`, `end` (unix s), `reward`, `fee` (lamports), `max_paid`, `paid_count`, `min_seen_secs`, `bump` |
+| `Event` | `["event", organizer, event_id as u64 LE]` | `organizer`, `oracles` (`[Pubkey; 3]`, unused slots = default key), `oracle_count`, `threshold`, `event_id`, `start`, `end` (unix s), `reward`, `fee` (lamports), `max_paid`, `paid_count`, `min_seen_secs`, `bump`, `name` (String, 1–64 bytes), `venue` (String, ≤ 64 bytes, empty = none) |
 | `Sighting` | `["sighting", event, attendee]` | `first_seen`, `last_seen` (chain clock), `reporters` (bitmask over oracle slots), `paid`, `payer` (the oracle that paid its rent), `event_end`, `bump` |
 | `OracleInfo` | `["oracle", oracle]` | `oracle`, `name` (String, ≤ 32 bytes), `url` (String, ≤ 128 bytes), `bump`: the oracle registry, see below |
 
-The `Event` account is also the vault: it holds the event's budget as lamports. A wallet's `Sighting` is created by
+The `Event` account is also the vault: it holds the event's budget as lamports. It is 327 bytes (`8 + INIT_SPACE`,
+both strings allocated at 4 + 64 bytes; rent 0.0031668 SOL, paid by the organizer on top of the budget). `name` and
+`venue` come after `bump`, so every fixed-size field keeps its offset (memcmp filters on `organizer` at 8 and the
+oracle slots at 40 + 32·i); a decoder reads each string's u32 length and ignores the zero padding after it. A wallet's `Sighting` is created by
 the first report (rent ≈ 0.00136 SOL, paid by the reporting oracle, reclaimable after the end with `close_sighting`);
 its `paid` flag is set in the paying transaction and checked first on every report, which is what makes a second
 payout impossible. `event_end` is copied from the Event so a Sighting can still be closed after `withdraw_remaining`
@@ -52,14 +55,14 @@ closed the Event.
 
 Mapping to `docs/oracle-api.md`: `event_id` in the API is the **address of the `Event` account**;
 `reward_lamports` = `reward`, `max_payouts` = `max_paid`, `paid` = `paid_count`,
-`spots_left` = `max_paid - paid_count`, `min_seen_secs` = `min_seen_secs`, `starts_at`/`ends_at` = `start`/`end`.
-Name and venue are not on-chain.
+`spots_left` = `max_paid - paid_count`, `min_seen_secs` = `min_seen_secs`, `starts_at`/`ends_at` = `start`/`end`,
+`name` = `name`, `venue` = `venue` (empty on chain = null in the API).
 
 ## Instructions
 
 | Instruction | Signer | Allowed when | Does |
 |---|---|---|---|
-| `create_event(event_id, oracles: Vec<Pubkey>, threshold: u8, start, end, reward, max_paid, min_seen_secs)` | organizer | any time | creates `Event` with 1–3 distinct non-default oracles and `1 ≤ threshold ≤ oracles.len()`, transfers `max_paid × (reward + fee)` into it; `fee` = `FEE_LAMPORTS`, frozen per event |
+| `create_event(event_id, oracles: Vec<Pubkey>, threshold: u8, start, end, reward, max_paid, min_seen_secs, name: String, venue: String)` | organizer | any time | creates `Event` with 1–3 distinct non-default oracles and `1 ≤ threshold ≤ oracles.len()`, a `name` of 1–64 bytes and a `venue` of 0–64 bytes (UTF-8, no control characters), transfers `max_paid × (reward + fee)` into it; `fee` = `FEE_LAMPORTS`; all terms incl. name and venue frozen per event |
 | `report_sighting()` | one of the event's oracles | `start ≤ now ≤ end` | records the sighting (creates the `Sighting` on first report); **pays** `reward` to the attendee and `fee` to the reporting oracle when ≥ `threshold` oracles reported, `last_seen − first_seen ≥ min_seen_secs` and the wallet is unpaid; fails with `CapReached` if those hold but `max_paid` is reached; a no-op once paid |
 | `withdraw_remaining()` | organizer | before start (cancel) or after end | closes `Event`, returns everything left to the organizer |
 | `close_sighting()` | the sighting's payer | after the event's end | closes a `Sighting`, returns its rent to the oracle that paid it |
@@ -122,6 +125,7 @@ An oracle without an entry cannot receive joins from the widget.
 | 6010 | `BadName` | oracle name empty, over 32 bytes or with a control character |
 | 6011 | `BadUrl` | oracle url not `http(s)://…`, over 128 bytes, or with spaces / control characters |
 | 6012 | `BadJoinProof` | the instruction before `report_sighting` is not an ed25519 check of the attendee's signed join for this event |
+| 6013 | `BadEventText` | event name empty or over 64 bytes, venue over 64 bytes, or a control character in either |
 | 2001 | `ConstraintHasOne` | withdraw_remaining signer is not the `Event`'s organizer, or close_sighting signer is not the `Sighting`'s payer |
 
 The codes changed in this version (`AlreadyStarted` was removed, the rest moved up by one): clients built for the
