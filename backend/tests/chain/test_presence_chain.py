@@ -9,6 +9,7 @@ import pytest
 from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.system_program import ID as SYSTEM_PROGRAM_ID
+from solders.sysvar import INSTRUCTIONS as INSTRUCTIONS_SYSVAR
 
 from app.chain.presence_chain import (
     EVENT_ORACLES_OFFSET,
@@ -26,20 +27,35 @@ from app.chain.presence_chain import (
     close_sighting_ix,
     config_pda,
     create_event_ix,
+    ed25519_verify_ix,
     event_pda,
     oracle_info_pda,
     register_oracle_ix,
     report_sighting_ix,
+    report_sighting_ixs,
     sighting_pda,
     update_oracle_ix,
 )
+from app.oracle.signatures import JoinProof, build_message
 
 ADDRESS = Keypair().pubkey()
 ORGANIZER = Keypair().pubkey()
 ORACLE = Keypair().pubkey()
 ORACLE2 = Keypair().pubkey()
 TREASURY = Keypair().pubkey()
-ATTENDEE = Keypair().pubkey()
+ATTENDEE_KP = Keypair()
+ATTENDEE = ATTENDEE_KP.pubkey()
+ED25519_PROGRAM = Pubkey.from_string("Ed25519SigVerify111111111111111111111111111")
+SYSVAR_INSTRUCTIONS = Pubkey.from_string("Sysvar1nstructions1111111111111111111111111")
+
+
+def signed_join(event: Pubkey, kp: Keypair) -> JoinProof:
+    """A join as the widget signs it (same as tests/oracle/fakes.signed_join, which this package cannot import)."""
+    message = build_message("join", str(event), str(kp.pubkey()), "2026-10-03T12:00:00Z", "2026-10-03").encode()
+    return JoinProof(message=message, signature=bytes(kp.sign_message(message)))
+
+
+PROOF = signed_join(ADDRESS, ATTENDEE_KP)
 
 
 def disc(namespace: str, name: str) -> bytes:
@@ -105,10 +121,12 @@ def test_report_sighting_ix_accounts_in_lib_rs_order():
     assert ix.program_id == PROGRAM_ID
     assert bytes(ix.data) == disc("global", "report_sighting")
     keys = [m.pubkey for m in ix.accounts]
-    assert keys == [ORACLE, ADDRESS, sighting_pda(ADDRESS, ATTENDEE), ATTENDEE, TREASURY, SYSTEM_PROGRAM_ID]
+    assert keys == [
+        ORACLE, ADDRESS, sighting_pda(ADDRESS, ATTENDEE), ATTENDEE, TREASURY, SYSTEM_PROGRAM_ID, SYSVAR_INSTRUCTIONS
+    ]
     assert config_pda() not in keys
-    assert [m.is_signer for m in ix.accounts] == [True, False, False, False, False, False]
-    assert [m.is_writable for m in ix.accounts] == [True, True, True, True, True, False]
+    assert [m.is_signer for m in ix.accounts] == [True, False, False, False, False, False, False]
+    assert [m.is_writable for m in ix.accounts] == [True, True, True, True, True, False, False]
 
 
 def test_sighting_pda_seeds():
@@ -136,7 +154,12 @@ def test_create_event_ix_borsh_layout():
 
 def test_program_error_codes_are_appended():
     assert PROGRAM_ERRORS[6] == "CapReached"
-    assert PROGRAM_ERRORS[8:] == ["BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl"]
+    assert PROGRAM_ERRORS[8:] == ["BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof"]
+    assert _program_error("Custom(6013)").code == "BadJoinProof"
+    assert _program_error("custom program error: 0x177d").code == "BadJoinProof"  # 0x177d = 6013
+    assert _program_error("Program log: AnchorError ... Error Code: BadJoinProof. Error Number: 6013.").code == (
+        "BadJoinProof"
+    )
     assert _program_error("Custom(6012)").code == "BadUrl"
     assert _program_error("custom program error: 0x1776").code == "CapReached"  # 0x1776 = 6006
     assert _program_error("Custom(6010)").code == "NotOracle"
@@ -171,14 +194,14 @@ class OfflineChain(PresenceChain):
 def test_report_sighting_refuses_an_event_that_does_not_list_the_oracle():
     chain = OfflineChain(sample_event())  # its oracles are ORACLE and ORACLE2, not this keypair
     with pytest.raises(PresenceError) as e:
-        asyncio.run(chain.report_sighting(Keypair(), ADDRESS, ATTENDEE))
+        asyncio.run(chain.report_sighting(Keypair(), ADDRESS, ATTENDEE, PROOF))
     assert e.value.code == "NotOracle" and chain.sent == []
 
 
 def test_report_sighting_without_event_is_noevent():
     chain = OfflineChain(None)
     with pytest.raises(PresenceError) as e:
-        asyncio.run(chain.report_sighting(Keypair(), ADDRESS, ATTENDEE))
+        asyncio.run(chain.report_sighting(Keypair(), ADDRESS, ATTENDEE, PROOF))
     assert e.value.code == "NoEvent" and chain.sent == []
 
 
@@ -186,9 +209,50 @@ def test_report_sighting_from_any_listed_oracle_uses_the_events_treasury():
     oracle = Keypair()
     ev = Event.decode(ADDRESS, event_bytes(oracles=[ORACLE, oracle.pubkey()], threshold=2), 0)
     chain = OfflineChain(ev)
-    asyncio.run(chain.report_sighting(oracle, ADDRESS, ATTENDEE))
+    asyncio.run(chain.report_sighting(oracle, ADDRESS, ATTENDEE, PROOF))
     (ixs,) = chain.sent
-    assert ixs[0].accounts[0].pubkey == oracle.pubkey() and ixs[0].accounts[4].pubkey == TREASURY
+    assert ixs[1].accounts[0].pubkey == oracle.pubkey() and ixs[1].accounts[4].pubkey == TREASURY
+
+
+def check_ed25519_layout(ix, signer: Pubkey, proof: JoinProof) -> None:
+    assert ix.program_id == ED25519_PROGRAM and list(ix.accounts) == []
+    data = bytes(ix.data)
+    assert data[:2] == bytes([1, 0])
+    assert struct.unpack_from("<7H", data, 2) == (48, 0xFFFF, 16, 0xFFFF, 112, len(proof.message), 0xFFFF)
+    assert data[16:48] == bytes(signer)
+    assert data[48:112] == proof.signature
+    assert data[112:] == proof.message
+    assert len(data) == 112 + len(proof.message)
+
+
+def test_report_sighting_sends_ed25519_check_then_report():
+    oracle = Keypair()
+    ev = Event.decode(ADDRESS, event_bytes(oracles=[oracle.pubkey()]), 0)
+    chain = OfflineChain(ev)
+    asyncio.run(chain.report_sighting(oracle, ADDRESS, ATTENDEE, PROOF))
+    (ixs,) = chain.sent
+    assert len(ixs) == 2
+    check_ed25519_layout(ixs[0], ATTENDEE, PROOF)
+    assert ixs[1] == report_sighting_ix(oracle.pubkey(), ev, ATTENDEE)
+    assert ixs == report_sighting_ixs(oracle.pubkey(), ev, ATTENDEE, PROOF)
+
+
+def test_report_ix_ends_with_the_read_only_instructions_sysvar():
+    last = report_sighting_ix(ORACLE, sample_event(), ATTENDEE).accounts[-1]
+    assert last.pubkey == SYSVAR_INSTRUCTIONS == INSTRUCTIONS_SYSVAR
+    assert (last.is_signer, last.is_writable) == (False, False)
+
+
+def test_ed25519_verify_ix_layout_and_signature_actually_verifies():
+    ix = ed25519_verify_ix(ATTENDEE, PROOF.signature, PROOF.message)
+    check_ed25519_layout(ix, ATTENDEE, PROOF)
+    assert PROOF.valid_for(str(ADDRESS), str(ATTENDEE))
+
+
+@pytest.mark.parametrize("sig", [b"", bytes(63), bytes(65)])
+def test_ed25519_verify_ix_rejects_a_non_64_byte_signature(sig):
+    with pytest.raises(ValueError):
+        ed25519_verify_ix(ATTENDEE, sig, PROOF.message)
 
 
 # Oracle registry ----------------------------------------------------------------------------------

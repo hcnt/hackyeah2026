@@ -197,6 +197,11 @@
           "name": "systemProgram",
           "isMut": false,
           "isSigner": false
+        },
+        {
+          "name": "instructions",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": []
@@ -547,6 +552,11 @@
       "code": 6012,
       "name": "BadUrl",
       "msg": "Oracle url must start with https:// or http://, be at most 128 bytes, no spaces"
+    },
+    {
+      "code": 6013,
+      "name": "BadJoinProof",
+      "msg": "Report must follow an ed25519 check of the attendee's signed join message for this event"
     }
   ],
   "metadata": {

@@ -13,12 +13,13 @@ from solders.signature import Signature
 
 from app.chain.presence_chain import PresenceChain, PresenceError
 from app.oracle.interfaces import EventInfo, SightingRejected, SightingResult
+from app.oracle.signatures import JoinProof
 
 log = logging.getLogger("app.chain")
 
 EVENT_CACHE_SECS = 5.0
 # Errors that no retry can fix. NotStarted, Unauthorized and transport errors stay retryable.
-PERMANENT_ERRORS = {"CapReached", "Ended", "NotOracle", "NoEvent"}
+PERMANENT_ERRORS = {"CapReached", "Ended", "NotOracle", "NoEvent", "BadJoinProof"}
 
 
 def _pubkey(value: str) -> Pubkey | None:
@@ -74,7 +75,7 @@ class SolanaSightingSink:
         self.oracle = oracle
         self.oracle_pubkey = str(oracle.pubkey())  # read by the join endpoint (see SightingSink)
 
-    async def report(self, event_id: str, wallet: str) -> SightingResult:
+    async def report(self, event_id: str, wallet: str, proof: JoinProof) -> SightingResult:
         event, attendee = _pubkey(event_id), _pubkey(wallet)
         if event is None or attendee is None:
             raise SightingRejected("event_id or wallet is not a valid address")
@@ -90,7 +91,7 @@ class SolanaSightingSink:
             # The organizer chose other oracles for this event: the program would reject our signature anyway.
             raise SightingRejected(f"this oracle's key {self.oracle.pubkey()} is not one of the event's oracles")
         try:
-            sig = await self.chain.report_sighting(self.oracle, event, attendee, ev)
+            sig = await self.chain.report_sighting(self.oracle, event, attendee, proof, ev)
         except PresenceError as e:
             if e.code in PERMANENT_ERRORS:
                 raise SightingRejected(e.code) from e

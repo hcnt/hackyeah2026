@@ -1,6 +1,7 @@
 // Test dla Solana Playground (beta.solpg.io): wklej do tests/anchor.test.ts i kliknij "Test".
 // Twój portfel z Playground gra tu jednocześnie admina, organizatora i oracle (wybranego per event).
 // Oracle tylko zgłasza obecność (reportSighting); o wypłacie decyduje program.
+// Każde zgłoszenie poprzedza weryfikacja ed25519 podpisu uczestnika pod wiadomością dołączenia (joinProof).
 // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml projektu), patrz README.
 describe("presence_pay", () => {
   const program = pg.program;
@@ -19,7 +20,8 @@ describe("presence_pay", () => {
 
   const configPda = pda([Buffer.from("config")]);
   const treasury = web3.Keypair.generate().publicKey;
-  const attendee = web3.Keypair.generate().publicKey;
+  const attendeeKp = web3.Keypair.generate(); // uczestnik podpisuje dołączenie, więc potrzebny jest jego klucz
+  const attendee = attendeeKp.publicKey;
 
   const fee = new BN(2_000_000); // 0.002 SOL
   const reward = new BN(10_000_000); // 0.01 SOL (oszczędzamy devnetowe SOL)
@@ -59,9 +61,24 @@ describe("presence_pay", () => {
   const reportAccounts = (ev: web3.PublicKey, who: web3.PublicKey) =>
     ({
       oracle: me, event: ev, sighting: sightingPda(ev, who), attendee: who, treasury, systemProgram: sys,
+      instructions: web3.SYSVAR_INSTRUCTIONS_PUBKEY,
     }) as any;
-  const report = (ev = event, who = attendee) =>
-    send(program.methods.reportSighting().accounts(reportAccounts(ev, who)));
+  // Podpis dołączenia, jak w widgecie (wallet signMessage), sprawdzany natywnym programem Ed25519 w tej samej transakcji.
+  const joinProof = (ev: web3.PublicKey, who: web3.Keypair) =>
+    web3.Ed25519Program.createInstructionWithPrivateKey({
+      privateKey: who.secretKey,
+      message: Buffer.from(
+        `Attend Now\nAction: join\nEvent: ${ev.toBase58()}\nWallet: ${who.publicKey.toBase58()}\n` +
+          `Consent: 2026-10-03\nTime: ${new Date().toISOString()}`
+      ),
+    });
+  const report = (ev = event, who = attendeeKp) =>
+    send(
+      program.methods
+        .reportSighting()
+        .accounts(reportAccounts(ev, who.publicKey))
+        .preInstructions([joinProof(ev, who)])
+    );
   const createEvent = (id: BN, oracles: web3.PublicKey[], threshold: number, start: number, end: number,
     max = maxPaid, seen = minSeen) =>
     send(
@@ -131,10 +148,34 @@ describe("presence_pay", () => {
   });
 
   it("inny treasury niż zapisany w evencie jest odrzucany", async () => {
-    const other = web3.Keypair.generate().publicKey;
+    const other = web3.Keypair.generate();
     await expectFail(
-      send(program.methods.reportSighting().accounts({ ...reportAccounts(event, other), treasury: other })),
+      send(
+        program.methods
+          .reportSighting()
+          .accounts({ ...reportAccounts(event, other.publicKey), treasury: other.publicKey })
+          .preInstructions([joinProof(event, other)])
+      ),
       "ConstraintHasOne"
+    );
+  });
+
+  it("zgłoszenie bez podpisu dołączenia uczestnika jest odrzucane", async () => {
+    const stranger = web3.Keypair.generate();
+    // bez weryfikacji ed25519
+    await expectFail(
+      send(program.methods.reportSighting().accounts(reportAccounts(event, stranger.publicKey))),
+      "BadJoinProof"
+    );
+    // podpis dołączenia do INNEGO eventu
+    await expectFail(
+      send(
+        program.methods
+          .reportSighting()
+          .accounts(reportAccounts(event, stranger.publicKey))
+          .preInstructions([joinProof(eventPda(new BN(now + 99)), stranger)])
+      ),
+      "BadJoinProof"
     );
   });
 
@@ -151,15 +192,15 @@ describe("presence_pay", () => {
     const ev5 = eventPda(id5);
     const otherOracle = web3.Keypair.generate().publicKey;
     await createEvent(id5, [me, otherOracle], 2, now - 60, now + 600, 1, 0);
-    const who = web3.Keypair.generate().publicKey;
+    const who = web3.Keypair.generate();
     await report(ev5, who);
     await sleep(2000);
     await report(ev5, who);
     await eventually(async () => {
-      const s = await program.account.sighting.fetch(sightingPda(ev5, who), "confirmed");
+      const s = await program.account.sighting.fetch(sightingPda(ev5, who.publicKey), "confirmed");
       assert.equal(s.paid, false);
       assert.equal(s.reporters, 1);
-      assert.equal(await conn.getBalance(who, "confirmed"), 0);
+      assert.equal(await conn.getBalance(who.publicKey, "confirmed"), 0);
     });
   });
 

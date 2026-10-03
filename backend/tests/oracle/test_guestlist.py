@@ -1,5 +1,5 @@
 import numpy as np
-from fakes import FakeClock, near, unit
+from fakes import DUMMY_PROOF, FakeClock, near, unit
 
 from app.oracle.guestlist import GuestLists
 
@@ -9,8 +9,8 @@ def test_round_trip_encrypted_and_destroyed_after_end():
     clock = FakeClock(1000.0)
     gl = GuestLists(wall_clock=clock)
     a, b = unit(rng), unit(rng)
-    gl.put("ev", 2000, "walletA", a)
-    gl.put("ev", 2000, "walletB", b)
+    gl.put("ev", 2000, "walletA", a, DUMMY_PROOF)
+    gl.put("ev", 2000, "walletB", b, DUMMY_PROOF)
 
     # stored bytes are ciphertext, not the float32 plaintext
     nonce, ct = gl.raw_entry("ev", "walletA")
@@ -25,6 +25,7 @@ def test_round_trip_encrypted_and_destroyed_after_end():
     assert res[2][0] is None
     assert gl.has("ev", "walletA")
     assert gl.count("ev") == 2
+    assert gl.join_proof("ev", "walletA") == DUMMY_PROOF and gl.join_proof("ev", "nobody") is None
     assert gl.best_other("ev", a, exclude_wallet="walletA")[0] == "walletB"
 
     # after the end: purge drops key + entries; lookups return nothing
@@ -34,6 +35,7 @@ def test_round_trip_encrypted_and_destroyed_after_end():
     assert gl.count("ev") == 0
     assert gl.match("ev", a[None, :], 0.40) == [(None, 0.0)]
     assert gl.raw_entry("ev", "walletA") is None
+    assert gl.join_proof("ev", "walletA") is None
     assert not gl.has("ev", "walletA")
 
 
@@ -41,7 +43,7 @@ def test_ended_event_is_dropped_lazily_without_purge():
     rng = np.random.default_rng(2)
     clock = FakeClock(1000.0)
     gl = GuestLists(wall_clock=clock)
-    gl.put("ev", 1500, "w", unit(rng))
+    gl.put("ev", 1500, "w", unit(rng), DUMMY_PROOF)
     clock.advance(600)
     assert not gl.has("ev", "w")  # lazy check on access
     assert not gl.has_key("ev")
@@ -51,12 +53,13 @@ def test_rejoin_replaces_and_remove_deletes():
     rng = np.random.default_rng(3)
     gl = GuestLists(wall_clock=FakeClock(0))
     a1, a2 = unit(rng), unit(rng)
-    gl.put("ev", 10, "w", a1)
+    gl.put("ev", 10, "w", a1, DUMMY_PROOF)
     n1, _ = gl.raw_entry("ev", "w")
-    gl.put("ev", 10, "w", a2)
+    gl.put("ev", 10, "w", a2, DUMMY_PROOF)
     n2, _ = gl.raw_entry("ev", "w")
     assert n1 != n2  # fresh nonce per entry write
     assert gl.count("ev") == 1
     assert gl.match("ev", a2[None, :], 0.4)[0][0] == "w"
     assert gl.remove("ev", "w")
     assert gl.count("ev") == 0
+    assert gl.join_proof("ev", "w") is None  # a wallet that left is no longer reported

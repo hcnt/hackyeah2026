@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::ed25519_program;
+use anchor_lang::solana_program::sysvar::instructions::{load_current_index_checked, load_instruction_at_checked};
 
 // Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy).
 // UWAGA: ta wersja zmienia układ kont Event (lista oracli + próg) i zastępuje Receipt kontem Sighting,
@@ -15,6 +17,9 @@ pub const SIGHTING_GAP_SECS: i64 = 60;
 /// Rejestr oracli: maksymalna długość nazwy i adresu API (w bajtach UTF-8).
 pub const MAX_ORACLE_NAME: usize = 32;
 pub const MAX_ORACLE_URL: usize = 128;
+/// Ed25519SigVerify: nagłówek (liczba podpisów + wypełnienie) i 7 offsetów u16 na każdy podpis.
+const ED25519_HEADER: usize = 2;
+const ED25519_OFFSETS: usize = 14;
 
 #[program]
 pub mod presence_pay {
@@ -122,6 +127,10 @@ pub mod presence_pay {
     ///   - okno `start <= now <= end`, limit `max_paid`, jedna wypłata na portfel (flaga `paid`).
     /// `min_seen_secs = 0` przy `threshold = 1` wypłaca już przy pierwszym zgłoszeniu.
     /// Zgłoszenia po wypłacie są niczym (Ok, bez zmian), więc oracle może je bezpiecznie ponawiać.
+    ///
+    /// Każde zgłoszenie musi nieść zgodę uczestnika: instrukcja tuż PRZED nią w tej samej transakcji to weryfikacja
+    /// ed25519 (natywny program Solany) podpisu portfela uczestnika pod wiadomością dołączenia do TEGO eventu
+    /// (zob. check_join_proof). Oracle nie może więc zgłosić portfela, który się nie zapisał: nie podrobi podpisu.
     pub fn report_sighting(ctx: Context<ReportSighting>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let ev = &ctx.accounts.event;
@@ -130,6 +139,11 @@ pub mod presence_pay {
             .iter()
             .position(|o| *o == oracle)
             .ok_or(PresenceError::NotOracle)?;
+        check_join_proof(
+            &ctx.accounts.instructions.to_account_info(),
+            &ctx.accounts.event.key(),
+            &ctx.accounts.attendee.key(),
+        )?;
         require!(now >= ev.start, PresenceError::NotStarted);
         require!(now <= ev.end, PresenceError::Ended);
 
@@ -230,6 +244,37 @@ pub mod presence_pay {
     pub fn close_oracle(_ctx: Context<CloseOracle>) -> Result<()> {
         Ok(())
     }
+}
+
+/// Zgoda uczestnika na łańcuchu. Instrukcja tuż przed bieżącą musi być Ed25519SigVerify z jednym podpisem, którego
+/// klucz, podpis i wiadomość leżą w danych TEJ instrukcji (indeksy u16::MAX), bo tylko wtedy bajty czytane tutaj są
+/// tymi, które natywny program zweryfikował (inaczej offsety mogłyby wskazać dane z innej instrukcji).
+/// Klucz = portfel uczestnika, a wiadomość zaczyna się od nagłówka dołączenia z widgetu (signatures.py w backendzie):
+///   "Attend Now\nAction: join\nEvent: <event>\nWallet: <attendee>\n"  (dalej Consent i Time, nie sprawdzane).
+/// Podpis "leave" lub dla innego eventu/portfela się nie zgadza. Ograniczenie: rezygnacja (leave) nie trafia na
+/// łańcuch, więc podpis dołączenia pozostaje ważny do końca eventu.
+fn check_join_proof(instructions: &AccountInfo, event: &Pubkey, attendee: &Pubkey) -> Result<()> {
+    let current = load_current_index_checked(instructions)? as usize;
+    require!(current > 0, PresenceError::BadJoinProof);
+    let ix = load_instruction_at_checked(current - 1, instructions)?;
+    require!(ix.program_id == ed25519_program::ID, PresenceError::BadJoinProof);
+    let data = &ix.data;
+    require!(data.len() >= ED25519_HEADER + ED25519_OFFSETS && data[0] == 1, PresenceError::BadJoinProof);
+
+    let u16_at = |i: usize| u16::from_le_bytes([data[ED25519_HEADER + 2 * i], data[ED25519_HEADER + 2 * i + 1]]);
+    // signature_offset, signature_ix, pubkey_offset, pubkey_ix, message_offset, message_size, message_ix
+    let (pubkey_off, msg_off, msg_len) = (u16_at(2) as usize, u16_at(4) as usize, u16_at(5) as usize);
+    require!(
+        u16_at(1) == u16::MAX && u16_at(3) == u16::MAX && u16_at(6) == u16::MAX,
+        PresenceError::BadJoinProof
+    );
+    let signer = data.get(pubkey_off..pubkey_off + 32).ok_or(PresenceError::BadJoinProof)?;
+    let message = data.get(msg_off..msg_off + msg_len).ok_or(PresenceError::BadJoinProof)?;
+    require!(signer == attendee.as_ref(), PresenceError::BadJoinProof);
+
+    let expected = format!("Attend Now\nAction: join\nEvent: {event}\nWallet: {attendee}\n");
+    require!(message.starts_with(expected.as_bytes()), PresenceError::BadJoinProof);
+    Ok(())
 }
 
 fn check_oracle_info(name: &str, url: &str) -> Result<()> {
@@ -367,6 +412,9 @@ pub struct ReportSighting<'info> {
     #[account(mut)]
     pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+    /// CHECK: sysvar Instructions (adres sprawdzany); stąd czytamy weryfikację podpisu uczestnika
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub instructions: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -453,4 +501,6 @@ pub enum PresenceError {
     BadName,
     #[msg("Oracle url must start with https:// or http://, be at most 128 bytes, no spaces")]
     BadUrl,
+    #[msg("Report must follow an ed25519 check of the attendee's signed join message for this event")]
+    BadJoinProof,
 }

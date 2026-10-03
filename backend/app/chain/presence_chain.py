@@ -7,6 +7,8 @@ defaults for new events.
 
 The oracle is a sensor: it sends report_sighting ("I see wallet W now") and the PROGRAM decides when to pay (dwell
 time on the chain clock, oracle threshold, window, cap, once per wallet). There is no instruction that pays directly.
+Each report is preceded, in the same transaction, by an Ed25519SigVerify instruction over the attendee's signed join
+message; the program reads it from the Instructions sysvar and refuses reports without it (BadJoinProof).
 
 Oracles also publish a registry entry (OracleInfo: name + API URL) so an attendee's widget can find every oracle of an
 event on the chain and send its join to each of them.
@@ -33,9 +35,11 @@ from solders.pubkey import Pubkey
 from solders.signature import Signature
 from solders.system_program import ID as SYSTEM_PROGRAM_ID
 from solders.system_program import TransferParams, transfer
+from solders.sysvar import INSTRUCTIONS as INSTRUCTIONS_SYSVAR
 from solders.transaction import Transaction
 
 from app.config import get_settings
+from app.oracle.signatures import JoinProof
 
 _settings = get_settings()
 PROGRAM_ID = Pubkey.from_string(_settings.presence_program_id)
@@ -47,7 +51,7 @@ LAMPORTS_PER_SOL = 1_000_000_000
 PROGRAM_ERRORS = [
     "BadTimes", "BadAmounts", "Overflow", "AlreadyStarted",
     "NotStarted", "Ended", "CapReached", "EventRunning",
-    "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl",
+    "BadOracles", "BadThreshold", "NotOracle", "BadName", "BadUrl", "BadJoinProof",
 ]
 MAX_ORACLES = 3
 SIGHTING_GAP_SECS = 60  # lib.rs: a longer gap between two reports restarts the dwell time
@@ -73,6 +77,7 @@ _SIGHTING_FMT = "<qqB?32sqB"  # first_seen, last_seen, reporters, paid, payer, e
 EVENT_ORGANIZER_OFFSET = 8
 EVENT_ORACLES_OFFSET = 8 + 32  # slot i at EVENT_ORACLES_OFFSET + 32 * i
 DEFAULT_PUBKEY = Pubkey.default()
+ED25519_PROGRAM_ID = Pubkey.from_string("Ed25519SigVerify111111111111111111111111111")
 
 
 def load_keypair(path: str | Path) -> Keypair:
@@ -239,8 +244,21 @@ def attendee_paid(logs: list[str] | None, event: Pubkey, attendee: Pubkey) -> bo
 # Instruction builders (pure, so they are testable without a network) ------------------------------------
 
 
+def ed25519_verify_ix(signer: Pubkey, signature: bytes, message: bytes) -> Instruction:
+    """Solana's native Ed25519SigVerify with one signature whose key, signature and message all sit in this
+    instruction's own data (instruction index u16::MAX), the only form the program accepts."""
+    if len(signature) != 64:
+        raise ValueError("signature must be 64 bytes")
+    pubkey_off, sig_off = 16, 48  # after the 2-byte header and the 14-byte offsets
+    msg_off = sig_off + 64
+    here = 0xFFFF
+    offsets = struct.pack("<7H", sig_off, here, pubkey_off, here, msg_off, len(message), here)
+    return Instruction(ED25519_PROGRAM_ID, bytes([1, 0]) + offsets + bytes(signer) + signature + message, [])
+
+
 def report_sighting_ix(oracle: Pubkey, ev: Event, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
-    """report_sighting: "oracle sees attendee now". The treasury is the event's own (has_one = treasury)."""
+    """report_sighting: "oracle sees attendee now". The treasury is the event's own (has_one = treasury). Must come
+    right after ed25519_verify_ix of the attendee's join (see report_sighting_ixs)."""
     return Instruction(
         program_id,
         _disc("global", "report_sighting"),
@@ -251,8 +269,19 @@ def report_sighting_ix(oracle: Pubkey, ev: Event, attendee: Pubkey, program_id: 
             AccountMeta(attendee, is_signer=False, is_writable=True),
             AccountMeta(ev.treasury, is_signer=False, is_writable=True),
             AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+            AccountMeta(INSTRUCTIONS_SYSVAR, is_signer=False, is_writable=False),
         ],
     )
+
+
+def report_sighting_ixs(
+    oracle: Pubkey, ev: Event, attendee: Pubkey, proof: JoinProof, program_id: Pubkey = PROGRAM_ID
+) -> list[Instruction]:
+    """The attendee's join signature check followed by the report, as one transaction's instructions."""
+    return [
+        ed25519_verify_ix(attendee, proof.signature, proof.message),
+        report_sighting_ix(oracle, ev, attendee, program_id),
+    ]
 
 
 def close_sighting_ix(payer: Pubkey, event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
@@ -495,9 +524,10 @@ class PresenceChain:
     # Oracle instructions ----------------------------------------------------------------------------
 
     async def report_sighting(
-        self, oracle: Keypair, event: Pubkey, attendee: Pubkey, ev: Event | None = None
+        self, oracle: Keypair, event: Pubkey, attendee: Pubkey, proof: JoinProof, ev: Event | None = None
     ) -> Signature:
-        """Report "`oracle` sees `attendee` now"; the program pays once its rules hold. Raises
+        """Report "`oracle` sees `attendee` now", with the attendee's signed join (`proof`, checked by the program:
+        BadJoinProof otherwise); the program pays once its rules hold. Raises
         PresenceError("NoEvent") when there is no such Event, PresenceError("NotOracle") when `oracle` is not one of
         the event's oracles, and the program's errors (NotStarted, Ended, CapReached, ...). A report for a wallet
         already paid is a successful no-op. Pass `ev` when the caller has just read the event, to save an RPC call."""
@@ -507,7 +537,7 @@ class PresenceChain:
             raise PresenceError("NoEvent", f"no presence_pay Event at {event}")
         if oracle.pubkey() not in ev.oracles:
             raise PresenceError("NotOracle", f"{oracle.pubkey()} is not one of the event's oracles")
-        return await self._send([report_sighting_ix(oracle.pubkey(), ev, attendee)], oracle)
+        return await self._send(report_sighting_ixs(oracle.pubkey(), ev, attendee, proof), oracle)
 
     async def close_sightings(self, payer: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
         """After the event's end: close Sightings whose rent `payer` paid (rent back to it), 10 per transaction."""

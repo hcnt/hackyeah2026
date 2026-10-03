@@ -1,11 +1,23 @@
 """Injected ground truth for oracle tests: a fake face engine, synthetic embeddings, a fake clock and sinks."""
 
 import numpy as np
+from solders.keypair import Keypair
 
 from app.oracle.face import RawFace, normalize
 from app.oracle.interfaces import SightingResult
+from app.oracle.signatures import JoinProof, build_message
 
 DIM = 512
+
+
+# For code that only stores and forwards a proof; the program and DevSightingSink would reject it.
+DUMMY_PROOF = JoinProof(message=b"Attend Now", signature=bytes(64))
+
+
+def signed_join(event_id: str, kp: Keypair, action: str = "join", wallet: str | None = None) -> JoinProof:
+    """A proof as the widget produces it: `kp` signs the message (for `wallet`, default its own address)."""
+    message = build_message(action, event_id, wallet or str(kp.pubkey()), "2026-10-03T12:00:00Z", "2026-10-03")
+    return JoinProof(message=message.encode(), signature=bytes(kp.sign_message(message.encode())))
 
 
 def unit(rng: np.random.Generator) -> np.ndarray:
@@ -95,15 +107,17 @@ class RecordingSink:
         self.min_seen = min_seen
         self.fail_times = fail_times
         self.calls: list[tuple[str, str, float]] = []
+        self.proofs: list[JoinProof] = []
         self.successes: list[tuple[str, str]] = []  # payouts
         self.paid_at: list[float] = []
         self._first: dict[tuple[str, str], float] = {}
         self._last: dict[tuple[str, str], float] = {}
         self._tx: dict[tuple[str, str], str] = {}
 
-    async def report(self, event_id: str, wallet: str) -> SightingResult:
+    async def report(self, event_id: str, wallet: str, proof: JoinProof) -> SightingResult:
         now = self.clock()
         self.calls.append((event_id, wallet, now))
+        self.proofs.append(proof)
         if self.fail_times > 0:
             self.fail_times -= 1
             raise RuntimeError("chain unavailable")

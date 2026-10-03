@@ -75,9 +75,19 @@ first report, or when `now − last_seen > SIGHTING_GAP_SECS` (60), the run rest
 `reporters = 0`. Then `last_seen = now` and the reporting oracle's slot bit is set in `reporters`. `min_seen_secs = 0`
 with `threshold = 1` pays on the first sighting.
 
+Every report must carry the attendee's consent: the instruction right before `report_sighting` in the same
+transaction is Solana's native `Ed25519SigVerify` (program `Ed25519SigVerify111111111111111111111111111`) with exactly
+one signature, whose key, signature and message all sit in that instruction's own data (each instruction index
+`u16::MAX`). The key must be the attendee's wallet and the message must start with
+`"Attend Now\nAction: join\nEvent: <event>\nWallet: <attendee>\n"`, the join message the widget had the wallet sign
+(the Consent and Time lines after it are not checked). Otherwise `BadJoinProof`. An oracle therefore cannot report a
+wallet that never signed up for this event. Limit: a cancellation (`leave`) is off chain only, so a join signature
+stays usable until the event ends.
+
 `report_sighting` accounts, in order: `oracle` (signer, writable, pays the sighting rent; must be in
 `event.oracles`), `event` (w), `sighting` (w), `attendee` (w), `treasury` (w; must equal `event.treasury`),
-`system_program`. `close_sighting` accounts: `payer` (signer, w; must equal `sighting.payer`), `sighting` (w).
+`system_program`, `instructions` (the Instructions sysvar, `Sysvar1nstructions1111111111111111111111111`).
+`close_sighting` accounts: `payer` (signer, w; must equal `sighting.payer`), `sighting` (w).
 
 `register_oracle` accounts: `oracle` (signer, w), `oracle_info` (w), `system_program`. `update_oracle`: `oracle`
 (signer), `oracle_info` (w). `close_oracle`: `oracle` (signer, w), `oracle_info` (w). Strings are Borsh (u32 LE
@@ -118,6 +128,7 @@ An oracle without an entry cannot receive joins from the widget.
 | 6010 | `NotOracle` | `report_sighting` signer is not one of the event's oracles |
 | 6011 | `BadName` | oracle name empty, over 32 bytes or with a control character |
 | 6012 | `BadUrl` | oracle url not `http(s)://…`, over 128 bytes, or with spaces / control characters |
+| 6013 | `BadJoinProof` | the instruction before `report_sighting` is not an ed25519 check of the attendee's signed join for this event |
 | 2001 | `ConstraintHasOne` | treasury is not the one stored in the `Event`, close_sighting signer is not the `Sighting`'s payer, admin is not the one in `Config`, or update/close_oracle signer is not the entry's oracle |
 
 ## Build, deploy, test (Solana Playground)
