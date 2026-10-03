@@ -45,7 +45,7 @@ The oracles are the one part that stays off chain, because a program can't see f
 oracles (Pyth, Switchboard): they supply facts, and the program decides. Their power is narrow by construction:
 
 - they can only report wallets that signed up for this event themselves;
-- the organizer chooses 1 to 3 oracles and how many must agree (M-of-N);
+- an event can require several oracles to agree (M-of-N);
 - the time spent on camera is measured on the chain's clock, not taken from the oracle;
 - they can't pay anyone, change an amount, or touch the budget.
 
@@ -129,6 +129,11 @@ oracles stop, nobody is paid and the organizer withdraws everything after the en
   (`solana program set-upgrade-authority <PROGRAM_ID> --final`). We plan to do that once the code is final.
 - **Oracle trust.** With threshold 1 (our demo), one oracle can report a registered person who didn't come.
   M-of-N reduces this; it doesn't remove it.
+- **The organizer picks the oracles.** An organizer running their own oracle could simply never report anyone and
+  withdraw the budget after the end. The oracle list is public and the widget shows it before joining, so
+  attendees can see who they're trusting. Next step: oracles assigned at random from an open pool, each with a
+  deposit (stake) locked in the program; after the event, an oracle that consistently disagrees with the others
+  on who was there loses part of it.
 - **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
   didn't come. Production needs liveness detection.
 - **Biometrics and GDPR.** The lawful setting is a pay lane or kiosk people step into after explicit, separate
