@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     env: str = "dev"
+    oracle_consent_versions: list[str] = ["2026-10-03"]
 
 
 @lru_cache
