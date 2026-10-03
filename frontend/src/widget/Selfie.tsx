@@ -1,13 +1,28 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Api, Frame, Step } from './api'
+import type { Api, Frame, Step, TestResponse } from './api'
 import { SILHOUETTE } from './assets'
 import { FaceGuide } from './icons'
 
-const STEPS: Step[] = ['straight', 'left', 'right']
-const PROMPT: Record<Step, string> = {
-  straight: 'Look straight at the camera',
-  left: 'Turn your head slightly left',
-  right: 'Turn your head slightly right',
+// The oracle names turns from the camera's point of view (`left` = nose toward the image's left edge), while
+// the preview is mirrored and the prompts speak to the user. Turning to your own left is the oracle's `right`.
+const STEPS: { step: Step; prompt: string; side?: 'left' | 'right' }[] = [
+  { step: 'straight', prompt: 'Look straight at the camera' },
+  { step: 'right', prompt: 'Turn your head slightly to your left', side: 'left' },
+  { step: 'left', prompt: 'Turn your head slightly to your right', side: 'right' },
+]
+const TOO_FAR_YAW = 0.35 // the oracle accepts a turn of |yaw| 0.10–0.35
+
+/** Coaching text for a failed test. Our own wording per issue code (the oracle's `wrong_pose` text says
+ * "as shown", which only makes sense next to a picture). */
+function hintFor(res: TestResponse, current: (typeof STEPS)[number]): string {
+  const issue = res.issues[0]
+  if (!issue) return current.prompt
+  if (issue.code !== 'wrong_pose') return issue.message
+  if (!current.side) return 'Look straight at the camera'
+  const yaw = res.face?.yaw ?? 0
+  const towardSide = current.step === 'left' ? yaw < 0 : yaw > 0
+  if (towardSide && Math.abs(yaw) > TOO_FAR_YAW) return 'Not that far — turn back a little'
+  return `Turn your head a bit more to your ${current.side}`
 }
 const TEST_INTERVAL_MS = 500
 const MAX_SIDE = 1280
@@ -71,7 +86,8 @@ export default function Selfie({ api, onDone }: Props) {
   }, [])
 
   const canvas = () => (canvasRef.current ??= document.createElement('canvas'))
-  const step = STEPS[Math.min(stepIndex, STEPS.length - 1)]
+  const current = STEPS[Math.min(stepIndex, STEPS.length - 1)]
+  const step = current.step
 
   // Live coaching: test the current frame without keeping it.
   useEffect(() => {
@@ -87,7 +103,7 @@ export default function Selfie({ api, onDone }: Props) {
         const res = await api.test({ step, image })
         if (stopped) return
         setLooksOk(res.ok)
-        setHint(res.ok ? null : (res.issues[0]?.message ?? null))
+        setHint(res.ok ? null : hintFor(res, current))
       } catch {
         // Coaching is best effort; the shutter reports real errors.
       } finally {
@@ -98,7 +114,7 @@ export default function Selfie({ api, onDone }: Props) {
       stopped = true
       clearInterval(id)
     }
-  }, [api, ready, busy, step, stepIndex])
+  }, [api, ready, busy, step, stepIndex, current])
 
   async function shoot() {
     if (!videoRef.current || busy) return
@@ -110,7 +126,7 @@ export default function Selfie({ api, onDone }: Props) {
       const res = await api.test({ step, image })
       if (!res.ok) {
         setLooksOk(false)
-        setHint(res.issues[0]?.message ?? 'Try again')
+        setHint(hintFor(res, current))
         return
       }
       frames.current = [...frames.current, { step, image }]
@@ -125,7 +141,7 @@ export default function Selfie({ api, onDone }: Props) {
     }
   }
 
-  const caption = cameraError ?? (!ready ? 'Opening camera…' : (hint ?? `${stepIndex + 1}/3 · ${PROMPT[step]}`))
+  const caption = cameraError ?? (!ready ? 'Opening camera…' : (hint ?? `${stepIndex + 1}/3 · ${current.prompt}`))
 
   return (
     <div className="an-body an-body--center an-selfie">
@@ -139,7 +155,7 @@ export default function Selfie({ api, onDone }: Props) {
       <button
         type="button"
         className="an-shutter"
-        aria-label={`Take photo: ${PROMPT[step]}`}
+        aria-label={`Take photo: ${current.prompt}`}
         disabled={!ready || busy || !!cameraError}
         onClick={shoot}
       >
