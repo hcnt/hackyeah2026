@@ -39,7 +39,9 @@ docker compose -p prod up -d --build                # http://localhost:8080
 Each PR gets `https://pr-<N>-hackyeah.kindhome.io` and a "View deployment" link on the PR.
 
 Repo secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY` (dedicated key, `restrict`ed in `authorized_keys`),
-`DEPLOY_KNOWN_HOSTS` (pinned host key). `.env` lives only on the server and is never synced.
+`DEPLOY_KNOWN_HOSTS` (pinned host key). Every other repo variable and secret (e.g. `ORACLE_KEYPAIR`, see
+`.env.example`) is written to prod's `.env` on every deploy and passed to the backend; previews get no `.env`,
+so they pay with in-memory stubs.
 Fork and Dependabot PRs do not get previews.
 
 If the site breaks, test the origin first on the VPS:

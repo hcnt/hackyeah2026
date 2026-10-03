@@ -55,9 +55,15 @@ class DevEventSource:
 # 2. Paying -----------------------------------------------------------------------------------------
 
 
+class PayoutRejected(Exception):
+    """The chain will never accept this payout (e.g. the event's payout cap is reached). The oracle does not
+    retry it."""
+
+
 class PayoutSink(Protocol):
     async def pay(self, event_id: str, wallet: str) -> str:
-        """Send the payout; return the tx signature. Idempotent. Raise on failure (the oracle retries)."""
+        """Send the payout; return the tx signature. Idempotent: a wallet already paid returns that payout's tx.
+        Raise PayoutRejected when retrying cannot help; any other exception means "retry later"."""
 
 
 class DevPayoutSink:

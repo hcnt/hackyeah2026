@@ -32,12 +32,26 @@ jobs:
           known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
 
       - name: Sync code
-        # .env lives only on the server. Excluded paths are also protected from --delete.
+        # .env is written by the next step, never synced. Excluded paths are also protected from --delete.
         run: |
           rsync -az --delete \
             --exclude .git --exclude .github --exclude .env \
             --exclude node_modules --exclude dist --exclude .venv --exclude __pycache__ \
             ./ "$TARGET:$DIR/"
+
+      - name: Write .env from repo variables and secrets
+        # Every repo variable and secret becomes a line of prod's .env (secrets win on a name clash), except the
+        # deploy credentials. Regenerated on every deploy: change the settings on GitHub, not the file on the
+        # server. Piped over ssh so no value appears on a command line.
+        env:
+          VARS: ${{ toJSON(vars) }}
+          SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          jq -nr --argjson v "$VARS" --argjson s "$SECRETS" '
+            $v + $s | to_entries[]
+            | select(.key | test("^(DEPLOY_|GITHUB_|github_token$)") | not)
+            | "\(.key)=\(.value | gsub("[\r\n]"; ""))"' \
+            | ssh "$TARGET" "umask 077 && cat > $DIR/.env"
 
       - name: Deploy (edge router + prod stack, then health check)
         run: ssh "$TARGET" "$DIR/scripts/deploy-prod.sh"

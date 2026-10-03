@@ -1,3 +1,5 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI
@@ -5,9 +7,31 @@ from fastapi import APIRouter, Depends, FastAPI
 from app import spike
 from app.config import Settings, get_settings
 from app.oracle.cors import OracleCORSMiddleware
+from app.oracle.interfaces import install
 from app.oracle.routes import router as oracle_router
 
-app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # With an oracle key, events come from and payouts go to the presence_pay program on Solana; without one
+    # the oracle keeps its in-memory dev event source and payout sink.
+    settings = get_settings()
+    key = settings.oracle_keypair.get_secret_value() if settings.oracle_keypair else ""
+    if not key:
+        yield
+        return
+    from app.chain.adapters import ChainEventSource, SolanaPayoutSink
+    from app.chain.presence_chain import PresenceChain, keypair_from_json
+
+    chain = PresenceChain(settings.solana_rpc_url)
+    install(event_source=ChainEventSource(chain), payout_sink=SolanaPayoutSink(chain, keypair_from_json(key)))
+    try:
+        yield
+    finally:
+        await chain.close()
+
+
+app = FastAPI(docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 app.add_middleware(OracleCORSMiddleware)
 api = APIRouter(prefix="/api")
 

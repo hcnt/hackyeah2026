@@ -18,6 +18,11 @@ services:
 
   backend:
     build: ./backend
+    # Prod's .env is written by deploy.yml from the repo's GitHub variables and secrets (e.g. ORACLE_KEYPAIR);
+    # previews and local runs have none and fall back to the defaults in backend/app/config.py.
+    env_file:
+      - path: .env
+        required: false
     environment:
       ENV: ${ENV:-prod}
     restart: unless-stopped

@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 from fakes import FakeClock, FakeEngine, RecordingSink, near, unit
 
-from app.oracle.interfaces import EventInfo
+from app.oracle.interfaces import EventInfo, PayoutRejected
 from app.oracle.runtime import OracleState
 from app.oracle.tracker import Track, Tracker, iou
 
@@ -12,15 +12,16 @@ B_BOX = [800.0, 100.0, 1000.0, 340.0]
 
 
 class Scenario:
-    def __init__(self, min_seen: int = 2, fail_times: int = 0, seed: int = 0) -> None:
+    def __init__(self, min_seen: int = 2, fail_times: int = 0, seed: int = 0, start_ts: int = 0) -> None:
         self.rng = np.random.default_rng(seed)
         self.clock = FakeClock(100.0)
         self.engine = FakeEngine()
         self.sink = RecordingSink(self.clock, fail_times=fail_times)
+        self.wall = FakeClock(1_000_000.0)
         self.state = OracleState(
-            engine=self.engine, clock=self.clock, wall_clock=FakeClock(1_000_000.0), sink=lambda: self.sink
+            engine=self.engine, clock=self.clock, wall_clock=self.wall, sink=lambda: self.sink
         )
-        info = EventInfo(event_id="ev", organizer="org", start_ts=0, end_ts=2_000_000, min_seen_secs=min_seen)
+        info = EventInfo(event_id="ev", organizer="org", start_ts=start_ts, end_ts=2_000_000, min_seen_secs=min_seen)
         self.rt = self.state.runtime_for(info)
         self.a = unit(self.rng)  # enrolled
         self.b = unit(self.rng)  # NOT enrolled
@@ -142,6 +143,46 @@ def test_failed_payout_retried_not_before_5s_exactly_one_success():
     assert len(s.sink.calls) == 2
     assert s.sink.successes == [("ev", "A")]
     assert s.sink.calls[1][2] - s.sink.calls[0][2] >= 5.0
+
+
+def test_no_payout_before_start_then_paid_once_started():
+    async def run():
+        s = Scenario(min_seen=1, start_ts=1_000_010)  # wall clock is 1_000_000: starts in 10 s
+        for _ in range(10):
+            await s.a_and_b(100.0)
+        await s.rt.wait_payouts()
+        before = list(s.sink.calls)
+        s.wall.advance(10)
+        for _ in range(4):
+            await s.a_and_b(100.0)
+        await s.rt.wait_payouts()
+        return s, before
+
+    s, before = asyncio.run(run())
+    assert before == []
+    assert [(e, w) for e, w, _ in s.sink.calls] == [("ev", "A")]
+
+
+def test_rejected_payout_is_never_retried():
+    async def run():
+        s = Scenario(min_seen=0)
+        calls = []
+
+        class CapSink:
+            async def pay(self, event_id, wallet):
+                calls.append(wallet)
+                raise PayoutRejected("CapReached")
+
+        s.state.sink = lambda: CapSink()
+        for _ in range(30):  # 15 s, three times the retry interval
+            await s.a_and_b(100.0)
+        await s.rt.wait_payouts()
+        return s, calls
+
+    s, calls = asyncio.run(run())
+    assert calls == ["A"]
+    assert s.rt.ledger.records["A"].status == "rejected"
+    assert s.rt.ledger.paid_tx("A") is None
 
 
 def test_many_frames_in_flight_still_one_pay_call():

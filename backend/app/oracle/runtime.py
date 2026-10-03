@@ -17,7 +17,7 @@ from typing import Any
 
 from app.oracle.face import MATCH_THRESHOLD, FaceEngine, InsightFaceEngine
 from app.oracle.guestlist import GuestLists
-from app.oracle.interfaces import EventInfo, PayoutSink, providers
+from app.oracle.interfaces import EventInfo, PayoutRejected, PayoutSink, providers
 from app.oracle.signatures import SignatureVerifier
 from app.oracle.tracker import Tracker
 
@@ -34,7 +34,7 @@ STAGE_STATS_INTERVAL = 3.0
 
 @dataclass
 class PayoutRecord:
-    status: str  # "pending" | "paid" | "failed"
+    status: str  # "pending" | "paid" | "failed" | "rejected"
     tx: str | None = None
     retry_after: float = 0.0
 
@@ -48,7 +48,7 @@ class PayoutLedger:
 
     def try_begin(self, wallet: str, now: float) -> bool:
         rec = self.records.get(wallet)
-        if rec is not None and (rec.status in ("pending", "paid") or now < rec.retry_after):
+        if rec is not None and (rec.status in ("pending", "paid", "rejected") or now < rec.retry_after):
             return False
         self.records[wallet] = PayoutRecord(status="pending")
         return True
@@ -58,6 +58,9 @@ class PayoutLedger:
 
     def fail(self, wallet: str, now: float) -> None:
         self.records[wallet] = PayoutRecord(status="failed", retry_after=now + PAYOUT_RETRY_SECS)
+
+    def reject(self, wallet: str) -> None:
+        self.records[wallet] = PayoutRecord(status="rejected")
 
     def paid_tx(self, wallet: str) -> str | None:
         rec = self.records.get(wallet)
@@ -128,7 +131,8 @@ class EventRuntime:
                 out.append({"bbox": _round_box(t.bbox), "state": "unknown", "name": None, "seen_secs": 0.0})
                 continue
             seen = t.seen_secs(now)
-            if seen >= self.info.min_seen_secs:
+            # The program rejects payouts before the event's start, so don't send them.
+            if seen >= self.info.min_seen_secs and self.state.wall_clock() >= self.info.start_ts:
                 self._maybe_pay(wallet, now)
             state = "paid" if self.ledger.paid_tx(wallet) else "tracking"
             out.append(
@@ -196,6 +200,10 @@ class EventRuntime:
     async def _pay(self, wallet: str, name: str) -> None:
         try:
             tx = await self.state.sink().pay(self.event_id, wallet)
+        except PayoutRejected as e:
+            self.ledger.reject(wallet)
+            log.warning("payout event_id=%s wallet=%s status=rejected reason=%s", self.event_id, wallet, e)
+            return
         except Exception as e:  # noqa: BLE001 - any sink failure means "retry later"
             self.ledger.fail(wallet, self.state.clock())
             log.warning("payout event_id=%s wallet=%s status=failed error=%s", self.event_id, wallet, type(e).__name__)
