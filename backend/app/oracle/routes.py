@@ -10,7 +10,7 @@ import logging
 import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated
 
 import numpy as np
 from fastapi import (
@@ -29,11 +29,11 @@ from starlette.websockets import WebSocketDisconnect
 from app.config import Settings, get_settings
 from app.oracle.consent import CONSENT_TEXTS
 from app.oracle.errors import OracleError, OracleRoute, invalid_request
-from app.oracle.face import RawFace, normalize
+from app.oracle.face import normalize
 from app.oracle.interfaces import DevEventSource, EventInfo, providers
-from app.oracle.liveness import passes_head_turn
-from app.oracle.quality import STEPS, check_photo
+from app.oracle.quality import check_photo
 from app.oracle.runtime import (
+    CAMERA_MIN_FRAME_INTERVAL,
     STAGE_MIN_FRAME_INTERVAL,
     STAGE_STATS_INTERVAL,
     StageClient,
@@ -42,7 +42,6 @@ from app.oracle.runtime import (
 
 log = logging.getLogger("app.oracle")
 
-SAME_PERSON_MIN_COSINE = 0.60
 DUPLICATE_FACE_COSINE = 0.50
 MAX_BODY_BYTES = 4 * 1024 * 1024
 MAX_IMAGE_SIDE = 1280
@@ -70,14 +69,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 router = APIRouter(lifespan=lifespan)
 v1 = APIRouter(prefix="/v1", tags=["oracle"], route_class=OracleRoute)
 
-Step = Literal["straight", "left", "right"]
-
-
 # Request bodies ------------------------------------------------------------------------------------
 
 
 class TestRequest(BaseModel):
-    step: Step
     image: str
 
 
@@ -92,15 +87,10 @@ class Consent(BaseModel):
     accepted: bool
 
 
-class Frame(BaseModel):
-    step: Step
-    image: str
-
-
 class SubmitRequest(Signed):
     consent: Consent
     first_name: str = Field(min_length=1, max_length=40)
-    frames: list[Frame]
+    image: str
 
 
 async def _body[M: BaseModel](request: Request, model: type[M]) -> M:
@@ -164,40 +154,29 @@ async def dev_create_event(info: EventInfo, settings: Annotated[Settings, Depend
 # Test a photo --------------------------------------------------------------------------------------
 
 
-def _test_photo(data: bytes, step: str) -> dict:
+def _test_photo(data: bytes) -> dict:
     img = _decode_image(data)
-    check = check_photo(img, get_state().engine.detect(img), step)
+    check = check_photo(img, get_state().engine.detect(img))
     return {"ok": check.ok, "issues": check.issues, "face": check.face_json()}
 
 
 @v1.post("/events/{event_id}/attendance/test")
 async def attendance_test(event_id: str, request: Request) -> dict:
     body = await _body(request, TestRequest)
-    return await asyncio.to_thread(_test_photo, _b64(body.image), body.step)
+    return await asyncio.to_thread(_test_photo, _b64(body.image))
 
 
 # Submit / leave / status ---------------------------------------------------------------------------
 
 
-def _analyze_submit(frames: list[tuple[str, bytes]]) -> tuple[list[RawFace], np.ndarray]:
-    """Worker thread: quality-check every frame, then embed. Raises OracleError(photo_rejected)."""
+def _analyze_submit(data: bytes) -> np.ndarray:
+    """Worker thread: quality-check the photo, then embed. Raises OracleError(photo_rejected)."""
     engine = get_state().engine
-    imgs, faces, issues = [], [], []
-    for i, (step, data) in enumerate(frames):
-        img = _decode_image(data)
-        check = check_photo(img, engine.detect(img), step)
-        issues += [{"frame": i, **iss} for iss in check.issues]
-        imgs.append(img)
-        faces.append(check.face)
-    if issues:
-        first = issues[0]
-        msg = first["message"]
-        raise OracleError(
-            422, "photo_rejected", f"Photo {first['frame'] + 1}: {msg[0].lower()}{msg[1:]}", issues=issues
-        )
-    embs = np.stack([engine.embed(img, [f])[0] for img, f in zip(imgs, faces, strict=True)])
-    del imgs
-    return faces, normalize(embs)
+    img = _decode_image(data)
+    check = check_photo(img, engine.detect(img))
+    if not check.ok:
+        raise OracleError(422, "photo_rejected", check.issues[0]["message"], issues=check.issues)
+    return normalize(engine.embed(img, [check.face])[0])
 
 
 @v1.post("/events/{event_id}/attendance", status_code=201)
@@ -205,12 +184,10 @@ async def attendance_submit(
     event_id: str, request: Request, settings: Annotated[Settings, Depends(get_settings)]
 ) -> JSONResponse:
     body = await _body(request, SubmitRequest)
-    if len(body.frames) != len(STEPS) or sorted(f.step for f in body.frames) != sorted(STEPS):
-        raise invalid_request("Send exactly three frames: straight, left and right.")
     first_name = body.first_name.strip()
     if not first_name:
         raise invalid_request("first_name must not be blank.")
-    frames = [(f.step, _b64(f.image)) for f in body.frames]
+    image = _b64(body.image)
     state = get_state()
     state.signatures.verify(
         action="join", event_id=event_id, wallet=body.wallet, signed_at=body.signed_at,
@@ -221,20 +198,13 @@ async def attendance_submit(
     if body.consent.accepted is not True or body.consent.version not in settings.oracle_consent_versions:
         raise OracleError(422, "consent_required", "Please accept the current consent to join.")
 
-    faces, embs = await asyncio.to_thread(_analyze_submit, frames)
-    del frames
-    sims = embs @ embs.T
-    if float(sims[np.triu_indices(len(faces), k=1)].min()) < SAME_PERSON_MIN_COSINE:
-        raise OracleError(422, "not_same_person", "The photos don't look like the same person. Please take them again.")
-    if not passes_head_turn([f.kps for f in faces]):
-        raise OracleError(422, "liveness_failed", "Please turn your head slightly between the photos.")
-
-    mean = normalize(embs.mean(axis=0))
-    other, score = state.guestlists.best_other(event_id, mean, exclude_wallet=body.wallet)
+    emb = await asyncio.to_thread(_analyze_submit, image)
+    del image
+    other, score = state.guestlists.best_other(event_id, emb, exclude_wallet=body.wallet)
     if other is not None and score >= DUPLICATE_FACE_COSINE:
         log.info("join event_id=%s wallet=%s status=duplicate_face", event_id, body.wallet)
         raise OracleError(409, "face_already_registered", "This face is already registered for this event.")
-    state.guestlists.put(event_id, info.end_ts, body.wallet, mean, first_name)
+    state.guestlists.put(event_id, info.end_ts, body.wallet, emb, first_name)
     log.info("join event_id=%s wallet=%s status=on_list", event_id, body.wallet)
     return JSONResponse({"status": "on_list", "event_id": event_id, "wallet": body.wallet}, status_code=201)
 
@@ -343,7 +313,7 @@ async def camera_ws(ws: WebSocket, token: str) -> None:
             if len(data) > MAX_BODY_BYTES:
                 await ws.send_json({"type": "error", "message": "frame over 4 MB"})
                 continue
-            started = time.perf_counter()
+            started = time.monotonic()
             try:
                 img = await asyncio.to_thread(state.engine.decode, data)
             except ValueError:
@@ -352,14 +322,10 @@ async def camera_ws(ws: WebSocket, token: str) -> None:
             if max(img.shape[0], img.shape[1]) > MAX_IMAGE_SIDE:
                 await ws.send_json({"type": "error", "message": f"frame larger than {MAX_IMAGE_SIDE} px"})
                 continue
-            try:
-                faces = await rt.process_frame(token, img, data)
-            except Exception as e:  # noqa: BLE001 - a bad frame must not kill the socket
-                log.warning("frame failed event_id=%s status=error error=%s", rt.event_id, type(e).__name__)
-                await ws.send_json({"type": "error", "message": "could not process this frame"})
-                continue
-            ms = round((time.perf_counter() - started) * 1000)
-            await ws.send_json({"type": "ack", "faces": len(faces), "ms": ms})
+            faces = rt.submit_frame(token, img, data)
+            # Pace the phone: the next frame is sent when this ack arrives.
+            await asyncio.sleep(max(0.0, CAMERA_MIN_FRAME_INTERVAL - (time.monotonic() - started)))
+            await ws.send_json({"type": "ack", "faces": len(faces), "ms": rt.last_ms.get(token, 0)})
     except WebSocketDisconnect:
         return
 

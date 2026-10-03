@@ -2,6 +2,7 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic import SecretStr
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +19,9 @@ class Settings(BaseSettings):
     solana_cluster: str = "devnet"
     presence_program_id: str = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
     oracle_keypair: SecretStr | None = None  # JSON array of 64 numbers (solana-keygen format)
+    # Detector input size in px. 320 is about twice as fast as 640 and enough when faces are close (a pay lane
+    # or kiosk); 640 finds smaller, more distant faces.
+    oracle_det_size: int = Field(default=640, ge=160, le=1280, multiple_of=32)
 
 
 @lru_cache

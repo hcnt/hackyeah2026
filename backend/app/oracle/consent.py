@@ -7,8 +7,8 @@ message refers to the exact text the attendee saw.
 CONSENT_TEXTS: dict[str, str] = {
     "2026-10-03": (
         "Use your face to get paid at this event?\n\n"
-        "We create a face signature from three photos and use it only to recognise you at this event. "
-        "The photos are not stored. The signature is deleted when the event ends or when you leave, "
+        "We create a face signature from one photo and use it only to recognise you at this event. "
+        "The photo is not stored. The signature is deleted when the event ends or when you leave, "
         "and you can leave at any time. You can attend without this."
     ),
 }
