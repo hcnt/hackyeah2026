@@ -17,7 +17,9 @@ import { WALLET_LOGOS } from './assets'
 import Selfie from './Selfie'
 import {
   connect,
+  disconnect,
   isMetaMask,
+  isStaleAccount,
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
   signAction,
@@ -120,12 +122,12 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
     }
   }
 
-  async function join(frames: Frame[], firstName: string) {
-    if (!conn || !event) return
+  async function join(frames: Frame[], firstName: string, c: Connection | null = conn, retried = false) {
+    if (!c || !event) return
     setError(null)
     setStage({ name: 'signing', frames, firstName })
     try {
-      const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
+      const signed = await signAction(c, 'join', event.event_id, event.consent.version)
       await api.submit({
         ...signed,
         consent: { version: event.consent.version, accepted: true },
@@ -135,13 +137,31 @@ export default function Widget({ eventId, apiBase = '' }: WidgetProps) {
       setStatus({ status: 'on_list', tx: null })
       setStage({ name: 'done' })
       api.event().then(setEvent, () => {})
-    } catch (err) {
+    } catch (signErr) {
+      let err = signErr
+      if (isStaleAccount(err) && !retried) {
+        // MetaMask restored a connection to an account it can no longer sign for: drop it, reconnect
+        // (MetaMask asks which account to use) and sign again with the same photos.
+        console.warn('[attend-now] MetaMask cannot sign for', c.account.address, '- reconnecting', err)
+        try {
+          await disconnect(c)
+          setStage({ name: 'connecting' })
+          const fresh = await connect(c.wallet)
+          setConn(fresh)
+          return join(frames, firstName, fresh, true)
+        } catch (reconnectErr) {
+          err = reconnectErr
+        }
+      }
       if (isUserRejection(err)) {
         setError('Signature cancelled in MetaMask.')
         setStage({ name: 'consent', frames, firstName })
       } else if (err instanceof ApiError && PHOTO_ERRORS.has(err.code)) {
         setError(`${err.message} Let's take the photos again.`)
         setStage({ name: 'selfie' })
+      } else if (isStaleAccount(err)) {
+        setError('MetaMask cannot sign with this account. Open MetaMask, check your Solana account, and try again.')
+        setStage({ name: 'consent', frames, firstName })
       } else {
         setError((err as Error).message)
         setStage({ name: 'consent', frames, firstName })

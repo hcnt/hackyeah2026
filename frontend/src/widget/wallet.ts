@@ -83,6 +83,15 @@ export async function signAction(
   return { wallet: account.address, signed_at: signedAt, signature: bs58.encode(output.signature) }
 }
 
+/**
+ * True when MetaMask can't sign for the account it handed us: its KeyringController has no keyring holding
+ * that address ("KeyringController - Keyring not found."). Happens when the site's stored connection still
+ * points at an account the wallet no longer has; connect() restores it silently. Reconnecting fixes it.
+ */
+export function isStaleAccount(err: unknown): boolean {
+  return /keyring not found/i.test((err as Error | null)?.message ?? '')
+}
+
 /** True when the user closed or rejected the wallet prompt. */
 export function isUserRejection(err: unknown): boolean {
   const e = err as { code?: number; message?: string } | null
