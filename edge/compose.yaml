@@ -1,0 +1,14 @@
+name: edge
+
+services:
+  caddy:
+    build: .
+    ports:
+      - "127.0.0.1:8080:80"
+    networks:
+      - edge
+    restart: unless-stopped
+
+networks:
+  edge:
+    name: edge

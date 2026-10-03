@@ -1,0 +1,20 @@
+name: SSH to VPS
+description: Install the deploy key and the pinned VPS host key.
+inputs:
+  key:
+    required: true
+  known-hosts:
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SSH_KEY: ${{ inputs.key }}
+        KNOWN_HOSTS: ${{ inputs.known-hosts }}
+      run: |
+        install -m 700 -d ~/.ssh
+        printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        # Pinned host key: a changed server key fails the job instead of being trusted.
+        printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts

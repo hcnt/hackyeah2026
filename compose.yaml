@@ -1,0 +1,27 @@
+# One app stack. Run with a project name and matching STACK, e.g.
+#   STACK=prod  docker compose -p prod  up -d --build
+#   STACK=pr-12 docker compose -p pr-12 up -d --build
+# The edge router (edge/compose.yaml) must be up first; it owns the "edge" network.
+services:
+  caddy:
+    build:
+      context: .
+      dockerfile: caddy/Dockerfile
+    networks:
+      default: {}
+      edge:
+        aliases:
+          - ${STACK:-prod}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    environment:
+      ENV: ${ENV:-prod}
+    restart: unless-stopped
+
+networks:
+  edge:
+    external: true

@@ -1,0 +1,67 @@
+name: Preview
+
+# One isolated stack per PR at https://pr-<N>-hackyeah.kindhome.io, removed on close.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+
+env:
+  N: ${{ github.event.pull_request.number }}
+  TARGET: root@${{ secrets.DEPLOY_HOST }}
+  PREVIEW_ROOT: /opt/hackyeah2026-previews
+
+jobs:
+  deploy:
+    # Fork and Dependabot PRs get no secrets, so they cannot (and should not) deploy.
+    if: >-
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: pr-${{ github.event.pull_request.number }}
+      url: https://pr-${{ github.event.pull_request.number }}-hackyeah.kindhome.io
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Sync code
+        run: |
+          rsync -az --delete --mkpath \
+            --exclude .git --exclude .github --exclude .env \
+            --exclude node_modules --exclude dist --exclude .venv --exclude __pycache__ \
+            ./ "$TARGET:$PREVIEW_ROOT/pr-$N/"
+
+      - name: Deploy preview (then health check through the edge router)
+        run: ssh "$TARGET" "$PREVIEW_ROOT/pr-$N/scripts/deploy-preview.sh $N"
+
+  teardown:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The PR's merge ref may be gone once it is closed; main has the scripts.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Remove preview
+        run: ssh "$TARGET" "/opt/hackyeah2026/scripts/teardown-preview.sh $N"

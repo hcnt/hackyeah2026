@@ -1,0 +1,27 @@
+# Edge router: the only thing published on the host (127.0.0.1:8080, where the host's
+# cloudflared sends *.kindhome.io). Routes by Host to app stacks on the shared "edge"
+# Docker network, where each stack's caddy has the network alias "prod" or "pr-<N>".
+{
+	auto_https off
+	servers {
+		trusted_proxies static private_ranges
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
+}
+
+:80 {
+	@preview header_regexp pr Host ^pr-(\d+)-hackyeah\.kindhome\.io$
+	handle @preview {
+		# Resolved per request, so new previews need no reload. No such stack -> 502.
+		reverse_proxy pr-{re.pr.1}:80
+	}
+
+	@prod host hackyeah.kindhome.io localhost 127.0.0.1
+	handle @prod {
+		reverse_proxy prod:80
+	}
+
+	handle {
+		respond "Not found" 404
+	}
+}

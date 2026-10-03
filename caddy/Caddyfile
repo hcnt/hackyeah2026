@@ -1,0 +1,25 @@
+# Runs behind a Cloudflare Tunnel: Cloudflare terminates TLS and the host's cloudflared
+# (systemd) forwards plain HTTP to the edge router, which proxies here. No certificates.
+{
+	auto_https off
+	servers {
+		# The edge router reaches us over the Docker network; trust its forwarded headers
+		# and take the real visitor IP from Cloudflare.
+		trusted_proxies static private_ranges
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,32 @@
+name: Preview cleanup
+
+# Safety net: removes preview stacks whose PR is no longer open (e.g. a missed teardown).
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known-hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Remove previews of closed PRs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: root@${{ secrets.DEPLOY_HOST }}
+        run: |
+          open=$(gh pr list --state open --limit 500 --json number -q '.[].number' | tr '\n' ' ')
+          echo "open PRs: ${open:-none}"
+          ssh "$TARGET" "/opt/hackyeah2026/scripts/teardown-preview.sh --keep $open"
