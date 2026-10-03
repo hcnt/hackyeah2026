@@ -20,6 +20,9 @@ services:
     build: ./backend
     environment:
       ENV: ${ENV:-prod}
+      # Solana payouts (contracts/presence_pay). Empty ORACLE_KEYPAIR = in-memory dev payouts.
+      ORACLE_KEYPAIR: ${ORACLE_KEYPAIR:-}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL:-https://api.devnet.solana.com}
     restart: unless-stopped
 
 networks:
