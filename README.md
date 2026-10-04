@@ -8,8 +8,8 @@ free events fight no-shows, and today it only works if everyone trusts whoever h
 list.
 
 With OnSight, an organizer or sponsor locks the giveaway budget in a Solana program. Attendees opt in with their
-wallet and one selfie, through a widget on the event's own page. At the venue, a phone camera at a pay lane streams to
-face-recognition **oracles**. The oracles only report "I see this wallet now". The **program** decides who gets
+wallet and one selfie, through a widget on the event's own page. At the venue, a camera at a check-in point
+streams footage of attendees to face-recognition **oracles**. The oracles only report "I see this wallet now". The **program** decides who gets
 paid, and pays each attendee once, straight from the escrow to their wallet.
 
 **Who it's for:** organizers and sponsors of free events (meetups, hackathons, product launches, conference side
@@ -136,7 +136,7 @@ oracles stop, nobody is paid and the organizer withdraws everything after the en
   on who was there loses part of it.
 - **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
   didn't come. Production needs liveness detection.
-- **Biometrics and GDPR.** The lawful setting is a pay lane or kiosk people step into after explicit, separate
+- **Biometrics and GDPR.** The lawful setting is a check-in point people step up to after explicit, separate
   consent, with a non-biometric alternative; scanning a whole room isn't.
 - **No organizer UI yet:** events are created with `scripts/devnet_event.py`.
 
