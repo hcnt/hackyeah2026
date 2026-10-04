@@ -186,7 +186,7 @@ LIMITS = ["With threshold 1, one oracle can lie", "The organizer picks the oracl
           "No organizer UI yet"]
 NEXT = ["Staked oracles from an open pool, slashed for disagreeing", "Liveness detection",
         "Several independent oracles per event by default", "Freeze the program: final upgrade authority"]
-slide("next", "Next week", head("What we'd build next week.", "Next week") + f'''
+slide("next", "Roadmap", head("What we'd build next.", "Roadmap") + f'''
   <div class="wg4 nx">{"".join(f'<div class="wc"><span class="nn">{i + 1}</span><div class="t">{x}</div></div>' for i, x in enumerate(NEXT))}</div>
   <div class="close"><span class="pm big">O</span><b>OnSight</b><span class="mut">· Oracles earn 0.002 SOL per paid attendee: running one is a business.</span></div>
 ''', "Known limits for Q&A: threshold 1 lets one oracle lie; the organizer picks the oracles; a held-up photo isn't caught (no liveness); GDPR limits it to a check-in point with consent. Close with the business model: anyone can run an oracle and get paid per attendee.")
