@@ -76,18 +76,20 @@ function Shell() {
           <Overview />
         )}
         <footer className="os-footer">
+          <span>OnSight · Seen on site, paid on-chain.</span>
           <span>
             OnSight keeps no data: this page reads Solana and the event’s oracles straight from your browser.{' '}
             <a href="https://github.com/hcnt/hackyeah2026" target="_blank" rel="noreferrer" style={{ textDecoration: 'underline' }}>
               Host it yourself
             </a>
             .
+            {backend.mode === 'demo' && (
+              <>
+                {' '}
+                <a href={liveUrl()}>Open the live devnet app →</a>
+              </>
+            )}
           </span>
-          {backend.mode === 'demo' && (
-            <span>
-              <a href={liveUrl()}>Open the live devnet app →</a>
-            </span>
-          )}
         </footer>
       </div>
     </div>
