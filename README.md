@@ -24,16 +24,16 @@ giveaway and the attendee who gets paid.
 0.1 devnet SOL from [faucet.solana.com](https://faucet.solana.com).
 
 1. **Create the event.** Open [hackyeah.kindhome.io/events.html](https://hackyeah.kindhome.io/events.html), sign
-   in with MetaMask and click **Create event**. Enter a name, start it now and end it in an hour, set the reward
-   to `0.01` SOL for `5` entrants, and under **Payout rules** set the time on camera to `10` s. Leave the oracle at
-   its default, the OnSight oracle. Click **Save terms**, then **Launch event** and approve the transaction: about
-   0.063 SOL is now locked in the program.
+   in with MetaMask and click **Create event**. Enter a name and start it now, ending in an hour. The defaults
+   are made for this test: 0.001 SOL for each of 10 attendees, 5 seconds on camera, and the OnSight oracle. Click
+   **Save terms**, then **Launch event** and approve the transaction: about 0.032 SOL is now locked in the program
+   (rewards, oracle fees and the account deposit).
 2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature),
    then the QR icon next to **Add a camera**, and scan it with the phone. The phone now streams to the oracle.
 3. **Join as an attendee.** On the dashboard, click **Attendee page**. In the widget, connect MetaMask, take a
    selfie, accept the consent and sign the join message. Joining is free: it's a signature, not a transaction.
-4. **Get seen.** Point the phone at your face. After 10 seconds on camera, the payout appears under **Payouts**
-   with an Explorer link, and 0.01 SOL arrives in the wallet you joined with. Nobody approved it: the program paid
+4. **Get seen.** Point the phone at your face. After 5 seconds on camera, the payout appears under **Payouts**
+   with an Explorer link, and 0.001 SOL arrives in the wallet you joined with. Nobody approved it: the program paid
    because the oracle's reports met the terms you locked in step 1.
 5. **After the end**, open the event's settings (the cog) and withdraw what's left. While the event runs, the program
    refuses.

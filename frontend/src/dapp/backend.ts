@@ -165,8 +165,8 @@ export function liveBackend(): Backend {
 
 // ---------- Demo ----------
 
-/** What a 327-byte Event account deposits on devnet, as eventRent() reads it live. */
-const DEMO_RENT = 3_166_800n
+/** What a 327-byte Event account deposits on devnet, as eventRent() reads it live (getMinimumBalanceForRentExemption). */
+const DEMO_RENT = 2_311_400n
 
 const SOL = 1_000_000_000n
 const sol = (n: number) => (BigInt(Math.round(n * 1000)) * SOL) / 1000n

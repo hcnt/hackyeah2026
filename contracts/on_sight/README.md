@@ -45,7 +45,7 @@ Files: `lib.rs` (the program), `idl.json` (interface for clients), `anchor.test.
 | `OracleInfo` | `["oracle", oracle]` | `oracle`, `name` (String, ≤ 32 bytes), `url` (String, ≤ 128 bytes), `bump`: the oracle registry, see below |
 
 The `Event` account is also the vault: it holds the event's budget as lamports. It is 327 bytes (`8 + INIT_SPACE`,
-both strings allocated at 4 + 64 bytes; rent 0.0031668 SOL, paid by the organizer on top of the budget). `name` and
+both strings allocated at 4 + 64 bytes; rent 0.0023114 SOL on devnet, paid by the organizer on top of the budget). `name` and
 `venue` come after `bump`, so every fixed-size field keeps its offset (memcmp filters on `organizer` at 8 and the
 oracle slots at 40 + 32·i); a decoder reads each string's u32 length and ignores the zero padding after it. A wallet's `Attendance` is created by
 the first report (rent ≈ 0.00136 SOL, paid by the reporting oracle, reclaimable after the end with `close_attendance`);
