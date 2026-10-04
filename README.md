@@ -15,6 +15,32 @@ footage of attendees to face-recognition **oracles**. The oracles only report "I
 who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see blockchain
 terms beyond "connect your wallet and sign".
 
+## Try it yourself (devnet, about 10 minutes)
+
+Everything runs on Solana devnet, so it costs nothing real. You play both sides: the organizer who funds the
+giveaway and the attendee who gets paid.
+
+**You need:** a laptop with a webcam, a phone, MetaMask with Solana enabled and switched to **devnet**, and about
+0.1 devnet SOL from [faucet.solana.com](https://faucet.solana.com).
+
+1. **Create the event.** Open [hackyeah.kindhome.io/events.html](https://hackyeah.kindhome.io/events.html), sign
+   in with MetaMask and click **Create event**. Enter a name, start it now and end it in an hour, set the reward
+   to `0.01` SOL for `5` entrants, and under **Payout rules** set the time on camera to `10` s. Leave the oracle at
+   its default, the OnSight oracle. Click **Save terms**, then **Launch event** and approve the transaction: about
+   0.063 SOL is now locked in the program.
+2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature),
+   then the QR icon next to **Add a camera**, and scan it with the phone. The phone now streams to the oracle.
+3. **Join as an attendee.** On the dashboard, click **Attendee page**. In the widget, connect MetaMask, take a
+   selfie, accept the consent and sign the join message. Joining is free: it's a signature, not a transaction.
+4. **Get seen.** Point the phone at your face. After 10 seconds on camera, the payout appears under **Payouts**
+   with an Explorer link, and 0.01 SOL arrives in the wallet you joined with. Nobody approved it: the program paid
+   because the oracle's reports met the terms you locked in step 1.
+5. **After the end**, open the event's settings (the cog) and withdraw what's left. While the event runs, the program
+   refuses.
+
+**If something doesn't work:** the public devnet RPC sometimes rate-limits; wait a moment and retry. The oracle
+needs a clearly lit face looking at the camera.
+
 ## Design rationale
 
 ### The financial relationship: an attendance giveaway
@@ -80,16 +106,16 @@ would carry on.
 
 ## How it works
 
-1. **Organizer creates the event on chain** on the organizer page (`create_event`): name, venue, reward, cap,
+1. **Organizer creates the event on chain** in the events app (`create_event`): name, venue, reward, cap,
    window, minimum time on camera, oracles, threshold. The budget moves into escrow.
 2. **Attendee joins** on the event's page through the widget: connects MetaMask (Solana), takes one selfie,
    accepts the consent and signs one message. Free, no transaction. The widget reads the event's terms and
    oracles from the chain and sends the join to every oracle.
-3. **At the venue**, the organizer opens the stage screen, signs once, and a phone scans a QR code to become the
+3. **At the venue**, the organizer opens the event dashboard, signs once, and a phone scans a QR code to become the
    camera. It streams to every oracle.
 4. **Oracles recognize** guests (only people on the guest list can be matched) and report each recognized wallet
    every 2 s: one transaction with the attendee's signature check followed by `report_sighting`.
-5. **The program pays** when the rules hold. The stage shows the payout with an Explorer link.
+5. **The program pays** when the rules hold. The dashboard shows the payout with an Explorer link.
 6. **After the end**, oracles destroy the guest list, and the organizer withdraws what's left.
 
 ## What is where
@@ -102,8 +128,8 @@ would carry on.
 | `backend/tests/` | Tests, including the compiled program run in LiteSVM (`tests/chain/test_program_litesvm.py`). |
 | `frontend/src/widget/` | The embeddable widget (`<attend-now-widget>`, built to `widget.js`): wallet, selfie, consent, join to every oracle. |
 | `frontend/src/dapp/` | The organizer's events app (`events.html`): create and fund events, follow payouts and oracles, pair cameras, withdraw. |
-| `frontend/src/organizer/` | Organizer page (`organizer.html`): create and fund an event from the organizer's wallet. |
-| `frontend/src/venue/` | Stage screen (`stage.html#<event>`, with the deposit and withdrawal) and camera page (`camera.html`). |
+| `frontend/src/organizer/` | The client for the program's instructions (`program.ts`): create, fund and withdraw. |
+| `frontend/src/venue/` | Camera page (`camera.html`) a phone opens from the dashboard's QR code, and the older stage screen (`stage.html#<event>`). |
 | `frontend/src/event-page/` | An example host page with the widget embedded. |
 | `scripts/` | `devnet_event.py` creates a devnet event; `register_oracle.py` publishes an oracle's name and URL on chain. |
 | `docs/` | The oracle API (`oracle-api.md`) and architecture pages. |

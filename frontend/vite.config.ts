@@ -17,7 +17,6 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         stage: path.resolve(__dirname, 'stage.html'),
         camera: path.resolve(__dirname, 'camera.html'),
-        organizer: path.resolve(__dirname, 'organizer.html'),
         events: path.resolve(__dirname, 'events.html'),
         eventsDemo: path.resolve(__dirname, 'events-demo.html'),
       },

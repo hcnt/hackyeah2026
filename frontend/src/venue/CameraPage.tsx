@@ -1,4 +1,4 @@
-// Event camera (phone): streams the back camera to every oracle in the link from the stage screen's QR code.
+// Event camera (phone): streams the back camera to every oracle in the link from the event dashboard's QR code.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { decodeCameraPayload, type CameraPayload } from './payload'
@@ -24,10 +24,10 @@ export function CameraPage() {
     return (
       <Shell>
         <CenterCard>
-          <p className="text-xl font-bold">Scan the QR code on the stage screen</p>
+          <p className="text-xl font-bold">Scan the QR code on the event dashboard</p>
           <p className="text-sm opacity-80">
-            This page needs the camera link from the event’s stage screen. Open the stage screen on the organizer’s
-            laptop and scan its QR code with this phone.
+            This page needs the camera link from the event’s dashboard. On the organizer’s laptop, open the event in
+            the OnSight events app, click Add a camera and scan its QR code with this phone.
           </p>
         </CenterCard>
       </Shell>
