@@ -52,7 +52,7 @@ function initialForm(demo: boolean, nowMs: number): Form {
     startTime: '18:00',
     endDate: dateValue(day),
     endTime: '22:00',
-    reward: '0.001',
+    reward: '0.02',
     entrants: '10',
     minSeen: '5',
     oracles: DEFAULT_ORACLE,
