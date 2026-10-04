@@ -121,7 +121,7 @@ slide("how", "How it works", head("Oracles see faces. The program decides.", "Ho
   <div class="band off"><span class="bl">Off chain</span></div>
   <div class="st s1"><div class="cap"><span class="n">1</span><span>Organizer locks the budget<br><code>create_event</code></span></div>{contract()}</div>
   <div class="st s2"><div class="cap"><span class="n">2</span><span>Attendee joins: wallet,<br>selfie, signature</span></div>{widget(small=True)}</div>
-  <div class="st s3"><div class="cap"><span class="n">3</span><span>At the door, oracles report<br>“I see this wallet”</span></div><div class="nodes">{node(1, PEOPLE[:2])}{node(2, PEOPLE[:2])}{node(3, PEOPLE[:2])}</div></div>
+  <div class="st s3"><div class="cap"><span class="n">3</span><span>Door video feed goes to trusted<br>oracles that identify wallets</span></div><div class="nodes">{node(1, PEOPLE[:2])}{node(2, PEOPLE[:2])}{node(3, PEOPLE[:2])}</div></div>
   <div class="st s4"><div class="cap"><span class="n">4</span><span><code>report_sighting</code> pays<br>straight from escrow</span></div><div class="chain">{block("7xKX…9fQe", "joined")}<span class="lk"></span>{block("+0.01 SOL", "paid", "pay")}</div></div>
   <div class="flow f12">{ARROW.format(w=56)}</div>
   <div class="flow f34">{ARROW.format(w=56)}</div>
