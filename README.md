@@ -112,7 +112,7 @@ Embedding the widget on any page:
 |---|---|---|
 | Organizer | create an event and fund it; withdraw the rest before the start or after the end | take the budget during the event, change the terms, pay anyone |
 | Oracle (listed on the event) | report sightings; close its Sighting accounts after the end; publish its name and URL | report a wallet that didn't sign up, pay anyone, change amounts |
-| Attendee | join (one signature), receive the reward | be paid twice |
+| Attendee | sign up with one message signature; receive the reward. Nothing to do on chain. | |
 | Us | run one of the oracles | anything an oracle can't; there is no admin. Until the program is made final, its deployer can still upgrade it (see Limitations). |
 
 **If a party disappears halfway:** if the organizer vanishes, the budget stays in escrow and payouts keep working;
