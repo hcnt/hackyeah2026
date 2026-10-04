@@ -4,7 +4,6 @@ import QRCode from 'qrcode'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
 import { cn } from '@/lib/utils'
-import { ApiError } from '../widget/api'
 import { ChainError, DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL, readEventOracles, type EventOracles, type OracleEntry } from '../widget/chain'
 import {
   connect,
@@ -13,11 +12,11 @@ import {
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
   shortAddress,
-  signAction,
   useSolanaWallets,
   type Connection,
 } from '../widget/wallet'
-import { parseJson, requestCameraToken, type CameraTokenResponse, type LiveFace, type LiveMessage } from './api'
+import { parseJson, type CameraTokenResponse, type LiveFace, type LiveMessage } from './api'
+import { clearPairing, loadPairing, pairWithOracles, savePairing, type PairResult } from './pairing'
 import { base64ToBlob, drawFrame } from './draw'
 import {
   backoffMs,
@@ -77,9 +76,6 @@ export function StagePage() {
 
 type ChainState = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; event: EventOracles }
 
-type PairResult =
-  | { oracle: OracleEntry; ok: true; tokens: CameraTokenResponse }
-  | { oracle: OracleEntry; ok: false; message: string }
 
 type Pairing = { kind: 'idle' } | { kind: 'busy'; step: string } | { kind: 'error'; message: string }
 
@@ -107,7 +103,13 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
   useEffect(() => {
     let cancelled = false
     readEventOracles(rpcUrl, programId, eventId).then(
-      (event) => !cancelled && setChain({ kind: 'ready', event }),
+      (event) => {
+        if (cancelled) return
+        setChain({ kind: 'ready', event })
+        // Tokens saved by an earlier pairing in this browser (a refresh, or the organizer page): no wallet needed.
+        const saved = loadPairing(eventId, event.oracles)
+        if (saved) setResults((current) => current ?? saved)
+      },
       (err: unknown) =>
         !cancelled &&
         setChain({
@@ -131,21 +133,9 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
       busy.current = true
       try {
         setPairing({ kind: 'busy', step: 'Approve the signature in your wallet…' })
-        const signed = await signAction(c, 'camera-token', eventId)
-        setPairing({ kind: 'busy', step: 'Pairing cameras with the oracles…' })
-        const results = await Promise.all(
-          event.oracles.map((oracle): Promise<PairResult> =>
-            requestCameraToken(oracle.url, eventId, signed, oracle.name || shortAddress(oracle.key)).then(
-              (tokens) => ({ oracle, ok: true, tokens }),
-              (err: unknown) => ({
-                oracle,
-                ok: false,
-                message: err instanceof ApiError ? err.message : 'Request failed',
-              }),
-            ),
-          ),
-        )
+        const results = await pairWithOracles(c, eventId, event.oracles)
         setResults(results)
+        if (event.meta) savePairing(eventId, event.meta.end, results)
         setPairing({ kind: 'idle' })
       } catch (err) {
         setPairing({ kind: 'error', message: walletErrorText(err) })
@@ -171,13 +161,32 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
     }
     setConn(c)
     setPairing({ kind: 'idle' })
-    if (!organizer || c.account.address === organizer) void pair(c)
+    // Already paired from saved tokens: connecting is only for withdrawing, so don't ask for another signature.
+    if ((!organizer || c.account.address === organizer) && paired.length === 0) void pair(c)
   }
+
+  /** A token an oracle no longer accepts: sign again with the wallet, connecting it first if needed. */
+  const repair = () => {
+    if (conn) return void pair(conn)
+    clearPairing(eventId)
+    setResults(null)
+  }
+
+  const walletButtons =
+    !conn && wallets.length > 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {wallets.map((w) => (
+          <Button key={w.name} variant="ghost" disabled={pairing.kind === 'busy'} onClick={() => void onConnect(w)}>
+            {w.icon && <img src={w.icon} alt="" className="size-5" />}
+            Connect {w.name}
+          </Button>
+        ))}
+      </div>
+    ) : null
 
   const onDisconnect = async () => {
     if (conn) await disconnect(conn)
     setConn(null)
-    setResults(null)
     setPairing({ kind: 'idle' })
   }
 
@@ -211,6 +220,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
         rpcUrl={rpcUrl}
         programId={programId}
         conn={isOrganizer ? conn : null}
+        walletButtons={walletButtons}
         end={ev.meta.end}
         now={now}
         refreshKey={refreshKey}
@@ -236,7 +246,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
         <Notice tone="bad" title="This event has ended">Cameras can no longer be paired. Payouts already sent are final.</Notice>
       )}
 
-      {conn && results && paired.length > 0 ? (
+      {results && paired.length > 0 ? (
         <>
           {pairing.kind === 'busy' && <Spinner label={pairing.step} />}
           {pairing.kind === 'error' && <Notice tone="bad" title={pairing.message} />}
@@ -247,7 +257,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
             failed={results.filter((r) => !r.ok)}
             threshold={ev.threshold}
             busy={pairing.kind === 'busy'}
-            onRepair={() => void pair(conn)}
+            onRepair={repair}
             deposit={(refreshKey) => depositPanel(refreshKey)}
           />
         </>
@@ -781,6 +791,7 @@ function DepositPanel({
   rpcUrl,
   programId,
   conn,
+  walletButtons,
   end,
   now,
   refreshKey,
@@ -790,6 +801,8 @@ function DepositPanel({
   programId: string
   /** The organizer's connection, or null when no organizer wallet is connected. */
   conn: Connection | null
+  /** Connect buttons, shown when withdrawing needs a wallet that isn't connected (null when one is). */
+  walletButtons: ReactNode
   /** Unix seconds. */
   end: number
   now: number
@@ -865,6 +878,7 @@ function DepositPanel({
                   ? 'Connect the organizer wallet to withdraw.'
                   : 'Returns what wasn’t paid out, plus the account rent, to your wallet.'}
             </p>
+            {ended && !conn && walletButtons}
           </>
         )
       )}

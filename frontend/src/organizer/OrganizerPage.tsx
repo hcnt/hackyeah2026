@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { nowIso } from '../widget/api'
-import { ChainError, DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL } from '../widget/chain'
+import { ChainError, DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL, readEventOracles } from '../widget/chain'
 import {
   connect,
   disconnect,
@@ -16,6 +16,7 @@ import {
   type Connection,
 } from '../widget/wallet'
 import { explorerTxUrl } from '../venue/payload'
+import { pairWithOracles, savePairing } from '../venue/pairing'
 import { Button, Chip, CopyButton, Notice, Spinner } from '../venue/ui'
 import {
   createEvent,
@@ -217,6 +218,23 @@ export function OrganizerPage() {
     setBalance(null)
   }
 
+  /**
+   * Pairs the stage with the event's oracles using the wallet that is already connected here and saves the tokens in
+   * this browser, so the stage screen opens without connecting a wallet. On any failure the stage simply asks itself.
+   */
+  async function openStage(stageUrl: string, eventId: string) {
+    if (conn) {
+      try {
+        const event = await readEventOracles(rpcUrl, programId, eventId)
+        const results = await pairWithOracles(conn, eventId, event.oracles)
+        if (event.meta) savePairing(eventId, event.meta.end, results)
+      } catch {
+        // rejected signature, oracle or RPC down: the stage screen offers pairing itself
+      }
+    }
+    window.location.href = stageUrl
+  }
+
   async function onSubmit() {
     setTouched(true)
     if (!conn || !checked.ok || submit.kind === 'busy') return
@@ -246,7 +264,12 @@ export function OrganizerPage() {
         </header>
 
         {submit.kind === 'done' ? (
-          <Created created={submit.created} params={checked.ok ? checked.params : null} onAnother={() => setSubmit({ kind: 'idle' })} />
+          <Created
+            created={submit.created}
+            params={checked.ok ? checked.params : null}
+            onAnother={() => setSubmit({ kind: 'idle' })}
+            onOpenStage={openStage}
+          />
         ) : (
           <>
             <Section title="1. Organizer wallet" hint="The deposit is paid from this wallet. After the event ends, whatever wasn’t paid out comes back to it.">
@@ -444,7 +467,18 @@ function Row({ label, value, strong }: { label: string; value: bigint | null; st
   )
 }
 
-function Created({ created, params, onAnother }: { created: CreatedEvent; params: EventParams | null; onAnother: () => void }) {
+function Created({
+  created,
+  params,
+  onAnother,
+  onOpenStage,
+}: {
+  created: CreatedEvent
+  params: EventParams | null
+  onAnother: () => void
+  onOpenStage: (stageUrl: string, eventId: string) => Promise<void>
+}) {
+  const [opening, setOpening] = useState(false)
   // Keep ?program= and ?rpc= so the stage screen and the attendee page read the same deployment.
   const base = `${window.location.origin}${import.meta.env.BASE_URL}`
   const query = new URLSearchParams(window.location.search)
@@ -471,9 +505,17 @@ function Created({ created, params, onAnother }: { created: CreatedEvent; params
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <a className="inline-flex min-h-11 items-center rounded-xl bg-sky-400 px-5 text-sm font-semibold text-neutral-950 hover:bg-sky-300" href={stageUrl}>
-          Open the stage screen
-        </a>
+        <button
+          type="button"
+          disabled={opening}
+          className="inline-flex min-h-11 items-center rounded-xl bg-sky-400 px-5 text-sm font-semibold text-neutral-950 hover:bg-sky-300 disabled:opacity-60"
+          onClick={() => {
+            setOpening(true)
+            void onOpenStage(stageUrl, created.event).finally(() => setOpening(false))
+          }}
+        >
+          {opening ? 'Approve the signature to pair cameras…' : 'Open the stage screen'}
+        </button>
         <a className="inline-flex min-h-11 items-center rounded-xl border border-white/20 bg-white/5 px-5 text-sm font-semibold hover:bg-white/10" href={attendeeUrl} target="_blank" rel="noreferrer">
           Attendee page
         </a>
