@@ -1,6 +1,6 @@
 // Shell of the OnSight events app: Luma-style nav, hash routes and the wallet sign-in gate.
 //   #/             events overview
-//   #/new          new attendance reward
+//   #/new          new event
 //   #/events/<id>  event dashboard
 import { useEffect, useRef, useState } from 'react'
 import { Copy, ExternalLink, FlaskConical, LogOut, Radio, Wallet } from 'lucide-react'

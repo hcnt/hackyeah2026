@@ -1,4 +1,4 @@
-// Screen 2: a new attendance reward. "Save terms" checks them (including a simulation against the program, so the
+// Screen 2: a new event. "Save terms" checks them (including a simulation against the program, so the
 // launch can't be refused) and freezes the form; "Launch event" then sends the one create_event transaction that moves
 // the deposit into the new Event account.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -195,7 +195,7 @@ export function Setup() {
         {saveButton('os-btn os-btn--secondary')}
       </div>
       <h1 className="os-title" style={{ marginBottom: 24 }}>
-        New attendance reward
+        New event
       </h1>
 
       <section className="os-card os-section" aria-labelledby="sec-a">
