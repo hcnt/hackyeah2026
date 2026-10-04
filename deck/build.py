@@ -148,7 +148,7 @@ DEMO = [("Join on the event page", "Wallet, one selfie, one signature. No transa
         ("Get paid", "The stage shows the payout with an Explorer link.")]
 slide("demo", "Live demo", head("Live on devnet: join, walk up, get paid.", "Demo") + f'''
   <div class="steps">{"".join(f'<div class="sc"><span class="n">{i + 1}</span><div class="t">{a}</div><div class="s">{b}</div></div>' for i, (a, b) in enumerate(DEMO))}</div>
-  <div class="links"><div><span class="mut">Try it</span><b>hackyeah.kindhome.io</b></div><div><span class="mut">Backup</span><b>70 s video walkthrough</b></div></div>
+  <div class="links"><div><span class="mut">Try it</span><b>demo-event.onsight.site</b></div><div><span class="mut">Backup</span><b>70 s video walkthrough</b></div></div>
 ''', "Run the live flow. Have two wallets funded and the stage screen open. Show the payout transaction on Solana Explorer. If anything fails, say what and why, then play the video.")
 
 # 8 ---------------------------------------------------------------- trust
