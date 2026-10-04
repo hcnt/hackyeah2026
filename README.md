@@ -23,7 +23,7 @@ A sponsor wants people in the room and is willing to pay for it, so the event an
 "the first 100 people who come get 0.01 SOL". Today that promise runs through intermediaries:
 
 - **The attendee trusts the organizer** to really pay out after the event, to the people who really came, and
-  not to change the rules ("we ran out", "only the first 50").
+  not to change the terms ("we ran out", "only the first 50").
 - **The sponsor trusts the organizer**, or a check-in agency or ticketing platform, that the claimed attendance is
   real and that their budget went to real attendees and not to friends or to nobody.
 - **Someone in the middle holds the money and keeps the list**: checks people in at the door, decides who
