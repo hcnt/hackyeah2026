@@ -37,8 +37,8 @@ RPC = "https://api.devnet.solana.com"
 # OLD program id (superseded). Its create_event accounts do NOT match what this script builds (no Config account
 # any more): replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
-# Our backend's oracle (public key, see contracts/on_sight/README.md).
-DEFAULT_ORACLE = "5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt"
+# The demo oracle, registered as OnSight at https://oracle.kindhome.io.
+DEFAULT_ORACLE = "9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3"
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000
 FEE_LAMPORTS = 2_000_000  # lib.rs FEE_LAMPORTS: per paid attendee, frozen into the Event at creation
