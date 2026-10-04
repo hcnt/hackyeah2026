@@ -19,7 +19,8 @@
   #s03-qs { position: absolute; left: 1040px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; font-size: 96px; line-height: 1.2; }
   #s03-how { display: block; }
   #s03-tail { position: relative; display: block; width: 820px; height: 1.25em; overflow: hidden; }
-  #s03-tail .q { position: absolute; left: 0; top: 0; }
+  #s03-tail .q { position: absolute; left: 0; top: 0; opacity: 0; }
+  #s03-how { opacity: 0; }
 
 </style>
 <div id="root" data-composition-id="s03-questions" data-width="1920" data-height="1080">
@@ -38,14 +39,15 @@
   // "How do we" stays; the end of the question rotates
   tl.fromTo("#s03-how", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 1.0);
   tl.set(["#s03-q1", "#s03-q2", "#s03-q3"], { yPercent: 110 }, 0);
-  tl.fromTo("#s03-q0", { yPercent: 110 }, { yPercent: 0, duration: 0.45, ease: "power3.out" }, 1.0);
+  tl.fromTo("#s03-q0", { yPercent: 110, opacity: 1 }, { yPercent: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 1.0);
   [1, 2, 3].forEach((i) => {
     const t = 1.0 + i * 1.0;
     tl.to(`#s03-q${i - 1}`, { yPercent: -110, duration: 0.4375, ease: "power3.in" }, t - 0.125);
+    tl.set(`#s03-q${i}`, { opacity: 1 }, t + 0.125);
     tl.to(`#s03-q${i}`, { yPercent: 0, duration: 0.5625, ease: "power3.out" }, t + 0.125);
   });
-  tl.to(["#s03-how", "#s03-q3"], { opacity: 0, y: -24, duration: 0.3, ease: "power2.in", stagger: 0.06 }, 4.95);
-  tl.to("#s03-div", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.35, ease: "power2.in" }, 5.05);
+  tl.to(["#s03-how", "#s03-q3"], { opacity: 0, y: -24, duration: 0.3, ease: "power2.in", stagger: 0.06 }, 5.45);
+  tl.to("#s03-div", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.35, ease: "power2.in" }, 5.55);
 
   window.__timelines["s03-questions"] = tl;
 </script>
