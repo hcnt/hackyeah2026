@@ -28,8 +28,8 @@ export const FEE_LAMPORTS = 2_000_000n
 export const MAX_ORACLES = 3
 export const MAX_EVENT_NAME = 64
 export const MAX_EVENT_VENUE = 64
-/** Our backend's oracle (public key, see contracts/on_sight/README.md). */
-export const DEFAULT_ORACLE = '5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt'
+/** The demo oracle, registered as OnSight at https://oracle.kindhome.io. */
+export const DEFAULT_ORACLE = '9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3'
 const SYSTEM_PROGRAM_ID = '11111111111111111111111111111111'
 /** 8 + Event::INIT_SPACE in lib.rs: discriminator, fixed fields, then name and venue at their max length. */
 const EVENT_ACCOUNT_SPACE = 8 + 32 + 32 * MAX_ORACLES + 1 + 1 + 8 + 8 + 8 + 8 + 8 + 4 + 4 + 4 + 1 + (4 + MAX_EVENT_NAME) + (4 + MAX_EVENT_VENUE)
