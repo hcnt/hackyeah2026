@@ -4,17 +4,16 @@ Superteam Poland challenge "Finance Without Intermediaries", HackYeah 2026.
 
 **Attendance giveaways without a middleman.** An attendance giveaway is a sponsor's promise to reward the people
 who actually come to an event: "the first 100 people at the venue get 0.01 SOL", a coffee, a T-shirt. It's how
-free events fight no-shows, and today it only works if everyone trusts whoever holds the prizes and the guest
-list.
+events fight no-shows, and today it only works if everyone trusts whoever holds the prizes and the guest list.
 
 With OnSight, an organizer or sponsor locks the giveaway budget in a Solana program. Attendees opt in with their
-wallet and one selfie, through a widget on the event's own page. At the venue, a camera at a check-in point
-streams footage of attendees to face-recognition **oracles**. The oracles only report "I see this wallet now". The **program** decides who gets
-paid, and pays each attendee once, straight from the escrow to their wallet.
+wallet and one selfie, through a widget on the event's own page. At the venue, a camera at a check-in point streams
+footage of attendees to face-recognition **oracles**. The oracles only report "I see this wallet now". The
+**program** decides who gets paid, and pays each attendee once, straight from the escrow to their wallet.
 
-**Who it's for:** organizers and sponsors of free events (meetups, hackathons, product launches, conference side
-events) who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see
-blockchain terms beyond "connect your wallet and sign".
+**Who it's for:** organizers and sponsors of events (meetups, hackathons, product launches, conference side events)
+who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see blockchain
+terms beyond "connect your wallet and sign".
 
 ## Design rationale
 
