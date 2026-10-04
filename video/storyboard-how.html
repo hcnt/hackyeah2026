@@ -1,0 +1,208 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>How it works — frames v4</title><style>
+@font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+* { box-sizing: border-box; margin: 0; }
+body { background: #E4E2DC; font-family: "Satoshi", sans-serif; color: #15161A; padding: 40px; }
+header { max-width: 1960px; margin: 0 auto 28px; }
+header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+header p { font-size: 17px; color: #55575E; margin-top: 8px; max-width: 1100px; line-height: 1.5; }
+.grid { display: grid; grid-template-columns: repeat(2, 960px); gap: 40px 40px; justify-content: center; }
+.cell .cap { margin-top: 12px; font-size: 16px; line-height: 1.45; color: #3A3C42; }
+.cell .cap b { color: #15161A; }
+.vp { width: 960px; height: 540px; overflow: hidden; border-radius: 10px; box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 10px 30px rgba(0,0,0,.08); }
+.fr1080 { position: relative; width: 1920px; height: 1080px; transform: scale(.5); transform-origin: 0 0; background: #F3F2EE; overflow: hidden; }
+.id { position: absolute; right: 60px; top: 60px; font-size: 22px; font-weight: 700; color: #A9ABB2; }
+.h1 { position: absolute; left: 160px; top: 100px; font-size: 64px; font-weight: 700; letter-spacing: -0.03em; white-space: nowrap; }
+.h2 { position: absolute; left: 160px; top: 192px; font-size: 30px; font-weight: 500; color: #6B6D74; width: 1500px; line-height: 1.35; }
+.acc { color: #2775CA; }
+.sq { position: absolute; width: 240px; height: 240px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; }
+.sq .t { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.sq .s { font-size: 18px; font-weight: 500; color: #6B6D74; }
+.sq .n { font-size: 44px; font-weight: 700; letter-spacing: -0.03em; }
+.sq.big { width: 400px; height: 400px; }
+.sq.dark { background: #15161A; color: #fff; box-shadow: none; }
+.sq.dark .s { color: #A9ABB2; }
+.sq.green { background: #1F8A5B; color: #fff; box-shadow: none; }
+.sq.green .s { color: #CDEBDD; }
+.sq.sm { position: relative; width: 190px; height: 190px; gap: 4px; }
+.sq.sm .t { font-size: 24px; }
+.sq.sm .s { font-size: 14px; letter-spacing: .1em; text-transform: uppercase; }
+.om { width: 48px; height: 48px; border-radius: 14px; background: #404040; color: #fff; font-weight: 900; font-size: 28px; display: flex; align-items: center; justify-content: center; }
+.ob { position: absolute; right: -12px; top: -12px; width: 44px; height: 44px; border-radius: 99px; display: flex; align-items: center; justify-content: center; }
+.ob.ok { background: #1F8A5B; }
+.ob.no { background: #C9C7C0; color: #fff; font-size: 26px; font-weight: 700; }
+.ora.ok { box-shadow: inset 0 0 0 3px #1F8A5B; }
+.ora.no { opacity: .55; }
+.oras { position: absolute; display: grid; grid-template-columns: repeat(2, 190px); gap: 30px; }
+.rules { position: absolute; width: 760px; background: #fff; border-radius: 22px; box-shadow: inset 0 0 0 2px #D9D7D0; padding: 34px 40px; }
+.rules .rh { font-size: 18px; font-weight: 500; color: #6B6D74; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 14px; }
+.rules .row { display: flex; align-items: baseline; gap: 14px; padding: 20px 0; border-top: 2px solid #EEEDEA; font-size: 26px; }
+.rules .row span { width: 270px; color: #6B6D74; font-weight: 500; }
+.rules .row b { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+.rules .row i { font-style: normal; color: #6B6D74; font-size: 22px; }
+.flow { position: absolute; display: flex; align-items: center; gap: 34px; }
+.cash { width: 64px; height: 40px; border-radius: 8px; background: #2775CA; color: #fff; font-size: 24px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.35); }
+.flow .cash:nth-child(1) { opacity: .35; } .flow .cash:nth-child(2) { opacity: .65; }
+.flow .amt { font-size: 30px; font-weight: 700; color: #2775CA; }
+.tok { padding: 14px 22px; border-radius: 999px; background: #15161A; color: #fff; font-size: 22px; font-weight: 500; white-space: nowrap; }
+.chips { position: absolute; display: flex; gap: 12px; }
+.chips span { padding: 10px 18px; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; font-size: 20px; font-weight: 500; }
+.pair { position: absolute; display: flex; align-items: center; gap: 30px; }
+.wal { display: flex; align-items: center; gap: 18px; padding: 26px 30px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.wal img { width: 64px; height: 64px; }
+.wal b { display: block; font-size: 28px; } .wal span { font-size: 22px; color: #6B6D74; font-weight: 500; }
+.plus, .eq { font-size: 72px; font-weight: 700; color: #A9ABB2; }
+.facecard { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.facecard svg { border-radius: 12px; }
+.facecard span { font-size: 20px; font-weight: 500; color: #3A3C42; }
+.cmp { position: absolute; display: flex; align-items: center; gap: 30px; }
+.note { position: absolute; font-size: 20px; color: #A15C00; font-weight: 500; }
+.venue { position: absolute; width: 1560px; height: 620px; }
+.venue .door { position: absolute; left: 520px; top: 0; width: 360px; height: 470px; border: 6px solid #D9D7D0; border-bottom: none; border-radius: 180px 180px 0 0; }
+.venue .door span { position: absolute; top: -50px; left: 0; right: 0; text-align: center; font-size: 22px; font-weight: 500; color: #6B6D74; }
+.venue .cam { position: absolute; }
+.venue .ppl { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.tag { padding: 8px 16px; border-radius: 999px; background: #1F8A5B; color: #fff; font-size: 20px; font-weight: 700; white-space: nowrap; }
+.tag.grey { background: #fff; color: #6B6D74; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.strip { position: absolute; display: flex; gap: 22px; padding: 22px; border-radius: 22px; background: #15161A; }
+.strip .fr { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.strip .fr span { font-size: 20px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+.quorum { position: absolute; width: 410px; }
+.quorum .bar { position: relative; height: 14px; border-radius: 99px; background: #E4E2DC; }
+.quorum .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: #1F8A5B; }
+.quorum .bar em { position: absolute; top: -8px; width: 3px; height: 30px; background: #15161A; }
+.quorum span { display: block; margin-top: 16px; font-size: 22px; color: #6B6D74; font-weight: 500; }
+.quorum b { color: #15161A; }
+.s.up { letter-spacing: .1em; text-transform: uppercase; }
+.sent { position: absolute; width: 760px; height: 240px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; padding: 32px 36px; display: flex; flex-direction: column; justify-content: space-between; }
+.sent .st { font-size: 46px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.sent.dark { background: #15161A; color: #fff; box-shadow: none; height: auto; min-height: 240px; gap: 18px; }
+.sent .ct { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 500; color: #A9ABB2; }
+.sent .cn { font-size: 54px; font-weight: 700; letter-spacing: -0.03em; }
+.sent .cn em { font-style: normal; font-size: 26px; font-weight: 500; color: #A9ABB2; }
+.chips2 { display: flex; gap: 10px; }
+.chips2 span { padding: 8px 16px; border-radius: 999px; background: #F3F2EE; font-size: 20px; font-weight: 500; color: #3A3C42; }
+.chips2.inv span { background: #2A2B30; color: #E4E2DC; }
+.enr { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 14px; background: #1F8A5B; }
+.enr img { width: 32px; height: 32px; }
+.enr span { font-size: 20px; color: #CDEBDD; font-weight: 500; } .enr b { font-size: 24px; }
+.wdw { position: absolute; }
+.wd { width: 400px; padding: 20px 24px 16px; border-radius: 20px; background: #fff; box-shadow: inset 0 0 0 1px #e5e5e5, 0 12px 32px -8px rgba(10,10,10,.24); display: flex; flex-direction: column; gap: 20px; }
+.wd .steps { display: flex; gap: 6px; } .wd .steps i { flex: 1; height: 3px; border-radius: 3px; background: #171717; }
+.wd .wdb { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.wd .badge { width: 64px; height: 64px; border-radius: 99px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; }
+.wd .yi { font-size: 32px; font-weight: 900; letter-spacing: -1.2px; }
+.wd .cal { width: 100%; height: 44px; border-radius: 999px; box-shadow: inset 0 0 0 1px #e5e5e5; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; }
+.wd .wf { text-align: center; font-size: 11px; color: #737373; }
+.addr { position: absolute; display: flex; align-items: center; gap: 16px; padding: 22px 28px; border-radius: 20px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.addr img, .pairb > img { width: 48px; height: 48px; }
+.addr b, .pairb b { display: block; font-size: 26px; } .addr span, .pairb span { font-size: 20px; color: #6B6D74; font-weight: 500; }
+.pairb { position: absolute; display: flex; align-items: center; gap: 14px; padding: 18px 26px; border-radius: 20px; background: #fff; box-shadow: inset 0 0 0 2px #1F8A5B; }
+.pairb .pl { font-size: 32px; font-weight: 700; color: #A9ABB2; }
+.pairb svg { border-radius: 8px; }
+.pairb.in { position: relative; margin-top: 22px; }
+.sq.org { width: 200px; height: 200px; }
+.rulesb { position: absolute; width: 860px; height: 200px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; padding: 30px 34px; display: flex; flex-direction: column; justify-content: space-between; }
+.rulesb .st { font-size: 46px; font-weight: 700; letter-spacing: -0.03em; }
+.blk { position: absolute; top: 470px; width: 220px; height: 150px; border-radius: 18px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+.blk .bt { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.blk .bs { font-size: 17px; font-weight: 500; }
+.blk.old { background: #ECEAE4; box-shadow: none; color: #8A8C93; }
+.blk .hash { display: flex; flex-direction: column; gap: 6px; width: 120px; } .blk .hash i { height: 6px; border-radius: 3px; background: #D9D7D0; }
+.blk.dark { background: #15161A; color: #fff; box-shadow: none; } .blk.dark .bs { color: #A9ABB2; }
+.blk.green { background: #1F8A5B; color: #fff; box-shadow: none; } .blk.green .bs { color: #CDEBDD; }
+.blk.wide { top: 130px; width: 860px; height: 200px; } .blk.wide .bt { font-size: 40px; } .blk.wide .bs { font-size: 22px; }
+.chain .lk { position: absolute; top: 531px; width: 50px; height: 28px; border-radius: 14px; border: 5px solid #C9C7C0; }
+.chain .more { position: absolute; top: 515px; font-size: 48px; font-weight: 700; color: #C9C7C0; letter-spacing: .1em; }
+.chain .chlab { position: absolute; left: 160px; top: 640px; font-size: 18px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: #A9ABB2; }
+.wdw.mini { transform: scale(.55); transform-origin: 0 0; }
+.net2 { position: absolute; left: 1120px; top: 760px; width: 660px; padding: 22px 24px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.net2.hot { box-shadow: inset 0 0 0 3px #1F8A5B; }
+.net2 .nh { display: flex; align-items: center; gap: 12px; font-size: 24px; }
+.net2 .om { width: 36px; height: 36px; font-size: 20px; border-radius: 10px; }
+.net2 .nodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+.net2 .nodes span { height: 56px; border-radius: 12px; background: #F3F2EE; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #6B6D74; }
+.net2 .nodes span.hot { background: #E3F2EA; color: #1F8A5B; }
+.sigs { display: flex; gap: 12px; margin-top: 14px; }
+.sg { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 8px; border-radius: 12px; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.sg svg { border-radius: 6px; width: 36px; height: 40px; } .sg span { font-size: 15px; font-weight: 500; color: #3A3C42; white-space: nowrap; }
+.ph { position: absolute; } .ph svg { border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,.18); }
+.orgbig { position: absolute; left: 200px; top: 400px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.orgbig span { font-size: 26px; font-weight: 700; }
+.plain { position: absolute; left: 160px; top: 420px; display: flex; flex-direction: column; font-size: 92px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; }
+.plain .l2 { color: #2775CA; }
+.csq { position: absolute; width: 300px; height: 300px; border-radius: 28px; background: #15161A; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.csq .t { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; } .csq .s { font-size: 20px; color: #A9ABB2; font-weight: 500; }
+.cb { position: absolute; top: 840px; width: 150px; height: 150px; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; color: #fff; }
+.cb.dark { background: #15161A; } .cb.green { background: #1F8A5B; }
+.cb .bt { font-size: 24px; font-weight: 700; } .cb .bt.sm { font-size: 19px; } .cb .bs { font-size: 15px; font-weight: 500; opacity: .7; }
+.cb.fall { top: 700px; opacity: .85; }
+.lk2 { position: absolute; top: 901px; width: 60px; height: 28px; border-radius: 14px; border: 5px solid #C9C7C0; }
+.more2 { position: absolute; top: 880px; font-size: 48px; font-weight: 700; color: #C9C7C0; letter-spacing: .1em; }
+.net3 { position: absolute; left: 460px; top: 70px; width: 1000px; padding: 22px 26px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.net3.hot { box-shadow: inset 0 0 0 3px #1F8A5B; }
+.net3 .nh { display: flex; align-items: center; gap: 12px; font-size: 24px; }
+.net3 .om { width: 36px; height: 36px; font-size: 20px; border-radius: 10px; }
+.net3 .nodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+.net3 .nodes span { height: 50px; border-radius: 12px; background: #F3F2EE; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 700; color: #6B6D74; }
+.net3 .nodes span.hot { background: #E3F2EA; color: #1F8A5B; }
+.net3 .sigs { min-height: 56px; flex-wrap: wrap; }
+.fslot { position: relative; width: 96px; height: 110px; display: flex; align-items: flex-end; justify-content: center; }
+.fslot .fc { height: 110px; width: auto; }
+.fslot .tick { position: absolute; right: -6px; bottom: 0; width: 30px; height: 30px; border-radius: 99px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #fff; }
+.sg .fc { height: 78px; width: auto; }
+.net3 .sg { padding: 8px 14px 8px 8px; } .net3 .sg span { font-size: 17px; }
+.ph .fc { height: 120px; width: auto; filter: drop-shadow(0 8px 16px rgba(0,0,0,.2)); }
+.ghost { position: absolute; border-radius: 20px; border: 3px dashed #C9C7C0; }
+.net { position: absolute; width: 520px; padding: 26px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.net .nh { display: flex; align-items: center; gap: 14px; font-size: 26px; }
+.net .om { width: 40px; height: 40px; font-size: 22px; border-radius: 12px; }
+.net .nodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 20px; }
+.net .nodes span { height: 80px; border-radius: 14px; background: #F3F2EE; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+.net .pairb.in { width: 100%; flex-wrap: wrap; padding: 16px 18px; }
+.net .pairb.in b { font-size: 22px; } .net .pairb.in span { font-size: 17px; }
+</style></head>
+<body>
+<header><h1>08 · How it works — still frames (v7.4 draft)</h1>
+<p>Flow only, no motion yet. No chain at the start: plain sentence → the sentence becomes a Contract square → it drops to the bottom and starts the chain → the oracle network arrives at the top → widgets stream in; each one links its address onto the chain and sends its photo up to the oracles. The widgets carry the real team faces (cut out, transparent); faces end up in the oracle network and never go on chain.</p></header>
+<div class="grid">
+<div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8a</div>
+  <div class="plain"><span>Organizer sets the rules</span></div>
+</div></div>
+<div class="cap"><b>8a. Organizer sets the rules.</b> Empty stage, no chain, no icon. Plain text: “Organizer sets the rules”.</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8b</div>
+  <div class="plain"><span>Organizer sets the rules</span><span class="l2">and locks the funds.</span></div>
+</div></div>
+<div class="cap"><b>8b. … and locks the funds.</b> 0.5 s later the second half of the line comes in: “and locks the funds.”</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8c</div>
+  <div class="csq" style="left:810px; top:390px"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="t">Contract</div><div class="s">10,000 USDC locked</div></div>
+</div></div>
+<div class="cap"><b>8c. The sentence merges into a contract.</b> The words collapse into one square block named “Contract” (10,000 USDC locked).</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8d</div>
+  <div class="cb dark" style="left:160px"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="bt">Contract</div><div class="bs">10,000 USDC</div></div><div class="more2" style="left:350px">···</div>
+</div></div>
+<div class="cap"><b>8d. The contract drops to the bottom.</b> The contract shrinks and moves to the bottom-left: it is the first block of the chain.</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8e</div>
+  <div class="cb dark" style="left:160px"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="bt">Contract</div><div class="bs">10,000 USDC</div></div><div class="more2" style="left:350px">···</div><div class="net3"><div class="nh"><span class="om">O</span><b>OnSight oracle network</b></div>
+  <div class="nodes"><span class="">Node 1</span><span class="">Node 2</span><span class="">Node 3</span><span class="">Node 4</span></div><div class="sigs"></div></div>
+</div></div>
+<div class="cap"><b>8e. The oracle network arrives.</b> The OnSight oracle network slides in at the top, idle.</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8f</div>
+  <div class="cb dark" style="left:160px"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="bt">Contract</div><div class="bs">10,000 USDC</div></div><span class="lk2" style="left:310px"></span><div class="cb green" style="left:370px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">7xKX…9fQe</div><div class="bs">enrolled</div></div><span class="lk2" style="left:520px"></span><div class="cb green" style="left:580px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">Bq4n…T1zc</div><div class="bs">enrolled</div></div><div class="cb green fall" style="left:790px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">9fLm…a8Pw</div></div><div class="more2" style="left:980px">···</div><div class="net3 hot"><div class="nh"><span class="om">O</span><b>OnSight oracle network</b></div>
+  <div class="nodes"><span class="hot">Node 1</span><span class="hot">Node 2</span><span class="hot">Node 3</span><span class="hot">Node 4</span></div><div class="sigs"><div class="sg"><img class="fc" src="assets/faces/szymon.png" alt=""><span>sig 3fa9…c21e</span></div><div class="sg"><img class="fc" src="assets/faces/jaca.png" alt=""><span>sig b71d…04aa</span></div></div></div><div class="wdw" style="left:800px; top:400px; transform:scale(0.8); transform-origin:0 0; opacity:0.35"><div class="wd"><div class="steps"><i></i><i></i><i></i></div>
+  <div class="wdb"><div class="fslot"><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="yi">You're in.</div><div class="cal">Add to calendar</div></div>
+  <div class="wf">Powered by OnSight</div></div></div><div class="ph" style="left:915px; top:300px"><img class="fc" src="assets/faces/bzdon.png" alt=""></div><div class="wdw" style="left:1500px; top:400px; transform:scale(0.8); transform-origin:0 0; opacity:1"><div class="wd"><div class="steps"><i></i><i></i><i></i></div>
+  <div class="wdb"><div class="fslot"><img class="fc" src="assets/faces/face4.png" alt=""><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="yi">You're in.</div><div class="cal">Add to calendar</div></div>
+  <div class="wf">Powered by OnSight</div></div></div>
+</div></div>
+<div class="cap"><b>8f. Widgets flow in; each joins the chain and sends its photo.</b> A stream of finished widgets flows in from the right. As each one reaches the middle it splits: its address drops down and links onto the chain, its photo flies up into the oracle network. Shown mid-split, with two already done and the next widget arriving.</div></div><div class="cell"><div class="vp"><div class="fr1080">
+  <div class="id">8g</div>
+  <div class="cb dark" style="left:160px"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="bt">Contract</div><div class="bs">10,000 USDC</div></div><span class="lk2" style="left:310px"></span><div class="cb green" style="left:370px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">7xKX…9fQe</div><div class="bs">enrolled</div></div><span class="lk2" style="left:520px"></span><div class="cb green" style="left:580px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">Bq4n…T1zc</div><div class="bs">enrolled</div></div><span class="lk2" style="left:730px"></span><div class="cb green" style="left:790px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">9fLm…a8Pw</div><div class="bs">enrolled</div></div><span class="lk2" style="left:940px"></span><div class="cb green" style="left:1000px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt sm">Hd2R…kq7V</div><div class="bs">enrolled</div></div><div class="more2" style="left:1190px">···</div><div class="net3"><div class="nh"><span class="om">O</span><b>OnSight oracle network</b></div>
+  <div class="nodes"><span class="hot">Node 1</span><span class="hot">Node 2</span><span class="hot">Node 3</span><span class="hot">Node 4</span></div><div class="sigs"><div class="sg"><img class="fc" src="assets/faces/szymon.png" alt=""><span>sig 3fa9…c21e</span></div><div class="sg"><img class="fc" src="assets/faces/jaca.png" alt=""><span>sig b71d…04aa</span></div><div class="sg"><img class="fc" src="assets/faces/bzdon.png" alt=""><span>sig e2c0…9f13</span></div><div class="sg"><img class="fc" src="assets/faces/face4.png" alt=""><span>sig 5a7b…d0e2</span></div></div></div>
+</div></div>
+<div class="cap"><b>8g. The chain keeps growing.</b> After all four widgets: the chain at the bottom is the contract plus enrolled wallets, the oracle network holds the matching face signatures. Faces never go on chain.</div></div>
+</div></body></html>
