@@ -318,7 +318,32 @@ export async function createEvent(
   onStep: (step: string) => void,
 ): Promise<CreatedEvent> {
   const organizer = conn.account.address
-  const eventId = BigInt(Date.now())
+  const { event, data } = await createEventInstruction(programId, organizer, p, BigInt(Date.now()))
+  const signature = await signSimulateSend(
+    conn,
+    rpcUrl,
+    (blockhash) => buildTransaction(programId, organizer, [event], [SYSTEM_PROGRAM_ID], data, blockhash),
+    onStep,
+  )
+  return { event, signature }
+}
+
+/**
+ * Simulates create_event for `organizer` without asking the wallet anything, so terms the program would refuse (or a
+ * balance that can't cover them) show up before the organizer commits to them. Throws a ChainError with the reason.
+ */
+export async function checkCreateEvent(rpcUrl: string, programId: string, organizer: string, p: EventParams): Promise<void> {
+  const { event, data } = await createEventInstruction(programId, organizer, p, BigInt(Date.now()))
+  const { value } = await rpc<{ value: { blockhash: string } }>(rpcUrl, 'getLatestBlockhash', [{ commitment: 'confirmed' }])
+  const tx = buildTransaction(programId, organizer, [event], [SYSTEM_PROGRAM_ID], data, value.blockhash)
+  const sim = await rpc<{ value: SimResult }>(rpcUrl, 'simulateTransaction', [
+    base64(tx),
+    { encoding: 'base64', sigVerify: false, replaceRecentBlockhash: true, commitment: 'confirmed' },
+  ])
+  if (sim.value.err) throw new ChainError(programErrorText(sim.value.err, sim.value.logs))
+}
+
+async function createEventInstruction(programId: string, organizer: string, p: EventParams, eventId: bigint) {
   const event = await findProgramAddress([utf8.encode('event'), bs58.decode(organizer), u64(eventId)], programId)
   const data = await instructionData(
     'create_event',
@@ -334,13 +359,7 @@ export async function createEvent(
     borshString(p.name),
     borshString(p.venue),
   )
-  const signature = await signSimulateSend(
-    conn,
-    rpcUrl,
-    (blockhash) => buildTransaction(programId, organizer, [event], [SYSTEM_PROGRAM_ID], data, blockhash),
-    onStep,
-  )
-  return { event, signature }
+  return { event, data }
 }
 
 /**
