@@ -25,9 +25,9 @@ giveaway and the attendee who gets paid.
 
 1. **Create the event.** Open [onsight.site](https://onsight.site), sign
    in with MetaMask and click **Create event**. Enter a name. The defaults are made for this test: it starts
-   now and ends in 15 minutes, 0.02 SOL for each of 10 attendees, 5 seconds on camera, and the OnSight oracle. Click
-   **Save terms**, then **Launch event** and approve the transaction: about 0.222 SOL is now locked in the program
-   (rewards, oracle fees and the account deposit).
+   now and ends in 15 minutes, 0.02 SOL for each of 10 attendees, 5 seconds on camera, and two oracles (OnSight
+   and OnSight 2) that must both agree. Click **Save terms**, then **Launch event** and approve the transaction:
+   about 0.222 SOL is now locked in the program (rewards, oracle fees and the account deposit).
 2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature),
    then the QR icon next to **Add a camera**, and scan it with the phone. The phone now streams to the oracle.
 3. **Join as an attendee.** On the dashboard, click **Attendee page**. In the widget, connect MetaMask, take a
@@ -161,8 +161,8 @@ oracles stop, nobody is paid and the organizer withdraws everything after the en
 
 - **The program is upgradeable** by whoever deployed it, until the upgrade authority is set to final
   (`solana program set-upgrade-authority <PROGRAM_ID> --final`). We plan to do that once the code is final.
-- **Oracle trust.** With threshold 1 (our demo), one oracle can report a registered person who didn't come.
-  M-of-N reduces this; it doesn't remove it.
+- **Oracle trust.** Our demo events require 2 of 2 oracles, but both are run by us, so together they could still
+  report a registered person who didn't come. M-of-N with independent operators reduces this; it doesn't remove it.
 - **The organizer picks the oracles.** An organizer running their own oracle could simply never report anyone and
   withdraw the budget after the end. The oracle list is public and the widget shows it before joining, so
   attendees can see who they're trusting. Next step: oracles assigned at random from an open pool, each with a

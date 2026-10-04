@@ -1,7 +1,7 @@
 """Create a test event on the on_sight program (devnet) and print its address, the oracle's `event_id`.
 
     cd backend && uv run python ../scripts/devnet_event.py [--reward 0.01] [--max 3] [--hours 2] [--min-seen 3]
-        [--oracle <pubkey> [--oracle <pubkey> ...]] [--threshold 1] [--program <program id>]
+        [--oracle <pubkey> [--oracle <pubkey> ...]] [--threshold N] [--program <program id>]
         [--name "OnSight demo"] [--venue ""]
 
 The organizer chooses the event's oracles (1-3, default: our backend's oracle key) and how many of them must report a
@@ -37,8 +37,8 @@ RPC = "https://api.devnet.solana.com"
 # OLD program id (superseded). Its create_event accounts do NOT match what this script builds (no Config account
 # any more): replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
-# The demo oracle, registered as OnSight at https://oracle.onsight.site.
-DEFAULT_ORACLE = "9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3"
+# The demo oracles, registered as OnSight (https://oracle.onsight.site) and OnSight 2 (https://oracle2.onsight.site).
+DEFAULT_ORACLES = ["9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3", "r84ftD3DgMFoL6P1SpnmAdsxApkVRqocrNcYGjFmXzT"]
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000
 FEE_LAMPORTS = 2_000_000  # lib.rs FEE_LAMPORTS: per paid attendee, frozen into the Event at creation
@@ -115,8 +115,8 @@ def main() -> None:
     ap.add_argument("--min-seen", type=int, default=3, help="seconds on camera (chain clock) before payout")
     ap.add_argument("--oracle", type=Pubkey.from_string, action="append", dest="oracles",
                     help="a key allowed to report sightings for this event; repeat for up to 3 "
-                    "(default: our backend's oracle)")
-    ap.add_argument("--threshold", type=int, default=1, help="how many different oracles must report a wallet")
+                    "(default: our two demo oracles)")
+    ap.add_argument("--threshold", type=int, help="how many different oracles must report a wallet (default: all of them)")
     ap.add_argument("--program", type=Pubkey.from_string, default=Pubkey.from_string(DEFAULT_PROGRAM),
                     help="on_sight program id (default: the OLD id until the new deploy)")
     ap.add_argument("--name", default="OnSight demo", help="event name shown to attendees (1-64 bytes)")
@@ -126,7 +126,9 @@ def main() -> None:
         if err:
             sys.exit(err)
     program: Pubkey = args.program
-    oracles: list[Pubkey] = args.oracles or [Pubkey.from_string(DEFAULT_ORACLE)]
+    oracles: list[Pubkey] = args.oracles or [Pubkey.from_string(o) for o in DEFAULT_ORACLES]
+    if args.threshold is None:
+        args.threshold = len(oracles)
     if not 1 <= len(oracles) <= 3 or len(set(oracles)) != len(oracles):
         sys.exit("--oracle: give 1 to 3 distinct keys")
     if not 1 <= args.threshold <= len(oracles):

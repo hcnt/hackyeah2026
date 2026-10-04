@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ArrowLeft, Check, ChevronDown, ChevronUp, Coins, ExternalLink, Info, Lock, MapPin, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { shortAddress } from '../widget/wallet'
 import {
-  DEFAULT_ORACLE,
+  DEFAULT_ORACLES,
   eventTextError,
   isPublicKey,
   MAX_EVENT_NAME,
@@ -57,8 +57,8 @@ function initialForm(demo: boolean, nowMs: number): Form {
     reward: '0.02',
     entrants: '10',
     minSeen: '5',
-    oracles: DEFAULT_ORACLE,
-    threshold: '1',
+    oracles: DEFAULT_ORACLES.join('\n'),
+    threshold: String(DEFAULT_ORACLES.length),
   }
 }
 
@@ -398,7 +398,7 @@ export function Setup() {
                   <input className="os-input num" inputMode="numeric" value={form.threshold} disabled={locked} onChange={(e) => set('threshold')(e.target.value)} />
                 </Field>
               </div>
-              <Field label={`Oracles (1–${MAX_ORACLES} public keys)`} hint="Only these keys can report attendees. Default: the OnSight oracle." error={shown.oracles}>
+              <Field label={`Oracles (1–${MAX_ORACLES} public keys)`} hint="Only these keys can report attendees. Default: OnSight and OnSight 2, both must agree." error={shown.oracles}>
                 <textarea className="os-input mono" rows={2} value={form.oracles} disabled={locked} onChange={(e) => set('oracles')(e.target.value)} />
               </Field>
             </div>
