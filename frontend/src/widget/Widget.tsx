@@ -5,9 +5,9 @@
 //
 // Multi-oracle: the event's oracles come from the chain (oracles.ts). The join is signed ONCE and the same body goes
 // to every oracle; it counts once `threshold` of them accepted. With a single oracle the UI is the same as before.
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
-import type { EventDetails, SubmitRequest } from './api'
+import { nowIso, signedMessage, type EventDetails, type SubmitRequest } from './api'
 import { ButtonCheck, Check, Chevron } from './icons'
 import { WALLET_LOGOS } from './assets'
 import Selfie from './Selfie'
@@ -21,7 +21,6 @@ import {
   METAMASK_DOWNLOAD_URL,
   metaMaskConnectWallet,
   PHANTOM_DOWNLOAD_URL,
-  phantomBrowseUrl,
   prefersPhantom,
   WALLET_NAMES,
   type WalletId,
@@ -41,6 +40,21 @@ import {
   type Oracle,
   type OracleSet,
 } from './oracles'
+import {
+  connectPhantom,
+  forgetPhantom,
+  signWithPhantom,
+  storedPhantomLink,
+  takePhantomReturn,
+  type PhantomLink,
+  type PhantomReturn,
+} from './phantomLink'
+
+/** A wallet in the page (extension or in-app browser), or Phantom reached from a phone browser through deep links. */
+type Conn = Connection | PhantomLink
+
+const addressOf = (c: Conn) => ('link' in c ? c.address : c.account.address)
+const nameOf = (c: Conn) => ('link' in c ? 'Phantom' : c.wallet.name)
 
 type Stage =
   | { name: 'signup' }
@@ -92,7 +106,9 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   const metamask = wallets.find(isMetaMask)
   const phantom = wallets.find(isPhantom)
   /** The wallet the sign-up button uses; the picker changes it. */
-  const [choice, setChoice] = useState<WalletId>(() => (prefersPhantom() ? 'phantom' : 'metamask'))
+  const [choice, setChoice] = useState<WalletId>(() =>
+    prefersPhantom() || takePhantomReturn() ? 'phantom' : 'metamask',
+  )
   const walletName = WALLET_NAMES[choice]
 
   const [oracleSet, setOracleSet] = useState<OracleSet | null>(null)
@@ -102,11 +118,12 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [stage, setStage] = useState<Stage>({ name: 'signup' })
-  const [conn, setConn] = useState<Connection | null>(null)
+  const [conn, setConn] = useState<Conn | null>(null)
   const [status, setStatus] = useState<Attendance | null>(null)
   const [progress, setProgress] = useState<Progress[]>([])
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const resumed = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -127,7 +144,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   // Once on the list, keep the status fresh so a payout shows up without a reload.
   useEffect(() => {
     if (stage.name !== 'done' || !conn || !oracleSet) return
-    const id = setInterval(() => attendance(oracleSet, conn.account.address).then(setStatus, () => {}), STATUS_POLL_MS)
+    const id = setInterval(() => attendance(oracleSet, addressOf(conn)).then(setStatus, () => {}), STATUS_POLL_MS)
     return () => clearInterval(id)
   }, [oracleSet, stage.name, conn])
 
@@ -135,14 +152,6 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     setProgress([])
     setStage({ name: 'consent', image })
   }, [])
-
-  if (!event || !oracleSet || !primary) {
-    return (
-      <Card stepper={null}>
-        {loadError ? <p className="an-error">{loadError}</p> : <p className="an-note">Loading event…</p>}
-      </Card>
-    )
-  }
 
   async function signUp(id: WalletId) {
     setError(null)
@@ -152,8 +161,11 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     if (id === 'phantom') {
       wallet = phantom
       if (!wallet && isMobile()) {
-        // Phone browsers have no Phantom in the page: continue in the Phantom app's browser instead.
-        window.location.assign(phantomBrowseUrl())
+        // Phone browsers have no Phantom in the page: ask the Phantom app, which sends the user back here.
+        const link = storedPhantomLink()
+        if (link) return afterConnect(link)
+        setStage({ name: 'connecting' })
+        connectPhantom()
         return
       }
     } else {
@@ -167,13 +179,53 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     setStage({ name: 'connecting' })
     try {
       // The wallet asks only the first time; after that it reuses this site's stored connection silently.
-      const c = await connect(wallet)
-      setConn(c)
-      const s = await attendance(oracleSet!, c.account.address)
+      await afterConnect(await connect(wallet))
+    } catch (err) {
+      setError(isUserRejection(err) ? `Connection cancelled in ${WALLET_NAMES[id]}.` : (err as Error).message)
+      setStage({ name: 'signup' })
+    }
+  }
+
+  async function afterConnect(c: Conn) {
+    setConn(c)
+    setStage({ name: 'connecting' })
+    try {
+      const s = await attendance(oracleSet!, addressOf(c))
       setStatus(s)
       setStage(s.status === 'not_joined' ? { name: 'connected' } : { name: 'done' })
     } catch (err) {
-      setError(isUserRejection(err) ? `Connection cancelled in ${WALLET_NAMES[id]}.` : (err as Error).message)
+      setError((err as Error).message)
+      setStage({ name: 'signup' })
+    }
+  }
+
+  async function resumeFromPhantom(back: PhantomReturn) {
+    const set = oracleSet!
+    if (back.kind === 'connect') return afterConnect(back.link)
+    if (back.kind === 'sign') {
+      const { pending } = back
+      if (pending.eventId !== eventId) return
+      setConn(back.link)
+      const body: SubmitRequest = {
+        wallet: back.link.address,
+        signed_at: pending.signedAt,
+        signature: back.signature,
+        consent: { version: pending.consentVersion, accepted: true },
+        image: pending.image,
+      }
+      const before: Progress[] = set.oracles.map((_, i) => (pending.accepted?.includes(i) ? { state: 'ok' } : null))
+      const targets = pending.targets?.map((i) => set.oracles[i]).filter(Boolean)
+      setStage({ name: 'signing', image: pending.image })
+      return send(body, pending.image, targets, before)
+    }
+    // A refused or broken request. Anything but "the user said no" may mean the session is gone: connect again.
+    if (!back.rejected) forgetPhantom()
+    const link = back.rejected ? storedPhantomLink() : null
+    setError(back.rejected ? `${back.step === 'sign' ? 'Signature' : 'Connection'} cancelled in Phantom.` : back.message)
+    if (back.step === 'sign' && back.pending && link) {
+      setConn(link)
+      setStage({ name: 'consent', image: back.pending.image })
+    } else {
       setStage({ name: 'signup' })
     }
   }
@@ -184,19 +236,43 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     const set = oracleSet
     setError(null)
     setStage({ name: 'signing', image })
+    if ('link' in conn) {
+      // Phantom signs in its app; the page leaves now and resumeFromPhantom sends the join when the user is back.
+      const signedAt = nowIso()
+      const message = signedMessage('join', eventId, conn.address, signedAt, event.consent.version)
+      const sent = signWithPhantom(message, {
+        eventId,
+        signedAt,
+        consentVersion: event.consent.version,
+        image,
+        targets: targets?.map((o) => set.oracles.indexOf(o)),
+        accepted: targets ? set.oracles.flatMap((_, i) => (progress[i]?.state === 'ok' ? [i] : [])) : undefined,
+      })
+      if (!sent) {
+        forgetPhantom()
+        setError('Connect Phantom again to sign.')
+        setStage({ name: 'signup' })
+      }
+      return
+    }
     let body: SubmitRequest
     try {
       const signed = await signAction(conn, 'join', eventId, event.consent.version) // the embedded id, never the oracle's
       body = { ...signed, consent: { version: event.consent.version, accepted: true }, image }
     } catch (err) {
-      setError(isUserRejection(err) ? `Signature cancelled in ${conn.wallet.name}.` : walletErrorMessage(err))
+      setError(isUserRejection(err) ? `Signature cancelled in ${nameOf(conn)}.` : walletErrorMessage(err))
       setStage({ name: 'consent', image })
       return
     }
+    await send(body, image, targets, progress)
+  }
 
+  /** Sends a signed join to `targets` (default: every oracle) and moves on by how many accepted. */
+  async function send(body: SubmitRequest, image: string, targets: Oracle[] | undefined, before: Progress[]) {
+    const set = oracleSet!
     const sendTo = targets ?? set.oracles
     // A retry keeps the oracles that already accepted; a full send starts over.
-    const next: Progress[] = targets ? [...progress] : set.oracles.map(() => null)
+    const next: Progress[] = targets ? [...before] : set.oracles.map(() => null)
     for (const o of sendTo) next[set.oracles.indexOf(o)] = { state: 'sending' }
     setProgress([...next])
     const results = await toAll(sendTo, (api) => api.submit(body))
@@ -209,7 +285,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     if (accepted >= set.need) {
       setStatus({ status: 'on_list', tx: null, onList: accepted })
       setStage({ name: 'done' })
-      primary.api.event().then((e) => setEvent(withChainTerms(e, set.meta)), () => {})
+      primary!.api.event().then((e) => setEvent(withChainTerms(e, set.meta)), () => {})
       return
     }
     const failed = results.filter((r) => !r.ok)
@@ -224,6 +300,23 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
       setError(`${accepted} of ${set.need} needed oracles accepted. ${failureText(failed)}`)
       setStage({ name: 'consent', image })
     }
+  }
+
+  // Coming back from the Phantom app: carry on from where the user left once the event has loaded.
+  const loaded = !!(event && oracleSet && primary)
+  useEffect(() => {
+    const back = takePhantomReturn()
+    if (!loaded || !back || resumed.current) return
+    resumed.current = true
+    void resumeFromPhantom(back)
+  })
+
+  if (!event || !oracleSet || !primary) {
+    return (
+      <Card stepper={null}>
+        {loadError ? <p className="an-error">{loadError}</p> : <p className="an-note">Loading event…</p>}
+      </Card>
+    )
   }
 
   const multi = oracleSet.oracles.length > 1
@@ -334,7 +427,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
                 sending ? (
                   'Sending to oracles…'
                 ) : (
-                  `Confirm in ${conn?.wallet.name ?? walletName}…`
+                  `Confirm in ${conn ? nameOf(conn) : walletName}…`
                 )
               ) : canRetry ? (
                 `Retry ${failedOracles.map((o) => o.name).join(', ')}`
