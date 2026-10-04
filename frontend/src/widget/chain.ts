@@ -47,6 +47,8 @@ export interface EventMeta {
   start: number
   end: number
   rewardLamports: number
+  /** Oracle fee per paid attendee, frozen into the event at creation. */
+  feeLamports: number
   maxPaid: number
   paidCount: number
   minSeenSecs: number
@@ -214,6 +216,7 @@ export function decodeEventMeta(data: Uint8Array): EventMeta | null {
     start: Number(view.getBigInt64(at, true)),
     end: Number(view.getBigInt64(at + 8, true)),
     rewardLamports: Number(view.getBigUint64(at + 16, true)),
+    feeLamports: Number(view.getBigUint64(at + 24, true)),
     maxPaid: view.getUint32(at + 32, true),
     paidCount: view.getUint32(at + 36, true),
     minSeenSecs: view.getUint32(at + 40, true),
