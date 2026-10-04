@@ -165,6 +165,9 @@ export function liveBackend(): Backend {
 
 // ---------- Demo ----------
 
+/** What a 327-byte Event account deposits on devnet, as eventRent() reads it live. */
+const DEMO_RENT = 3_166_800n
+
 const SOL = 1_000_000_000n
 const sol = (n: number) => (BigInt(Math.round(n * 1000)) * SOL) / 1000n
 /** The demo opens at 4 Oct 2026, 20:17:50 local time, so the ongoing meetup "Ends in 01:42:10". */
@@ -193,7 +196,7 @@ function demoRow(
     start,
     end,
     rewardLamports: sol(reward),
-    feeLamports: sol(0.005),
+    feeLamports: FEE_LAMPORTS,
     maxPaid,
     paidCount,
     oracles: DEMO_ORACLES,
@@ -249,14 +252,14 @@ export function demoBackend(): Backend {
     rpcUrl: '',
     programId: '',
     now,
-    feePerAttendee: sol(0.005),
-    rent: async () => sol(0.002),
+    feePerAttendee: FEE_LAMPORTS,
+    rent: async () => DEMO_RENT,
     balance: async () => balance,
     listEvents: async () => (await wait(250), events.map((e) => ({ ...e }))),
     getEvent: async (id) => (await wait(150), find(id) && { ...find(id)! }),
     async checkTerms(_organizer, p) {
       await wait(700)
-      const cost = (p.rewardLamports + sol(0.005)) * BigInt(p.maxPaid) + sol(0.002)
+      const cost = (p.rewardLamports + FEE_LAMPORTS) * BigInt(p.maxPaid) + DEMO_RENT
       if (cost > balance) throw new Error('Not enough SOL in this wallet for the deposit.')
     },
     async launch(_conn, organizer, p, onStep) {
@@ -265,7 +268,7 @@ export function demoBackend(): Backend {
       onStep('Waiting for the network to confirm…')
       await wait(1100)
       const id = randomKey()
-      balance -= (p.rewardLamports + sol(0.005)) * BigInt(p.maxPaid) + sol(0.002)
+      balance -= (p.rewardLamports + FEE_LAMPORTS) * BigInt(p.maxPaid) + DEMO_RENT
       events.unshift({ ...demoRow(id, p.name, p.venue, p.start, p.end, 0, p.maxPaid, 0), rewardLamports: p.rewardLamports, organizer })
       return { event: id, signature: randomKey() + randomKey() }
     },
@@ -275,7 +278,7 @@ export function demoBackend(): Backend {
       const row = find(event.id)
       if (row) {
         row.returnedLamports = remaining(row)
-        balance += remaining(row) + sol(0.002)
+        balance += remaining(row) + DEMO_RENT
         row.withdrawn = true
       }
       return randomKey() + randomKey()
