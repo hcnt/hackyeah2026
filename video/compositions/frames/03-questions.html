@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Satoshi", sans-serif; overflow: hidden; }
+  .disp { font-family: "Satoshi"; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }
+  .acc { color: #2775CA; }
+
+  #s03-line { position: absolute; left: 160px; top: 0; bottom: 0; display: flex; align-items: center; font-size: 90px; }
+  #s03-line > span { margin-right: 0.24em; display: inline-block; }
+  #s03-first { transform-origin: 0% 50%; }
+  #s03-div { position: absolute; left: 960px; top: 160px; width: 4px; height: 760px; background: #D9D7D0; transform-origin: 50% 0%; }
+  #s03-qs { position: absolute; left: 1040px; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; font-size: 96px; line-height: 1.2; }
+  #s03-how { display: block; }
+  #s03-tail { position: relative; display: block; width: 820px; height: 1.25em; overflow: hidden; }
+  #s03-tail .q { position: absolute; left: 0; top: 0; opacity: 0; }
+  #s03-how { opacity: 0; }
+
+</style>
+<div id="root" data-composition-id="s03-questions" data-width="1920" data-height="1080">
+
+  <div id="s03-line" class="disp"><span id="s03-first">First <span class="acc">1000</span></span><span class="t">attendees get</span><span class="t">a prize.</span></div>
+  <div id="s03-div"></div>
+  <div id="s03-qs" class="disp"><span id="s03-how">How do we</span><span id="s03-tail"><span class="q" id="s03-q0">distribute it?</span><span class="q" id="s03-q1">organize it?</span><span class="q" id="s03-q2">set this up?</span><span class="q" id="s03-q3">make it fair?</span></span></div>
+
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+
+  tl.to("#s03-line .t", { opacity: 0, y: 40, duration: 0.35, ease: "power2.in", stagger: 0.05 }, 0.15);
+  tl.fromTo("#s03-first", { scale: 1 }, { scale: 1.6667, duration: 0.7, ease: "power3.inOut" }, 0.35);
+  tl.fromTo("#s03-div", { scaleY: 0 }, { scaleY: 1, duration: 0.6, ease: "power3.out" }, 0.7);
+  // "How do we" stays; the end of the question rotates
+  tl.fromTo("#s03-how", { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 1.0);
+  tl.set(["#s03-q1", "#s03-q2", "#s03-q3"], { yPercent: 110 }, 0);
+  tl.fromTo("#s03-q0", { yPercent: 110, opacity: 1 }, { yPercent: 0, opacity: 1, duration: 0.45, ease: "power3.out" }, 1.0);
+  [1, 2, 3].forEach((i) => {
+    const t = 1.0 + i * 1.0;
+    tl.to(`#s03-q${i - 1}`, { yPercent: -110, duration: 0.4375, ease: "power3.in" }, t - 0.125);
+    tl.set(`#s03-q${i}`, { opacity: 1 }, t + 0.125);
+    tl.to(`#s03-q${i}`, { yPercent: 0, duration: 0.5625, ease: "power3.out" }, t + 0.125);
+  });
+  tl.to(["#s03-how", "#s03-q3"], { opacity: 0, y: -24, duration: 0.3, ease: "power2.in", stagger: 0.06 }, 5.45);
+  tl.to("#s03-div", { scaleY: 0, transformOrigin: "50% 100%", duration: 0.35, ease: "power2.in" }, 5.55);
+
+  window.__timelines["s03-questions"] = tl;
+</script>
+</template>
+</body>
+</html>

@@ -41,5 +41,5 @@ User's frame outline (v1, verbatim intent):
 
 - No product site exists yet: every UI frame is a designed mock of our own product, not a capture.
 - Fonts available locally in assets/fonts/: Satoshi, Geist, Geist Mono (also in Penpot, team "hackyeah").
-- Product name placeholder: Attend Now.
+- Product name: OnSight (was the placeholder Attend Now).
 - Tone (user, v3): the payout is a nice bonus for showing up, never the reason people look for an event.

@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Satoshi", sans-serif; overflow: hidden; }
+  .disp { font-family: "Satoshi"; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }
+  .acc { color: #2775CA; }
+
+  .wgw { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; }
+  .wg { box-sizing: border-box; width: 400px; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px 16px; background: #fff; border-radius: 20px;
+        box-shadow: inset 0 0 0 1px #e5e5e5, 0 12px 32px -8px rgba(10,10,10,.24); font-family: "Satoshi"; color: #0a0a0a; font-size: 14px; line-height: 1.4; overflow: hidden; }
+  .wg * { box-sizing: border-box; }
+  .wg .body { display: flex; flex-direction: column; gap: 16px; }
+  .wg .center { align-items: center; text-align: center; }
+  .wg .reward { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  .wg .rlabel { font-size: 18px; font-weight: 500; color: #171717; }
+  .wg .rlabel b { font-weight: 700; color: #2775CA; }
+  .wg .amt { font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.9px; color: #2775CA; }
+  .wg .split { display: flex; align-items: center; height: 44px; padding: 0 8px 0 20px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; }
+  .wg .split .main { flex: 1; text-align: center; }
+  .wg .split .div { width: 1px; height: 20px; background: rgba(255,255,255,.16); }
+  .wg .split .trig { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 12px; }
+  .wg .tile { position: relative; width: 26px; height: 26px; border-radius: 7px; background: #fff; }
+  .wg .tile img { position: absolute; left: 4px; top: 4px; width: 18px; height: 18px; }
+  .wg .chev { width: 14px; height: 14px; }
+  .wg .foot { display: flex; justify-content: center; font-size: 11px; color: #737373; }
+  .wg .foot.brand { margin-top: 14px; }
+  .wg .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: linear-gradient(rgba(0,0,0,.015), rgba(0,0,0,.045));
+              box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); font-size: 12px; font-weight: 500; line-height: 1.2; color: #8a8a8a; }
+  .wg .pill b { font-weight: 700; color: #404040; }
+  .wg .mark { width: 16px; height: 16px; border-radius: 5px; background: #404040; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .wg .stepper { display: flex; gap: 6px; height: 3px; }
+  .wg .seg { position: relative; flex: 1; border-radius: 3px; background: #e5e5e5; overflow: hidden; }
+  .wg .seg i { position: absolute; inset: 0; background: #171717; transform-origin: 0 50%; }
+  .wg .btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; width: 100%; flex: none; }
+  .wg .btn.outline { background: #fff; color: #171717; box-shadow: inset 0 0 0 1px #e5e5e5; }
+  .wg .heading { font-size: 20px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.4; }
+  .wg .question { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; }
+  .wg .display { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; }
+  .wg .badge { width: 64px; height: 64px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .vf { position: relative; height: 300px; border-radius: 16px; background: #1a1b1f; overflow: hidden; width: 100%; flex: none; }
+  .wg .vf .sil { position: absolute; left: 100px; bottom: 0; width: 152px; }
+  .wg .vf .cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .wg .vf .guide { position: absolute; left: 88px; top: 33px; width: 176px; height: 216px; }
+  .wg .vf .cap { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; background: rgba(10,10,10,.6); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .wg .vf .flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+  .wg .shutter { width: 64px; height: 64px; border-radius: 999px; border: 4px solid #171717; background: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .shutter span { width: 46px; height: 46px; border-radius: 999px; background: #171717; }
+  .wg .phone { position: relative; width: 96px; height: 180px; border: 3px solid #171717; border-radius: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .phone::before { content: ""; position: absolute; top: 8px; left: 35px; width: 20px; height: 6px; border-radius: 99px; background: #171717; }
+  .wg .phone .ok { width: 40px; height: 40px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; }
+  .wg .status { display: flex; align-items: center; gap: 6px; color: #1F8A5B; font-size: 13px; font-weight: 500; }
+  .wg .status::before { content: ""; width: 7px; height: 7px; border-radius: 99px; background: #1F8A5B; }
+  .wg .qr { width: 188px; height: 188px; padding: 12px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px #e5e5e5; flex: none; }
+  .wg .qr svg { width: 100%; height: 100%; display: block; }
+  .wg .stage { position: relative; height: 380px; }
+  .wg .pane { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+
+  #s06-ww { left: 0; top: 0; }
+  #s06-card { position: relative; padding: 0; display: block; height: 225px; }
+  .lay { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px 16px; }
+  #s06-cur { position: absolute; left: 0; top: 0; }
+  #s06-sbtn { transform-origin: 50% 50%; }
+  #s06-b { opacity: 0; }
+
+</style>
+<div id="root" data-composition-id="s06-verify" data-width="1920" data-height="1080">
+
+  <div class="wgw" id="s06-ww">
+    <div class="wg" id="s06-card">
+      <div class="lay" id="s06-a">
+        <div class="body"><div class="reward"><div class="rlabel">First <b>1000</b> attendees earn</div><div class="amt">10 USDC</div></div><div id="s06-sbtn"><div class="split"><span class="main">Sign up with MetaMask</span><span class="div"></span><span class="trig"><span class="tile" id="s06-tile"><img src="assets/widget/metamask.svg" alt=""></span><svg class="chev" viewBox="0 0 14 14"><path d="M3.5 5.25l3.5 3.5 3.5-3.5" stroke="#fafafa" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div>
+        <div class="foot brand"><span class="pill"><span class="mark">O</span><span>Powered by <b>OnSight</b></span></span></div>
+      </div>
+      <div class="lay" id="s06-b">
+        <div class="stepper"><span class="seg"><i id="s06-seg0"></i></span><span class="seg"><i id="s06-seg1"></i></span><span class="seg"><i id="s06-seg2"></i></span></div>
+        <div class="stage"><div class="pane"><div class="vf"><img class="cam" src="assets/faces/szymon-cam.jpg" alt=""><svg class="guide" viewBox="0 0 176 216"><ellipse id="s06-ell" cx="88" cy="108" rx="85" ry="105" fill="none" stroke="#15161A" stroke-opacity=".75" stroke-width="3" stroke-dasharray="13 13"/></svg><span class="cap" id="s06-cap">Look straight at the camera</span><span class="flash" id="s06-flash"></span></div><div class="shutter"><span></span></div></div></div>
+        <div class="foot">Powered by OnSight</div>
+      </div>
+    </div>
+  </div>
+  <div id="s06-cur"><svg viewBox="0 0 24 24" width="44" height="44"><path d="M4 2l16 9.5-7 1.5-3.5 7z" fill="#15161A" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+
+  // the zoom at the end of 05 lands the widget already centred (960,540, 2.1x)
+  tl.set("#s06-ww", { xPercent: -50, yPercent: -50, x: 960, y: 540, scale: 2.1 }, 0);
+  tl.set(["#s06-seg0", "#s06-seg1", "#s06-seg2"], { scaleX: 0 }, 0);
+  // the cursor clicks "Sign up with MetaMask"
+  tl.fromTo("#s06-cur", { x: 1300, y: 1000, opacity: 0 }, { x: 905, y: 570, opacity: 1, duration: 0.7, ease: "power3.out" }, 0.5);
+  tl.to("#s06-sbtn", { scale: 0.96, duration: 0.08 }, 1.3);
+  tl.to("#s06-sbtn", { scale: 1, duration: 0.2 }, 1.39);
+  // the same card grows into the photo step
+  tl.to("#s06-a", { opacity: 0, x: -60, duration: 0.3, ease: "power2.in" }, 1.55);
+  tl.to("#s06-card", { height: 474, duration: 0.6, ease: "power3.inOut" }, 1.6);
+  tl.to("#s06-ww", { scale: 1.9, duration: 0.6, ease: "power3.inOut" }, 1.6);
+  tl.to("#s06-cur", { x: 1300, y: 960, duration: 0.6, ease: "power3.inOut" }, 1.6);
+  tl.fromTo("#s06-b", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.4, ease: "power3.out", immediateRender: false }, 1.9);
+  tl.to("#s06-seg0", { scaleX: 1, duration: 0.35, ease: "power2.out" }, 2.0);
+  tl.to("#s06-seg1", { scaleX: 0.5, duration: 0.35, ease: "power2.out" }, 2.1);
+
+  window.__timelines["s06-verify"] = tl;
+</script>
+</template>
+</body>
+</html>
