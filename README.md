@@ -169,6 +169,11 @@ oracles stop, nobody is paid and the organizer withdraws everything after the en
   attendees can see who they're trusting. Next step: oracles assigned at random from an open pool, each with a
   deposit (stake) locked in the program; after the event, an oracle that consistently disagrees with the others
   on who was there loses part of it.
+- **The oracle fee is a fixed constant**: 0.002 SOL per paid attendee (`FEE_LAMPORTS` in the program), copied into
+  each event at creation. On chain, a payout costs the oracle about 0.00001 to 0.00004 SOL in transaction fees,
+  so the fee is far above that, but it ignores the oracle's real costs (GPU, bandwidth) and can only change with a
+  program upgrade. Next step: oracles set their own price in the registry and the organizer accepts it when
+  choosing them.
 - **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
   didn't come. Production needs liveness detection.
 - **Biometrics and GDPR.** The lawful setting is a check-in point people step up to after explicit, separate
