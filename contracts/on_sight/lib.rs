@@ -2,11 +2,10 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::ed25519_program;
 use anchor_lang::solana_program::sysvar::instructions::{load_current_index_checked, load_instruction_at_checked};
 
-// Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy).
-// UWAGA: ta wersja zmienia układ kont Event (lista oracli + próg) i zastępuje Receipt kontem Sighting,
-// więc wymaga ŚWIEŻEGO deployu pod NOWYM program id.
-// Poniższy id to STARY program (4Yhph…), który zostaje na devnecie, ale jest zastąpiony.
-// TODO po deployu: wpisać tu nowy program id (oraz w idl.json, README.md i PRESENCE_PROGRAM_ID backendu).
+// Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy). Program jest aktualizowany (upgrade)
+// pod tym samym id. UWAGA: zmiana nazwy lub ziarna konta (np. Sighting -> Attendance) zmienia adresy i
+// dyskryminatory kont, więc upgrade wolno zrobić tylko wtedy, gdy żaden event nie trwa (inaczej możliwa
+// podwójna wypłata dla portfeli wypłaconych przed upgrade'em).
 declare_id!("4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf");
 
 /// Maksymalna liczba oracli w evencie (M-of-N, N ≤ 3).
@@ -21,7 +20,7 @@ pub const MAX_ORACLE_URL: usize = 128;
 pub const MAX_EVENT_NAME: usize = 64;
 pub const MAX_EVENT_VENUE: usize = 64;
 /// Opłata za każdego wypłaconego uczestnika (0.002 SOL). Dostaje ją oracle, którego zgłoszenie wywołało wypłatę:
-/// to on płaci za transakcje i depozyt konta Sighting. Nie ma osobnego treasury ani konta Config.
+/// to on płaci za transakcje i depozyt konta Attendance. Nie ma osobnego treasury ani konta Config.
 pub const FEE_LAMPORTS: u64 = 2_000_000;
 /// Ed25519SigVerify: nagłówek (liczba podpisów + wypełnienie) i 7 offsetów u16 na każdy podpis.
 const ED25519_HEADER: usize = 2;
@@ -131,7 +130,7 @@ pub mod on_sight {
         let min_seen = ev.min_seen_secs as i64;
         let event_end = ev.end;
 
-        let s = &mut ctx.accounts.sighting;
+        let s = &mut ctx.accounts.attendance;
         if s.paid {
             return Ok(());
         }
@@ -140,7 +139,7 @@ pub mod on_sight {
         if is_new {
             s.payer = oracle;
             s.event_end = event_end; // czasy eventu są niezmienne
-            s.bump = ctx.bumps.sighting;
+            s.bump = ctx.bumps.attendance;
         }
         if is_new || now - s.last_seen > SIGHTING_GAP_SECS {
             s.first_seen = now;
@@ -162,7 +161,7 @@ pub mod on_sight {
         let fee = ev.fee;
         ev.paid_count += 1;
         // Flaga ustawiona PRZED przelewem i sprawdzana na początku: ochrona przed podwójną wypłatą.
-        ctx.accounts.sighting.paid = true;
+        ctx.accounts.attendance.paid = true;
 
         // Konto eventu ma dane, więc lamporty przesuwamy bezpośrednio (nie przez System Program).
         let total = reward.checked_add(fee).ok_or(PresenceError::Overflow)?;
@@ -187,11 +186,11 @@ pub mod on_sight {
         Ok(())
     }
 
-    /// Po końcu eventu oracle, który zapłacił rent konta Sighting, zamyka je i odzyskuje rent.
-    /// Koniec eventu jest zapisany w Sighting, więc działa też po withdraw_remaining (konto Event już nie istnieje).
-    pub fn close_sighting(ctx: Context<CloseSighting>) -> Result<()> {
+    /// Po końcu eventu oracle, który zapłacił rent konta Attendance, zamyka je i odzyskuje rent.
+    /// Koniec eventu jest zapisany w Attendance, więc działa też po withdraw_remaining (konto Event już nie istnieje).
+    pub fn close_attendance(ctx: Context<CloseAttendance>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(now > ctx.accounts.sighting.event_end, PresenceError::EventRunning);
+        require!(now > ctx.accounts.attendance.event_end, PresenceError::EventRunning);
         Ok(())
     }
 
@@ -293,13 +292,13 @@ pub struct Event {
 /// Obecność jednego portfela na jednym evencie. `paid` = ochrona przed podwójną wypłatą.
 #[account]
 #[derive(InitSpace)]
-pub struct Sighting {
+pub struct Attendance {
     pub first_seen: i64, // początek bieżącego ciągu zgłoszeń (zegar łańcucha)
     pub last_seen: i64,
     pub reporters: u8, // maska bitowa po indeksie oracla w event.oracles
     pub paid: bool,
     pub payer: Pubkey, // oracle, który zapłacił rent; tylko on może zamknąć konto
-    pub event_end: i64, // kopia event.end, żeby close_sighting działał po zamknięciu eventu
+    pub event_end: i64, // kopia event.end, żeby close_attendance działał po zamknięciu eventu
     pub bump: u8,
 }
 
@@ -335,22 +334,22 @@ pub struct CreateEvent<'info> {
 
 #[derive(Accounts)]
 pub struct ReportSighting<'info> {
-    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci depozyt konta Sighting i dostaje
+    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci depozyt konta Attendance i dostaje
     /// opłatę, gdy jego zgłoszenie wypłaca.
     #[account(mut)]
     pub oracle: Signer<'info>,
     #[account(mut)]
     pub event: Account<'info, Event>,
-    // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml). Ponowne utworzenie po close_sighting
+    // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml). Ponowne utworzenie po close_attendance
     // jest niemożliwe: close działa dopiero po końcu eventu, a zgłoszenia tylko do końca.
     #[account(
         init_if_needed,
         payer = oracle,
-        space = 8 + Sighting::INIT_SPACE,
-        seeds = [b"sighting", event.key().as_ref(), attendee.key().as_ref()],
+        space = 8 + Attendance::INIT_SPACE,
+        seeds = [b"attendance", event.key().as_ref(), attendee.key().as_ref()],
         bump
     )]
-    pub sighting: Account<'info, Sighting>,
+    pub attendance: Account<'info, Attendance>,
     /// CHECK: tylko odbiorca SOL, dowolny portfel
     #[account(mut)]
     pub attendee: UncheckedAccount<'info>,
@@ -369,11 +368,11 @@ pub struct WithdrawRemaining<'info> {
 }
 
 #[derive(Accounts)]
-pub struct CloseSighting<'info> {
+pub struct CloseAttendance<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(mut, close = payer, has_one = payer)]
-    pub sighting: Account<'info, Sighting>,
+    pub attendance: Account<'info, Attendance>,
 }
 
 #[derive(Accounts)]

@@ -117,7 +117,7 @@
           "isSigner": false
         },
         {
-          "name": "sighting",
+          "name": "attendance",
           "isMut": true,
           "isSigner": false
         },
@@ -156,7 +156,7 @@
       "args": []
     },
     {
-      "name": "closeSighting",
+      "name": "closeAttendance",
       "accounts": [
         {
           "name": "payer",
@@ -164,7 +164,7 @@
           "isSigner": true
         },
         {
-          "name": "sighting",
+          "name": "attendance",
           "isMut": true,
           "isSigner": false
         }
@@ -277,7 +277,7 @@
       }
     },
     {
-      "name": "Sighting",
+      "name": "Attendance",
       "type": {
         "kind": "struct",
         "fields": [
