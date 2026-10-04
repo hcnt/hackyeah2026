@@ -63,11 +63,11 @@
   <div class="side" id="create-side">
     <div class="kicker">Step 2 of 6</div>
     <h1 class="title">Create the event</h1>
-    <div class="bullets"><div class="b" id="create-b0"><i></i><span>Click <strong>Create event</strong></span></div><div class="b" id="create-b1"><i></i><span>Name it, start it <strong>now</strong>, end it in an hour</span></div><div class="b" id="create-b2"><i></i><span>Defaults: <strong>0.001 SOL</strong> for <strong>10</strong> people</span></div><div class="b" id="create-b3"><i></i><span>Payout rules: <strong>5 s</strong> on camera and the OnSight oracle</span></div><div class="b" id="create-b4"><i></i><span><strong>Save terms</strong></span></div></div>
+    <div class="bullets"><div class="b" id="create-b0"><i></i><span>Click <strong>Create event</strong></span></div><div class="b" id="create-b1"><i></i><span>Name it. It starts <strong>now</strong> and ends in <strong>15 minutes</strong></span></div><div class="b" id="create-b2"><i></i><span>Defaults: <strong>0.02 SOL</strong> for <strong>10</strong> people</span></div><div class="b" id="create-b3"><i></i><span>Payout rules: <strong>5 s</strong> on camera, and <strong>2 of 2</strong> oracles must agree</span></div><div class="b" id="create-b4"><i></i><span><strong>Save terms</strong></span></div></div>
   </div>
   <div class="win" id="create-win">
     <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">onsight.site/#/new</span></div>
-    <div class="view"><div class="cam" id="create-cam" data-layout-allow-overflow><img class="scr" id="create-i0" src="assets/screens/a2-overview.webp" alt=""><img class="scr" id="create-i1" src="assets/screens/b2-setup-details.webp" alt=""><img class="scr" id="create-i2" src="assets/screens/b3-rewards.webp" alt=""><img class="scr" id="create-i3" src="assets/screens/b4-rules.webp" alt=""><div class="hl" id="create-h0" style="left:377.6px;top:246.4px;width:524.8px;height:292.0px"></div><div class="hl" id="create-h1" style="left:378.40000000000003px;top:236.8px;width:521.6px;height:60.800000000000004px"></div><div class="hl" id="create-h2" style="left:389.6px;top:292.8px;width:253.60000000000002px;height:59.2px"></div><div class="ripple" id="create-rip"></div><div class="cursor" id="create-cur"><svg viewBox="0 0 30 36" width="30" height="36"><path d="M2 2 L2 28 L9 21.5 L14 33 L19 31 L14 19.5 L24 19.5 Z" fill="#15161A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div></div></div>
+    <div class="view"><div class="cam" id="create-cam" data-layout-allow-overflow><img class="scr" id="create-i0" src="assets/screens/a2-overview.webp" alt=""><img class="scr" id="create-i1" src="assets/screens/b2-setup-details.webp" alt=""><img class="scr" id="create-i2" src="assets/screens/b3-rewards.webp" alt=""><img class="scr" id="create-i3" src="assets/screens/b4-rules.webp" alt=""><div class="hl" id="create-h0" style="left:377.6px;top:246.4px;width:524.8px;height:292.0px"></div><div class="hl" id="create-h1" style="left:378.40000000000003px;top:236.8px;width:521.6px;height:60.800000000000004px"></div><div class="hl" id="create-h2" style="left:380.8px;top:241.60000000000002px;width:518.4000000000001px;height:198.4px"></div><div class="ripple" id="create-rip"></div><div class="cursor" id="create-cur"><svg viewBox="0 0 30 36" width="30" height="36"><path d="M2 2 L2 28 L9 21.5 L14 33 L19 31 L14 19.5 L24 19.5 Z" fill="#15161A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div></div></div>
   </div>
   
 </div>
@@ -92,13 +92,13 @@ tl.fromTo("#create-h2", {opacity: 0, scale: 1.06}, {opacity: 1, scale: 1, durati
 tl.to("#create-h2", {opacity: 0, duration: 0.25}, 11.4);
 tl.to("#create-cam", {scale: 1.45, transformOrigin: "640.0px 312.0px", duration: 0.7, ease: "power2.inOut"}, 5.5);
 tl.to("#create-cam", {scale: 1, duration: 0.6, ease: "power2.inOut"}, 8.2);
-tl.to("#create-cam", {scale: 1.5, transformOrigin: "512.0px 336.0px", duration: 0.7, ease: "power2.inOut"}, 9.2);
+tl.to("#create-cam", {scale: 1.4, transformOrigin: "640.0px 342.40000000000003px", duration: 0.7, ease: "power2.inOut"}, 9.2);
 tl.to("#create-cam", {scale: 1, duration: 0.6, ease: "power2.inOut"}, 11.3);
 tl.fromTo("#create-cur", {x: 880.0, y: 320.0, opacity: 0}, {x: 880.0, y: 320.0, opacity: 1, duration: 0.15}, 0.2);
 tl.to("#create-cur", {x: 1145.6000000000001, y: 125.60000000000001, duration: 0.7, ease: "power2.inOut"}, 0.4);
 tl.to("#create-cur", {x: 560.0, y: 224.0, duration: 0.6, ease: "power2.inOut"}, 2.2);
 tl.to("#create-cur", {x: 736.0, y: 264.0, duration: 0.6, ease: "power2.inOut"}, 5.3);
-tl.to("#create-cur", {x: 512.0, y: 323.20000000000005, duration: 0.6, ease: "power2.inOut"}, 9.0);
+tl.to("#create-cur", {x: 760.0, y: 292.0, duration: 0.6, ease: "power2.inOut"}, 9.0);
 tl.to("#create-cur", {x: 640.0, y: 497.6, duration: 0.6, ease: "power2.inOut"}, 11.6);
 tl.to("#create-cur", {scale: 0.82, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "2px 2px"}, 1.25);
 tl.fromTo("#create-rip", {opacity: 0.7, scale: 0.3, x: 1145.6000000000001, y: 125.60000000000001}, {opacity: 0, scale: 1.6, duration: 0.5, ease: "power2.out", immediateRender: false}, 1.25);

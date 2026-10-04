@@ -1,7 +1,9 @@
 """Generates the judge walkthrough: index.html plus one sub-composition per scene in compositions/.
 
-The screens in assets/screens are real captures of the app at 1600x900 (2x). Cursor targets, highlights and zooms
-are in those 1600x900 page coordinates; the browser window shows the page at 0.8 scale (1280x720).
+The screens in assets/screens are captures of onsight.site at 1600x900 (2x): the create flow from its demo mode; the
+dashboard, widget and phone from a real 2-of-2 devnet event (EVENT below) with a real join and payout. Only the
+player's orange-to-green frames (m1-m4) are staged, from a mocked camera stream on that event. Cursor targets,
+highlights and zooms are in those 1600x900 page coordinates; the browser window shows the page at 0.8 scale.
 Run: python3 build.py, then npx hyperframes check / preview / render.
 """
 import html
@@ -11,9 +13,9 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 W, H = 1920, 1080
 S = 0.8  # page px -> window px
-EVENT = "2jQMau7m7H1cMMHYPv6XKH1k7xqhWhCsfUixktTtMrXz"
-ORGANIZER = "WiKXqZBj3kPCKe3N5QU3gKGnkFjgaZQaTYSvaZzE5bj"
-ATTENDEE = "A9APM9cNTY1Xa6eT3HQ8yEsrGdQdQGZJ8cditY9CtG9B"
+EVENT = "FFXJQwFPcZZqMR6wbHuFGLzZVVP2LotneUAeRjzXfiKr"
+ORGANIZER = "4yrJ5j7TuLjRQtXCSzJedkZPzB8X4NTbur8VBUojmg15"
+ATTENDEE = "2AyXNVWf63XupvZVMYty8ifZ5v1SCaQ9yd82ngAfJ2ba"
 
 
 def short(a):
@@ -91,7 +93,7 @@ def popup(sid, k, kind):
                '<div class="mm-site">It can see your address and ask you to sign. It can\'t move funds.</div>'
         ok = "Connect"
     elif kind == "signin":
-        msg = f"Sign in to OnSight as an event organiser.\n\nWallet: {short(ORGANIZER)}\n\nThis costs nothing and sends no transaction."
+        msg = f"Sign in to OnSight as an event organiser.\n\nWallet: {short(ORGANIZER)}\nTime: 2026-10-04T07:42:51Z\n\nThis costs nothing and sends no transaction."
         body = f'<div class="mm-h">Signature request</div>{site}<div class="mm-msg">{html.escape(msg)}</div>'
         ok = "Confirm"
     elif kind == "pair":
@@ -105,7 +107,7 @@ def popup(sid, k, kind):
                '<div class="mm-site">Free: no transaction.</div>'
         ok = "Confirm"
     else:  # tx
-        body = f'<div class="mm-h">Transaction request</div>{site}<div class="mm-amt">−0.0323114 SOL</div>' \
+        body = f'<div class="mm-h">Transaction request</div>{site}<div class="mm-amt">−0.222311 SOL</div>' \
                '<div class="mm-row"><span>Program</span><span>on_sight</span></div>' \
                '<div class="mm-row"><span>Instruction</span><span>create_event</span></div>' \
                '<div class="mm-row"><span>Network fee</span><span>0.000005 SOL</span></div>'
@@ -245,15 +247,15 @@ scenes.append(scene(
 
 scenes.append(scene(
     "create", "Step 2 of 6", "Create the event",
-    [(0.4, "Click <strong>Create event</strong>"), (1.9, "Name it, start it <strong>now</strong>, end it in an hour"),
-     (5.2, "Defaults: <strong>0.001 SOL</strong> for <strong>10</strong> people"),
-     (8.8, "Payout rules: <strong>5 s</strong> on camera and the OnSight oracle"), (11.8, "<strong>Save terms</strong>")],
+    [(0.4, "Click <strong>Create event</strong>"), (1.9, "Name it. It starts <strong>now</strong> and ends in <strong>15 minutes</strong>"),
+     (5.2, "Defaults: <strong>0.02 SOL</strong> for <strong>10</strong> people"),
+     (8.8, "Payout rules: <strong>5 s</strong> on camera, and <strong>2 of 2</strong> oracles must agree"), (11.8, "<strong>Save terms</strong>")],
     "onsight.site/#/new",
     [(0, "a2-overview"), (1.6, "b2-setup-details"), (5.0, "b3-rewards"), (8.6, "b4-rules")],
-    cursor=[(0.2, 1100, 400, 0), (0.4, 1432, 157, 0.7), (2.2, 700, 280, 0.6), (5.3, 920, 330, 0.6), (9.0, 640, 404, 0.6), (11.6, 800, 622, 0.6)],
+    cursor=[(0.2, 1100, 400, 0), (0.4, 1432, 157, 0.7), (2.2, 700, 280, 0.6), (5.3, 920, 330, 0.6), (9.0, 950, 365, 0.6), (11.6, 800, 622, 0.6)],
     clicks=[1.25, 12.35],
-    hls=[(2.4, 4.8, 482, 318, 636, 345), (5.6, 8.4, 483, 306, 632, 56), (9.3, 11.4, 497, 376, 297, 54)],
-    zooms=[(5.5, 8.2, 800, 390, 1.45), (9.2, 11.3, 640, 420, 1.5)],
+    hls=[(2.4, 4.8, 482, 318, 636, 345), (5.6, 8.4, 483, 306, 632, 56), (9.3, 11.4, 486, 312, 628, 228)],
+    zooms=[(5.5, 8.2, 800, 390, 1.45), (9.2, 11.3, 800, 428, 1.4)],
     dur=13,
 ))
 
@@ -273,7 +275,7 @@ scenes.append(scene(
 scenes.append(scene(
     "camera", "Step 4 of 6", "Add the camera",
     [(0.4, "<strong>Open dashboard</strong>, then <strong>Pair cameras</strong>: one free signature"),
-     (4.4, "Click the <strong>QR icon</strong> next to Add a camera"), (7.8, "Scan it with your phone. The phone streams to the oracle")],
+     (4.4, "Click the <strong>QR icon</strong> next to Add a camera"), (7.8, "Scan it with your phone. It streams one feed to <strong>both oracles</strong>")],
     f"onsight.site/#/events/{EVENT[:6]}…",
     [(0, "l2-dashboard"), (3.6, "l4-paired"), (5.3, "l5-qr")],
     cursor=[(0.3, 700, 500, 0), (0.6, 1230, 676, 0.9), (2.2, MM_OK[0], MM_OK[1], 0.6), (4.2, 1348, 700, 0.7)],
@@ -297,11 +299,11 @@ scenes.append(scene(
 scenes.append(scene(
     "paid", "Step 6 of 6", "Get paid",
     [(0.4, "Face the phone for <strong>5 seconds</strong>"),
-     (1.8, "On the dashboard, the box is <strong>orange</strong> while the oracle tracks you"),
-     (7.0, "It turns <strong>green</strong> once the program has paid"),
-     (9.2, "<strong>0.001 SOL</strong> lands in your wallet. Nobody approves it: the payout is a public transaction")],
+     (1.8, "On the dashboard, the box is <strong>orange</strong> while the oracles track you"),
+     (7.0, "It turns <strong>green</strong> once both oracles agreed and the program paid"),
+     (9.2, "<strong>0.02 SOL</strong> lands in your wallet. Nobody approves it: the payout is a public transaction")],
     f"onsight.site/#/events/{EVENT[:6]}…",
-    [(0, "m0-online"), (1.6, "m1-tracking"), (3.4, "m2-tracking"), (5.2, "m3-tracking"), (7.0, "m4-paid"), (9.2, "l4-paired"), (12.2, "d8-paid")],
+    [(0, "m0-online"), (1.6, "m1-tracking"), (3.4, "m2-tracking"), (5.2, "m3-tracking"), (7.0, "m4-paid"), (9.2, "m5-dashboard-paid"), (12.2, "d8-paid")],
     cursor=[(0.3, 1000, 450, 0), (0.5, 1400, 626, 0.8)],
     clicks=[1.4],
     hls=[(9.6, 11.8, 176, 640, 814, 36), (12.6, 15.6, 722, 566, 351, 44)],
