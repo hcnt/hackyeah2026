@@ -1,5 +1,5 @@
 # Edge router: the only thing published on the host (127.0.0.1:8080, where the host's
-# cloudflared sends *.kindhome.io). Routes by Host to app stacks on the shared "edge"
+# cloudflared sends *.kindhome.io and *.onsight.site). Routes by Host to app stacks on the shared "edge"
 # Docker network, where each stack's caddy has the network alias "prod" or "pr-<N>".
 {
 	auto_https off
@@ -16,7 +16,19 @@
 		reverse_proxy pr-{re.pr.1}:80
 	}
 
-	@prod host hackyeah.kindhome.io localhost 127.0.0.1
+	# onsight.site opens the events app; its attendee links (/?event=<id>) still reach the attendee page.
+	@site host onsight.site www.onsight.site
+	handle @site {
+		@dashboard {
+			path /
+			not query event=*
+		}
+		rewrite @dashboard /events.html
+		reverse_proxy prod:80
+	}
+
+	# demo-event.onsight.site is the attendee page, which defaults to the demo event.
+	@prod host demo-event.onsight.site hackyeah.kindhome.io localhost 127.0.0.1
 	handle @prod {
 		reverse_proxy prod:80
 	}
