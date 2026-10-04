@@ -70,6 +70,14 @@ the reward goes straight from the escrow to the attendee in the same transaction
 The money side: `create_event` locks the whole budget and freezes the rules, and `withdraw_remaining` returns the
 rest to the organizer only before the start or after the end.
 
+### The web apps are not a source of truth
+
+The events app, the widget and the camera page are static files with no OnSight server or database behind them.
+They read the program's accounts from a Solana RPC, sign with the user's wallet, and talk to the oracles listed on
+the event; the only thing they keep is a cache in the browser. Anyone can build `frontend/` and host it themselves,
+or point it at their own RPC with `?rpc=<url>`. If hackyeah.kindhome.io went down, events, budgets and payouts
+would carry on.
+
 ## How it works
 
 1. **Organizer creates the event on chain** on the organizer page (`create_event`): name, venue, reward, cap,
@@ -93,6 +101,7 @@ rest to the organizer only before the start or after the end.
 | `backend/app/chain/` | Solana client for the program: reads events, sends reports with the join proof, finds payout transactions. |
 | `backend/tests/` | Tests, including the compiled program run in LiteSVM (`tests/chain/test_program_litesvm.py`). |
 | `frontend/src/widget/` | The embeddable widget (`<attend-now-widget>`, built to `widget.js`): wallet, selfie, consent, join to every oracle. |
+| `frontend/src/dapp/` | The organizer's events app (`events.html`): create and fund events, follow payouts and oracles, pair cameras, withdraw. |
 | `frontend/src/organizer/` | Organizer page (`organizer.html`): create and fund an event from the organizer's wallet. |
 | `frontend/src/venue/` | Stage screen (`stage.html#<event>`, with the deposit and withdrawal) and camera page (`camera.html`). |
 | `frontend/src/event-page/` | An example host page with the widget embedded. |
