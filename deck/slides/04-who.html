@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>05 · How it works · OnSight</title>
+<title>04 · Who it's for · OnSight</title>
 <style>
 @font-face { font-family: "Satoshi"; src: url("../assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
 @font-face { font-family: "Satoshi"; src: url("../assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
@@ -141,6 +141,15 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .ck i { flex: none; width: 50px; height: 50px; border-radius: 99px; background: #2775CA; color: #fff; font-style: normal; font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .ck:last-child i { background: #1B7A50; }
 
+/* video: live player on screen, clickable thumbnail in the PDF */
+.vid { position: absolute; left: 140px; top: 79px; width: 1640px; height: 922px; border-radius: 28px; overflow: hidden; background: #15161A; box-shadow: 0 24px 50px rgba(21,22,26,.18); }
+.vid iframe { width: 100%; height: 100%; border: 0; display: block; }
+.vthumb { display: none; position: absolute; inset: 0; } .vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vbtn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); line-height: 0; }
+/* YouTube refuses to play without a referrer, so file:// pages fall back to the thumbnail too */
+@media print { .vplay { display: none; } .vthumb { display: block; } }
+.vid.offline .vplay { display: none; } .vid.offline .vthumb { display: block; }
+
 /* demo */
 .steps { position: absolute; left: 140px; right: 140px; top: 380px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; }
 .sc { position: relative; background: #fff; border-radius: 28px; padding: 70px 34px 40px; box-shadow: inset 0 0 0 2px #D9D7D0; min-height: 330px; }
@@ -149,6 +158,9 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .sc .t { font-size: 42px; font-weight: 700; line-height: 1.1; } .sc .s { margin-top: 18px; font-size: 32px; font-weight: 500; color: #4A4B50; line-height: 1.3; }
 .links { position: absolute; left: 140px; right: 140px; bottom: 100px; display: flex; gap: 120px; font-size: 48px; }
 .links div { display: flex; flex-direction: column; gap: 6px; } .links .mut { font-size: 30px; letter-spacing: .1em; text-transform: uppercase; } .links b { color: #2775CA; }
+.qr { position: absolute; left: 50%; top: 300px; transform: translateX(-50%); width: 520px; height: 520px; padding: 36px; box-sizing: border-box; background: #fff; border-radius: 36px; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.qr img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.qrlink { position: absolute; left: 0; right: 0; bottom: 110px; text-align: center; font-family: "Geist Mono", ui-monospace, monospace; font-size: 60px; font-weight: 600; letter-spacing: -0.02em; } .qrlink b { color: #2775CA; }
 
 /* trust */
 .perm { position: absolute; left: 140px; width: 1030px; top: 330px; }
@@ -185,19 +197,22 @@ html, body { width: 1920px; height: 1080px; }
 </style>
 </head>
 <body>
-<!-- speaker notes: Only the camera and face matching are off chain, like a price oracle. Oracles supply facts; the program holds the money and the rules. -->
-<div class="scene"><section><div class="kick">How it works</div><h1 class="h">Oracles see faces. The program decides.</h1>
-  <div class="band on"><span class="bl">On chain · Solana</span></div>
-  <div class="band off"><span class="bl">Off chain</span></div>
-  <div class="st s1"><div class="cap"><span class="n">1</span><span>Organizer locks the budget<br><code>create_event</code></span></div><div class="con"><span class="solc"><svg viewBox="0 0 100 80" width="34" height="27"><defs><linearGradient id="solg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#9945FF"/><stop offset="1" stop-color="#14F195"/></linearGradient></defs><path fill="url(#solg)" d="M18 0h82L82 18H0zM0 31h82l18 18H18zM18 62h82L82 80H0z"/></svg></span><svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="t">Contract</div><div class="s">budget locked</div></div></div>
-  <div class="st s2"><div class="cap"><span class="n">2</span><span>Attendee joins: wallet,<br>selfie, signature</span></div><div class="wg sm">
+<!-- speaker notes: Two users, deliberately: organizers/sponsors run the giveaway; attendees only see a sign-up widget on the event's own page. -->
+<div class="scene"><section><div class="kick">Who it's for</div><h1 class="h">Built for organizers who reward showing up.</h1>
+  <div class="events"><span class="lab">For</span><span class="chip">Meetups</span><span class="chip">Hackathons</span><span class="chip">Product launches</span><span class="chip">Conference side events</span></div>
+  <div class="two who">
+    <div class="col">
+      <div class="lab">Organizers &amp; sponsors</div>
+      <div class="ccon"><span class="solc"><svg viewBox="0 0 100 80" width="34" height="27"><defs><linearGradient id="solg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#9945FF"/><stop offset="1" stop-color="#14F195"/></linearGradient></defs><path fill="url(#solg)" d="M18 0h82L82 18H0zM0 31h82l18 18H18zM18 62h82L82 80H0z"/></svg></span><div class="ch"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><b>Contract</b></div><div class="r">Set the reward</div><div class="r">Lock the budget</div><div class="r">Put a camera at the door</div></div>
+    </div>
+    <div class="col">
+      <div class="lab">Their attendees</div>
+      <div class="wg">
       <div class="rl">First <b>100</b> attendees earn</div><div class="amt">0.01 SOL</div>
       <div class="btn"><span>Sign up with MetaMask</span><span class="tile"><img src="../assets/widget/metamask.svg" alt=""></span></div>
-      <div class="pw"><span class="pm">O</span>Powered by <b>OnSight</b></div></div></div>
-  <div class="st s3"><div class="cap"><span class="n">3</span><span>At the door, oracles report<br>“I see this wallet”</span></div><div class="nodes"><div class="node"><div class="nt"><i></i>Oracle node 1</div><div class="g"><span class="av"><img src="../assets/faces/szymon.png" alt=""></span><span class="av"><img src="../assets/faces/jaca.png" alt=""></span></div></div><div class="node"><div class="nt"><i></i>Oracle node 2</div><div class="g"><span class="av"><img src="../assets/faces/szymon.png" alt=""></span><span class="av"><img src="../assets/faces/jaca.png" alt=""></span></div></div><div class="node"><div class="nt"><i></i>Oracle node 3</div><div class="g"><span class="av"><img src="../assets/faces/szymon.png" alt=""></span><span class="av"><img src="../assets/faces/jaca.png" alt=""></span></div></div></div></div>
-  <div class="st s4"><div class="cap"><span class="n">4</span><span><code>report_sighting</code> pays<br>straight from escrow</span></div><div class="chain"><div class="cb "><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div class="t">7xKX…9fQe</div><div class="s">joined</div></div><span class="lk"></span><div class="cb pay"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div class="t">+0.01 SOL</div><div class="s">paid</div></div></div></div>
-  <div class="flow f12"><svg class="arr" viewBox="0 0 120 24" width="56" height="24"><path d="M2 12h108M100 3l12 9-12 9" fill="none" stroke="#9A9CA3" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-  <div class="flow f34"><svg class="arr" viewBox="0 0 120 24" width="56" height="24"><path d="M2 12h108M100 3l12 9-12 9" fill="none" stroke="#9A9CA3" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="pw"><span class="pm">O</span>Powered by <b>OnSight</b></div></div>
+    </div>
+  </div>
 </section></div>
 </body>
 </html>

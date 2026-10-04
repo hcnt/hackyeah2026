@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8" />
-<title>06 · Where the intermediary disappears · OnSight</title>
+<title>08 · Live demo · OnSight</title>
 <style>
 @font-face { font-family: "Satoshi"; src: url("../assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
 @font-face { font-family: "Satoshi"; src: url("../assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
@@ -141,6 +141,15 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .ck i { flex: none; width: 50px; height: 50px; border-radius: 99px; background: #2775CA; color: #fff; font-style: normal; font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .ck:last-child i { background: #1B7A50; }
 
+/* video: live player on screen, clickable thumbnail in the PDF */
+.vid { position: absolute; left: 140px; top: 79px; width: 1640px; height: 922px; border-radius: 28px; overflow: hidden; background: #15161A; box-shadow: 0 24px 50px rgba(21,22,26,.18); }
+.vid iframe { width: 100%; height: 100%; border: 0; display: block; }
+.vthumb { display: none; position: absolute; inset: 0; } .vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vbtn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); line-height: 0; }
+/* YouTube refuses to play without a referrer, so file:// pages fall back to the thumbnail too */
+@media print { .vplay { display: none; } .vthumb { display: block; } }
+.vid.offline .vplay { display: none; } .vid.offline .vthumb { display: block; }
+
 /* demo */
 .steps { position: absolute; left: 140px; right: 140px; top: 380px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; }
 .sc { position: relative; background: #fff; border-radius: 28px; padding: 70px 34px 40px; box-shadow: inset 0 0 0 2px #D9D7D0; min-height: 330px; }
@@ -149,6 +158,9 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .sc .t { font-size: 42px; font-weight: 700; line-height: 1.1; } .sc .s { margin-top: 18px; font-size: 32px; font-weight: 500; color: #4A4B50; line-height: 1.3; }
 .links { position: absolute; left: 140px; right: 140px; bottom: 100px; display: flex; gap: 120px; font-size: 48px; }
 .links div { display: flex; flex-direction: column; gap: 6px; } .links .mut { font-size: 30px; letter-spacing: .1em; text-transform: uppercase; } .links b { color: #2775CA; }
+.qr { position: absolute; left: 50%; top: 300px; transform: translateX(-50%); width: 520px; height: 520px; padding: 36px; box-sizing: border-box; background: #fff; border-radius: 36px; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.qr img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.qrlink { position: absolute; left: 0; right: 0; bottom: 110px; text-align: center; font-family: "Geist Mono", ui-monospace, monospace; font-size: 60px; font-weight: 600; letter-spacing: -0.02em; } .qrlink b { color: #2775CA; }
 
 /* trust */
 .perm { position: absolute; left: 140px; width: 1030px; top: 330px; }
@@ -185,13 +197,10 @@ html, body { width: 1920px; height: 1080px; }
 </style>
 </head>
 <body>
-<!-- speaker notes: Excerpt simplified from lib.rs. The oracle can only say “I see this wallet”; every rule that decides a payout is checked here. -->
-<div class="scene"><section><div class="kick">Where exactly</div><h1 class="h">The middleman disappears in <code>report_sighting</code>.</h1>
-  <div class="codewrap">
-    <div class="code"><div class="ln">pub fn <b>report_sighting</b>(ctx) -&gt; Result&lt;()&gt; {</div><div class="ln">  ev.oracles.position(oracle).ok_or(NotOracle)?;<i>1</i></div><div class="ln">  check_join_proof(event, attendee)?;<i>2</i></div><div class="ln">  require!(now &gt;= ev.start &amp;&amp; now &lt;= ev.end);<i>3</i></div><div class="ln">  attendance.reporters |= 1 &lt;&lt; slot;</div><div class="ln">  if !(enough_oracles &amp;&amp; long_enough) { return Ok(()) }<i>4</i></div><div class="ln">  require!(ev.paid_count &lt; ev.max_paid, CapReached);<i>5</i></div><div class="ln">  attendance.paid = true;</div><div class="ln">  event.sub_lamports(reward + fee)?;<i>6</i></div><div class="ln">  attendee.add_lamports(reward)?;<i>6</i></div><div class="ln">}</div></div>
-    <div class="checks"><div class="ck"><i>1</i>Only an oracle listed on the event</div><div class="ck"><i>2</i>Only with the attendee's own signed join</div><div class="ck"><i>3</i>Only during the event, on the chain's clock</div><div class="ck"><i>4</i>Only once M-of-N oracles saw them long enough</div><div class="ck"><i>5</i>Only while the cap isn't reached</div><div class="ck"><i>6</i>Then: escrow → attendee, same transaction</div></div>
-  </div>
-  <div class="bottom">No person approves anything. <span class="mut">contracts/on_sight/lib.rs</span></div>
+<!-- speaker notes: Run the live flow: join on the event page, scan the stage QR to turn a phone into the camera, walk up, get paid. Have two wallets funded and the stage screen open. Show the payout transaction on Solana Explorer. If anything fails, say what and why, then play the 70 s backup video. -->
+<div class="scene"><section><h1 class="h">DURING LIVE DEMO</h1>
+  <div class="qr"><img src="../assets/qr/demo-event.svg" alt="QR code for https://demo-event.onsight.site"></div>
+  <div class="qrlink"><b>demo-event.onsight.site</b></div>
 </section></div>
 </body>
 </html>

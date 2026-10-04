@@ -63,6 +63,17 @@ slide("title", "OnSight", f'''
   <div class="foot">Superteam Poland · Finance Without Intermediaries · HackYeah 2026</div>
 ''', "One line: an attendance giveaway where nobody holds the money. The program pays the people who actually came.")
 
+# 2 ---------------------------------------------------------------- video
+VIDEO_ID = "FVaaKxfSCt4"
+PLAY = '<svg viewBox="0 0 68 48" width="136" height="96"><path d="M66.5 7.7a8.5 8.5 0 0 0-6-6C55.2.3 34 .3 34 .3s-21.2 0-26.5 1.4a8.5 8.5 0 0 0-6 6C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="#FF0033"/><path d="M27 34.3 45 24 27 13.7z" fill="#fff"/></svg>'
+slide("video", "Video", f'''
+  <div class="vid">
+    <iframe class="vplay" src="https://www.youtube.com/embed/{VIDEO_ID}?rel=0" title="OnSight pitch video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <a class="vthumb" href="https://youtu.be/{VIDEO_ID}"><img src="assets/video/pitch-thumb.jpg" alt="OnSight pitch video"><span class="vbtn">{PLAY}</span></a>
+  </div>
+  <script>if (location.protocol === "file:") document.querySelector(".vid").classList.add("offline");</script>
+''', "Play the video. In the PDF, click the thumbnail to open it on YouTube.")
+
 # 2 ---------------------------------------------------------------- problem
 slide("problem", "The problem", head("Today's giveaways run on trust in a middleman.", "The problem") + f'''
   <div class="tri">
@@ -142,14 +153,11 @@ slide("code", "Where the intermediary disappears", head("The middleman disappear
 ''', "Excerpt simplified from lib.rs. The oracle can only say “I see this wallet”; every rule that decides a payout is checked here.")
 
 # 7 ---------------------------------------------------------------- demo
-DEMO = [("Join on the event page", "Wallet, one selfie, one signature. No transaction."),
-        ("A phone becomes the camera", "Scan the QR on the stage screen."),
-        ("Walk up to the camera", "Oracles recognise you and report every 2 s."),
-        ("Get paid", "The stage shows the payout with an Explorer link.")]
-slide("demo", "Live demo", head("Live on devnet: join, walk up, get paid.", "Demo") + f'''
-  <div class="steps">{"".join(f'<div class="sc"><span class="n">{i + 1}</span><div class="t">{a}</div><div class="s">{b}</div></div>' for i, (a, b) in enumerate(DEMO))}</div>
-  <div class="links"><div><span class="mut">Try it</span><b>demo-event.onsight.site</b></div><div><span class="mut">Backup</span><b>70 s video walkthrough</b></div></div>
-''', "Run the live flow. Have two wallets funded and the stage screen open. Show the payout transaction on Solana Explorer. If anything fails, say what and why, then play the video.")
+DEMO_URL = "demo-event.onsight.site"
+slide("demo", "Live demo", head("DURING LIVE DEMO") + f'''
+  <div class="qr"><img src="assets/qr/demo-event.svg" alt="QR code for https://{DEMO_URL}"></div>
+  <div class="qrlink"><b>{DEMO_URL}</b></div>
+''', "Run the live flow: join on the event page, scan the stage QR to turn a phone into the camera, walk up, get paid. Have two wallets funded and the stage screen open. Show the payout transaction on Solana Explorer. If anything fails, say what and why, then play the 70 s backup video.")
 
 # 8 ---------------------------------------------------------------- trust
 PERMS = [("create_event", "anyone, who funds it", "any time"),
@@ -330,6 +338,15 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .ck i { flex: none; width: 50px; height: 50px; border-radius: 99px; background: #2775CA; color: #fff; font-style: normal; font-size: 26px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
 .ck:last-child i { background: #1B7A50; }
 
+/* video: live player on screen, clickable thumbnail in the PDF */
+.vid { position: absolute; left: 140px; top: 79px; width: 1640px; height: 922px; border-radius: 28px; overflow: hidden; background: #15161A; box-shadow: 0 24px 50px rgba(21,22,26,.18); }
+.vid iframe { width: 100%; height: 100%; border: 0; display: block; }
+.vthumb { display: none; position: absolute; inset: 0; } .vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vbtn { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); line-height: 0; }
+/* YouTube refuses to play without a referrer, so file:// pages fall back to the thumbnail too */
+@media print { .vplay { display: none; } .vthumb { display: block; } }
+.vid.offline .vplay { display: none; } .vid.offline .vthumb { display: block; }
+
 /* demo */
 .steps { position: absolute; left: 140px; right: 140px; top: 380px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; }
 .sc { position: relative; background: #fff; border-radius: 28px; padding: 70px 34px 40px; box-shadow: inset 0 0 0 2px #D9D7D0; min-height: 330px; }
@@ -338,6 +355,9 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 .sc .t { font-size: 42px; font-weight: 700; line-height: 1.1; } .sc .s { margin-top: 18px; font-size: 32px; font-weight: 500; color: #4A4B50; line-height: 1.3; }
 .links { position: absolute; left: 140px; right: 140px; bottom: 100px; display: flex; gap: 120px; font-size: 48px; }
 .links div { display: flex; flex-direction: column; gap: 6px; } .links .mut { font-size: 30px; letter-spacing: .1em; text-transform: uppercase; } .links b { color: #2775CA; }
+.qr { position: absolute; left: 50%; top: 300px; transform: translateX(-50%); width: 520px; height: 520px; padding: 36px; box-sizing: border-box; background: #fff; border-radius: 36px; box-shadow: inset 0 0 0 2px #D9D7D0; }
+.qr img { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.qrlink { position: absolute; left: 0; right: 0; bottom: 110px; text-align: center; font-family: "Geist Mono", ui-monospace, monospace; font-size: 60px; font-weight: 600; letter-spacing: -0.02em; } .qrlink b { color: #2775CA; }
 
 /* trust */
 .perm { position: absolute; left: 140px; width: 1030px; top: 330px; }
@@ -371,6 +391,8 @@ code, .code { font-family: "Geist Mono", ui-monospace, monospace; }
 
 
 # ---------------------------------------------------------------- output: one standalone page per slide
+for old in SLIDES_DIR.glob("*.html"):
+    old.unlink()
 CSS = CSS.replace('url("assets/', 'url("../assets/')
 for i, (sid, label, body, notes) in enumerate(SLIDES, 1):
     html = f"""<!doctype html>
