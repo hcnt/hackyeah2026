@@ -62,28 +62,47 @@ interface RpcAccount {
   owner: string
 }
 
+/** Waits before each retry of a rate-limited call; the public devnet RPC allows only a few connections per IP. */
+const RATE_LIMIT_BACKOFF_MS = [1000, 2000, 4000, 8000]
+
+function isRateLimited(status: number, message: string | undefined): boolean {
+  return status === 429 || /rate limit|too many requests/i.test(message ?? '')
+}
+
+/** One JSON-RPC call; retried with backoff while the RPC answers "rate limited". */
+export async function rpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response
+    try {
+      res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+    } catch {
+      throw new ChainError('Could not reach the Solana RPC.')
+    }
+    const body = await res.json().catch(() => null)
+    if (res.ok && body && !body.error && 'result' in body) return body.result as T
+    const message: string | undefined = body?.error?.message
+    if (isRateLimited(res.status, message) && attempt < RATE_LIMIT_BACKOFF_MS.length) {
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS[attempt]))
+      continue
+    }
+    if (isRateLimited(res.status, message)) {
+      throw new ChainError('The Solana RPC is rate limiting this browser. Wait a minute and try again, or use another RPC with ?rpc=<url>.')
+    }
+    throw new ChainError(message ?? `Solana RPC failed (${res.status})`)
+  }
+}
+
 export async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(RpcAccount | null)[]> {
-  let res: Response
-  try {
-    res = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getMultipleAccounts',
-        params: [keys, { encoding: 'base64', commitment: 'confirmed' }],
-      }),
-    })
-  } catch {
-    throw new ChainError('Could not reach the Solana RPC.')
-  }
-  const body = await res.json().catch(() => null)
-  const value = body?.result?.value
-  if (!res.ok || !Array.isArray(value) || value.length !== keys.length) {
-    throw new ChainError(body?.error?.message ?? `Solana RPC failed (${res.status})`)
-  }
-  return value as (RpcAccount | null)[]
+  const result = await rpcCall<{ value?: unknown }>(rpcUrl, 'getMultipleAccounts', [
+    keys,
+    { encoding: 'base64', commitment: 'confirmed' },
+  ])
+  if (!Array.isArray(result?.value) || result.value.length !== keys.length) throw new ChainError('Solana RPC failed (bad reply)')
+  return result.value as (RpcAccount | null)[]
 }
 
 export function base64Bytes(b64: string): Uint8Array {
