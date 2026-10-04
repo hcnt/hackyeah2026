@@ -33,7 +33,7 @@ A sponsor wants people in the room and is willing to pay for it, so the event an
 
 | Before | With OnSight |
 |---|---|
-| The organizer holds the reward budget. | The budget is **locked in the program's escrow** when the event is created. Nobody, us included, can take it while the event runs; what is not paid out goes back to the organizer after the end. |
+| The organizer holds the reward budget. | The budget is **locked in the program's escrow** when the event is created. Nobody, us included, can take it while the event runs (as long as the program isn't upgraded, see Limitations); what is not paid out goes back to the organizer after the end. |
 | Rules live in a promise ("first 100, arrive before 18:00"). | Rules are **frozen in the Event account**: reward, cap, time window, how long a person must be seen, which oracles count and how many must agree. |
 | Staff decide who came. | Independent **oracles report sightings**; the **program** checks them against the frozen rules on the chain's clock and pays. |
 | Payouts happen later, by hand, if at all. | The payout is **in the same transaction** as the report that satisfies the rules: seconds after the person is seen. |
