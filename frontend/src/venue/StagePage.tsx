@@ -628,15 +628,17 @@ function Live({
             </div>
           </Notice>
         )}
-        <div className="relative overflow-hidden rounded-2xl bg-black">
+        <div className="relative flex justify-center overflow-hidden rounded-2xl bg-black">
+          {/* Fit the frame inside the window whatever its shape: a portrait phone frame is capped by height, a
+              landscape one by width, both keeping their aspect ratio. */}
           <canvas
             ref={canvasRef}
             role="img"
             aria-label="Live camera view with recognised attendees marked"
-            className={cn('block h-auto w-full', !hasFrame && 'hidden')}
+            className={cn('block h-auto max-h-[calc(100svh-10rem)] w-auto max-w-full', !hasFrame && 'hidden')}
           />
           {!hasFrame && (
-            <div className="flex aspect-video flex-col items-center justify-center gap-2 p-6 text-center">
+            <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 p-6 text-center">
               <p className="text-xl font-semibold">Waiting for the event camera</p>
               <p className="max-w-sm text-sm text-neutral-400">
                 Scan the QR code with a phone and point it at the room. The video appears here.
