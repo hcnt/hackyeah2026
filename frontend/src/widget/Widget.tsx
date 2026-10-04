@@ -17,6 +17,7 @@ import {
   isLockedWallet,
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
+  metaMaskConnectWallet,
   signAction,
   useSolanaWallets,
   type Connection,
@@ -135,6 +136,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   async function signUp(wallet: Wallet | undefined) {
     setError(null)
     setPickerOpen(false)
+    wallet ??= (await metaMaskConnectWallet()) ?? undefined
     if (!wallet) {
       window.open(METAMASK_DOWNLOAD_URL, '_blank', 'noopener')
       setError('Install MetaMask, then reload this page.')

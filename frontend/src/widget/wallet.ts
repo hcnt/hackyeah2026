@@ -1,6 +1,9 @@
 // Solana wallets through the Wallet Standard. MetaMask registers itself here when its Solana
 // support is on; Phantom and others show up the same way, so they work as a fallback.
+// Without the extension (any phone browser, desktop without MetaMask), MetaMask Connect registers a "MetaMask"
+// wallet instead that reaches the MetaMask mobile app: a deep link on phones, a QR code on desktop.
 import { useEffect, useState } from 'react'
+import { createSolanaClient, type SolanaClient } from '@metamask/connect-solana'
 import { getWallets } from '@wallet-standard/app'
 import type { Wallet, WalletAccount } from '@wallet-standard/base'
 import {
@@ -14,6 +17,35 @@ import bs58 from 'bs58'
 import { nowIso, signedMessage, type SignAction, type Signed } from './api'
 
 export const METAMASK_DOWNLOAD_URL = 'https://metamask.io/download/'
+
+let metaMaskConnect: Promise<SolanaClient> | null = null
+
+/**
+ * Starts MetaMask Connect once per page. It waits about a second for the extension and registers its own wallet
+ * only when no MetaMask is in the page. Start it on load, not on click: a phone only follows the deep link to the
+ * app while the tap that triggered it is still fresh.
+ */
+export function startMetaMaskConnect(): Promise<SolanaClient> {
+  metaMaskConnect ??= createSolanaClient({
+    dapp: { name: 'OnSight', url: window.location.origin },
+    // Joining only signs a message, which works the same on any cluster; MetaMask mobile only offers mainnet.
+    api: { supportedNetworks: { mainnet: 'https://api.mainnet-beta.solana.com', devnet: 'https://api.devnet.solana.com' } },
+    analytics: { enabled: false },
+  })
+  metaMaskConnect.catch(() => {
+    metaMaskConnect = null
+  })
+  return metaMaskConnect
+}
+
+/** The MetaMask Connect wallet, for when the user taps sign up before it registered. Null if it failed to start. */
+export async function metaMaskConnectWallet(): Promise<Wallet | null> {
+  try {
+    return (await startMetaMaskConnect()).getWallet()
+  } catch {
+    return null
+  }
+}
 
 export function isSolanaWallet(wallet: Wallet): boolean {
   return (
@@ -31,6 +63,7 @@ export function isMetaMask(wallet: Wallet): boolean {
 export function useSolanaWallets(): Wallet[] {
   const [wallets, setWallets] = useState<Wallet[]>(() => listWallets())
   useEffect(() => {
+    startMetaMaskConnect().catch(() => {})
     const { on } = getWallets()
     const update = () => setWallets(listWallets())
     update()
