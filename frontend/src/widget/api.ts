@@ -1,4 +1,4 @@
-// Client for the oracle API v1. Types mirror docs/oracle-api.md.
+// Client for the oracle API v1. Types mirror backend/app/oracle/routes.py.
 
 export type IssueCode =
   | 'no_face' | 'multiple_faces' | 'low_confidence' | 'too_small' | 'out_of_frame'

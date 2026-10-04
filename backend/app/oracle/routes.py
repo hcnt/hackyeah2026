@@ -1,4 +1,4 @@
-"""Oracle API v1 (contract: docs/oracle-api.md), mounted under /api: HTTP routes under /api/v1, dev helper under
+"""Oracle API v1, mounted under /api: HTTP routes under /api/v1, dev helper under
 /api/oracle/dev."""
 
 import asyncio

@@ -1,4 +1,4 @@
-// Oracle calls and socket messages used at the venue (docs/oracle-api.md: camera pairing, WebSockets).
+// Oracle calls and socket messages used at the venue: camera pairing and the WebSockets.
 import { ApiError, type Signed } from '../widget/api'
 
 export interface CameraTokenResponse {

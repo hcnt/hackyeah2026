@@ -132,7 +132,6 @@ would carry on.
 | `frontend/src/venue/` | Camera page (`camera.html`) a phone opens from the dashboard's QR code, and the older stage screen (`stage.html#<event>`). |
 | `frontend/src/event-page/` | An example host page with the widget embedded. |
 | `scripts/` | `devnet_event.py` creates a devnet event; `register_oracle.py` publishes an oracle's name and URL on chain. |
-| `docs/` | The oracle API (`oracle-api.md`). |
 
 Embedding the widget on any page:
 
