@@ -75,7 +75,7 @@ export type WidgetProps = {
   apiBase?: string
   /** Solana JSON-RPC endpoint for reading the event's oracles. Default: devnet. */
   rpcUrl?: string
-  /** presence_pay program id. Default: DEFAULT_PROGRAM_ID in chain.ts. */
+  /** on_sight program id. Default: DEFAULT_PROGRAM_ID in chain.ts. */
   programId?: string
 }
 

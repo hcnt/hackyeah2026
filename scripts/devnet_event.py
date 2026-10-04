@@ -1,4 +1,4 @@
-"""Create a test event on the presence_pay program (devnet) and print its address, the oracle's `event_id`.
+"""Create a test event on the on_sight program (devnet) and print its address, the oracle's `event_id`.
 
     cd backend && uv run python ../scripts/devnet_event.py [--reward 0.01] [--max 3] [--hours 2] [--min-seen 3]
         [--oracle <pubkey> [--oracle <pubkey> ...]] [--threshold 1] [--program <program id>]
@@ -37,8 +37,8 @@ RPC = "https://api.devnet.solana.com"
 # OLD program id (superseded). Its create_event accounts do NOT match what this script builds (no Config account
 # any more): replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
-# Our backend's oracle (public key, see contracts/presence_pay/README.md).
-DEFAULT_ORACLE = "5aCXNpzkmYiruMNobXCVBivoUPQPxrsogp3FMhxvf5Dt"
+# The demo oracle, registered as OnSight at https://oracle.kindhome.io.
+DEFAULT_ORACLE = "9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3"
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000
 FEE_LAMPORTS = 2_000_000  # lib.rs FEE_LAMPORTS: per paid attendee, frozen into the Event at creation
@@ -118,7 +118,7 @@ def main() -> None:
                     "(default: our backend's oracle)")
     ap.add_argument("--threshold", type=int, default=1, help="how many different oracles must report a wallet")
     ap.add_argument("--program", type=Pubkey.from_string, default=Pubkey.from_string(DEFAULT_PROGRAM),
-                    help="presence_pay program id (default: the OLD id until the new deploy)")
+                    help="on_sight program id (default: the OLD id until the new deploy)")
     ap.add_argument("--name", default="OnSight demo", help="event name shown to attendees (1-64 bytes)")
     ap.add_argument("--venue", default="", help="event venue (0-64 bytes, empty = none)")
     args = ap.parse_args()

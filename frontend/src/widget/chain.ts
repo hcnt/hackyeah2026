@@ -1,7 +1,7 @@
-// Reads an event's oracles straight from the presence_pay program on Solana, so the attendee's widget (not our API)
+// Reads an event's oracles straight from the on_sight program on Solana, so the attendee's widget (not our API)
 // decides which oracles receive the join. Plain JSON-RPC over fetch plus small decoders; the only dependency is bs58.
 //
-// Layouts mirror contracts/presence_pay/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
+// Layouts mirror contracts/on_sight/lib.rs (Anchor: 8-byte discriminator = sha256("account:<Name>")[:8]):
 //   Event:      organizer 32 | oracles 3×32 | oracle_count u8 | threshold u8 | event_id u64 | start i64 | end i64 |
 //               reward u64 | fee u64 | max_paid u32 | paid_count u32 | min_seen_secs u32 | bump u8 |
 //               name (u32 LE length + UTF-8, ≤ 64) | venue (u32 LE length + UTF-8, ≤ 64)
@@ -9,7 +9,7 @@
 import bs58 from 'bs58'
 
 export const DEFAULT_RPC_URL = 'https://api.devnet.solana.com'
-// TODO after the new deploy: the presence_pay program id that has the oracle registry. The id below is the OLD
+// TODO after the new deploy: the on_sight program id that has the oracle registry. The id below is the OLD
 // program (no OracleInfo accounts, different Event layout), so until then reads fail and the widget falls back to
 // single-oracle mode (api-base). Override per page with the `program-id` attribute.
 export const DEFAULT_PROGRAM_ID = '4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf'
@@ -62,38 +62,57 @@ interface RpcAccount {
   owner: string
 }
 
-async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(RpcAccount | null)[]> {
-  let res: Response
-  try {
-    res = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getMultipleAccounts',
-        params: [keys, { encoding: 'base64', commitment: 'confirmed' }],
-      }),
-    })
-  } catch {
-    throw new ChainError('Could not reach the Solana RPC.')
-  }
-  const body = await res.json().catch(() => null)
-  const value = body?.result?.value
-  if (!res.ok || !Array.isArray(value) || value.length !== keys.length) {
-    throw new ChainError(body?.error?.message ?? `Solana RPC failed (${res.status})`)
-  }
-  return value as (RpcAccount | null)[]
+/** Waits before each retry of a rate-limited call; the public devnet RPC allows only a few connections per IP. */
+const RATE_LIMIT_BACKOFF_MS = [1000, 2000, 4000, 8000]
+
+function isRateLimited(status: number, message: string | undefined): boolean {
+  return status === 429 || /rate limit|too many requests/i.test(message ?? '')
 }
 
-function base64Bytes(b64: string): Uint8Array {
+/** One JSON-RPC call; retried with backoff while the RPC answers "rate limited". */
+export async function rpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response
+    try {
+      res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+      })
+    } catch {
+      throw new ChainError('Could not reach the Solana RPC.')
+    }
+    const body = await res.json().catch(() => null)
+    if (res.ok && body && !body.error && 'result' in body) return body.result as T
+    const message: string | undefined = body?.error?.message
+    if (isRateLimited(res.status, message) && attempt < RATE_LIMIT_BACKOFF_MS.length) {
+      await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS[attempt]))
+      continue
+    }
+    if (isRateLimited(res.status, message)) {
+      throw new ChainError('The Solana RPC is rate limiting this browser. Wait a minute and try again, or use another RPC with ?rpc=<url>.')
+    }
+    throw new ChainError(message ?? `Solana RPC failed (${res.status})`)
+  }
+}
+
+export async function getMultipleAccounts(rpcUrl: string, keys: string[]): Promise<(RpcAccount | null)[]> {
+  const result = await rpcCall<{ value?: unknown }>(rpcUrl, 'getMultipleAccounts', [
+    keys,
+    { encoding: 'base64', commitment: 'confirmed' },
+  ])
+  if (!Array.isArray(result?.value) || result.value.length !== keys.length) throw new ChainError('Solana RPC failed (bad reply)')
+  return result.value as (RpcAccount | null)[]
+}
+
+export function base64Bytes(b64: string): Uint8Array {
   const bin = atob(b64)
   const out = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
 }
 
-async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
+export async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
   const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0))
   let off = 0
   for (const p of parts) {
@@ -105,7 +124,7 @@ async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
 
 const utf8 = new TextEncoder()
 
-async function discriminator(account: string): Promise<Uint8Array> {
+export async function discriminator(account: string): Promise<Uint8Array> {
   return (await sha256(utf8.encode(`account:${account}`))).slice(0, 8)
 }
 

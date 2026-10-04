@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Satoshi", sans-serif; overflow: hidden; }
+  .disp { font-family: "Satoshi"; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }
+  .acc { color: #2775CA; }
+
+  .wgw { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; }
+  .wg { box-sizing: border-box; width: 400px; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px 16px; background: #fff; border-radius: 20px;
+        box-shadow: inset 0 0 0 1px #e5e5e5, 0 12px 32px -8px rgba(10,10,10,.24); font-family: "Satoshi"; color: #0a0a0a; font-size: 14px; line-height: 1.4; overflow: hidden; }
+  .wg * { box-sizing: border-box; }
+  .wg .body { display: flex; flex-direction: column; gap: 16px; }
+  .wg .center { align-items: center; text-align: center; }
+  .wg .reward { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  .wg .rlabel { font-size: 18px; font-weight: 500; color: #171717; }
+  .wg .rlabel b { font-weight: 700; color: #2775CA; }
+  .wg .amt { font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.9px; color: #2775CA; }
+  .wg .split { display: flex; align-items: center; height: 44px; padding: 0 8px 0 20px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; }
+  .wg .split .main { flex: 1; text-align: center; }
+  .wg .split .div { width: 1px; height: 20px; background: rgba(255,255,255,.16); }
+  .wg .split .trig { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 12px; }
+  .wg .tile { position: relative; width: 26px; height: 26px; border-radius: 7px; background: #fff; }
+  .wg .tile img { position: absolute; left: 4px; top: 4px; width: 18px; height: 18px; }
+  .wg .chev { width: 14px; height: 14px; }
+  .wg .foot { display: flex; justify-content: center; font-size: 11px; color: #737373; }
+  .wg .foot.brand { margin-top: 14px; }
+  .wg .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: linear-gradient(rgba(0,0,0,.015), rgba(0,0,0,.045));
+              box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); font-size: 12px; font-weight: 500; line-height: 1.2; color: #8a8a8a; }
+  .wg .pill b { font-weight: 700; color: #404040; }
+  .wg .mark { width: 16px; height: 16px; border-radius: 5px; background: #404040; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .wg .stepper { display: flex; gap: 6px; height: 3px; }
+  .wg .seg { position: relative; flex: 1; border-radius: 3px; background: #e5e5e5; overflow: hidden; }
+  .wg .seg i { position: absolute; inset: 0; background: #171717; transform-origin: 0 50%; }
+  .wg .btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; width: 100%; flex: none; }
+  .wg .btn.outline { background: #fff; color: #171717; box-shadow: inset 0 0 0 1px #e5e5e5; }
+  .wg .heading { font-size: 20px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.4; }
+  .wg .question { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; }
+  .wg .display { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; }
+  .wg .badge { width: 64px; height: 64px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .vf { position: relative; height: 300px; border-radius: 16px; background: #1a1b1f; overflow: hidden; width: 100%; flex: none; }
+  .wg .vf .sil { position: absolute; left: 100px; bottom: 0; width: 152px; }
+  .wg .vf .cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .wg .vf .guide { position: absolute; left: 88px; top: 33px; width: 176px; height: 216px; }
+  .wg .vf .cap { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; background: rgba(10,10,10,.6); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .wg .vf .flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+  .wg .shutter { width: 64px; height: 64px; border-radius: 999px; border: 4px solid #171717; background: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .shutter span { width: 46px; height: 46px; border-radius: 999px; background: #171717; }
+  .wg .phone { position: relative; width: 96px; height: 180px; border: 3px solid #171717; border-radius: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .phone::before { content: ""; position: absolute; top: 8px; left: 35px; width: 20px; height: 6px; border-radius: 99px; background: #171717; }
+  .wg .phone .ok { width: 40px; height: 40px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; }
+  .wg .status { display: flex; align-items: center; gap: 6px; color: #1F8A5B; font-size: 13px; font-weight: 500; }
+  .wg .status::before { content: ""; width: 7px; height: 7px; border-radius: 99px; background: #1F8A5B; }
+  .wg .qr { width: 188px; height: 188px; padding: 12px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px #e5e5e5; flex: none; }
+  .wg .qr svg { width: 100%; height: 100%; display: block; }
+  .wg .stage { position: relative; height: 380px; }
+  .wg .pane { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+
+  #s04-sent { position: absolute; left: 160px; top: 340px; font-size: 110px; line-height: 1.12; }
+  #s04-l1, #s04-l2, #s04-l3 { display: block; height: 1.12em; }
+  #s04-first { display: inline-block; transform-origin: 0% 50%; }
+  .rv { display: inline-block; clip-path: inset(0 100% 0 0); }
+  #s04-tok { display: inline-block; transform-origin: 50% 50%; }
+  #s04-sight { display: inline-block; transform-origin: 0% 50%; }
+  #s04-ww { left: 960px; top: 540px; }
+  .wg .tile img { opacity: 0; }
+  #s04-w0 { opacity: 1; }
+
+</style>
+<div id="root" data-composition-id="s04-answer" data-width="1920" data-height="1080">
+
+  <div id="s04-sent" class="disp">
+    <span id="s04-l1"><span id="s04-first">First <span class="acc">1000</span></span> <span class="rv" id="s04-r1">people earn</span></span>
+    <span id="s04-l2"><span class="rv" id="s04-r2">100</span> <span class="rv" id="s04-tok">of your token</span></span>
+    <span id="s04-l3"><span class="acc" id="s04-sight">on sight.</span></span>
+  </div>
+  <div class="wgw" id="s04-ww"><div class="wg" id="s04-card">
+        <div class="body"><div class="reward"><div class="rlabel" id="s04-label">First <b>1000</b> attendees earn</div><div class="amt" id="s04-amt">10 USDC</div></div><div id="s04-btn"><div class="split"><span class="main">Sign up with <span id="s04-name" style="display:inline-block"><span id="s04-n0" style="display:inline">MetaMask</span><span id="s04-n1" style="display:none">Phantom</span><span id="s04-n2" style="display:none">Coinbase Wallet</span><span id="s04-n3" style="display:none">Trust Wallet</span><span id="s04-n4" style="display:none">WalletConnect</span></span></span><span class="div"></span><span class="trig"><span class="tile" id="s04-tile"><img id="s04-w0" src="assets/widget/metamask.svg" alt=""><img id="s04-w1" src="assets/widget/phantom.svg" alt=""><img id="s04-w2" src="assets/widget/coinbase.svg" alt=""><img id="s04-w3" src="assets/widget/trust.svg" alt=""><img id="s04-w4" src="assets/widget/walletconnect.svg" alt=""></span><svg class="chev" viewBox="0 0 14 14"><path d="M3.5 5.25l3.5 3.5 3.5-3.5" stroke="#fafafa" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div>
+        <div class="foot brand"><span class="pill" id="s04-pill"><span class="mark">O</span><span>Powered by <b>OnSight</b></span></span></div>
+      </div></div>
+
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+
+  // 03 left "First 1000" at 150px (110 x 1.364); unroll the rest of the sentence out of it
+  tl.fromTo("#s04-first", { scale: 1.364 }, { scale: 1, duration: 0.55, ease: "power3.inOut" }, 0);
+  tl.fromTo("#s04-sent", { y: 138 }, { y: 0, duration: 0.55, ease: "power3.inOut" }, 0);
+  tl.to("#s04-r1", { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power2.out" }, 0.35);
+  tl.to("#s04-r2", { clipPath: "inset(0 0% 0 0)", duration: 0.35, ease: "power2.out" }, 0.75);
+  tl.to("#s04-tok", { clipPath: "inset(0 0% 0 0)", duration: 0.5, ease: "power2.out" }, 0.95);
+  tl.fromTo("#s04-sight", { opacity: 0, scale: 1.18 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(2)" }, 1.35);
+
+  // the line becomes the widget
+  tl.set("#s04-ww", { xPercent: -50, yPercent: -50 }, 0);
+  tl.fromTo("#s04-ww", { opacity: 0, scale: 1.5 }, { opacity: 1, scale: 2.1, duration: 0.875, ease: "power3.out" }, 2.475);
+  tl.fromTo("#s04-card > *", { opacity: 0 }, { opacity: 0, duration: 0.01 }, 0);
+  tl.to("#s04-tok", { x: 140, y: 380, rotation: 24, opacity: 0, duration: 1, ease: "power2.in" }, 2.35);
+  tl.to(["#s04-l1", "#s04-r2"], { opacity: 0, y: -30, filter: "blur(6px)", duration: 0.5, ease: "power2.in" }, 2.538);
+  tl.to("#s04-sight", { x: 520, y: 70, scale: 0.3, opacity: 0, duration: 0.938, ease: "power3.inOut" }, 2.6);
+  tl.to("#s04-card > .body", { opacity: 1, duration: 0.013 }, 2.912);
+  tl.fromTo("#s04-label", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 2.912);
+  tl.fromTo("#s04-amt", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 3.1);
+  tl.fromTo("#s04-btn", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.562, ease: "power3.out" }, 3.35);
+  tl.to("#s04-card > .foot", { opacity: 1, duration: 0.013 }, 3.413);
+  tl.fromTo("#s04-pill", { opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1, duration: 0.562, ease: "back.out(1.8)" }, 3.413);
+
+  // wallet shuffle in the button tile
+  [1, 2, 3, 4, 0].forEach((k, i) => {
+    const t = 4.4125 + i * 0.50625;
+    tl.set(`#s04-w${(k + 4) % 5}`, { opacity: 0 }, t);
+    tl.set(`#s04-w${k}`, { opacity: 1 }, t);
+    tl.set(`#s04-n${(k + 4) % 5}`, { display: "none" }, t);
+    tl.set(`#s04-n${k}`, { display: "inline" }, t);
+    tl.fromTo("#s04-tile", { scale: 1.6, rotation: -12 }, { scale: 1, rotation: 0, duration: 0.4725, ease: "back.out(3)", immediateRender: false }, t);
+    tl.fromTo("#s04-name", { y: 8, opacity: 0.3 }, { y: 0, opacity: 1, duration: 0.3375, ease: "power3.out", immediateRender: false }, t);
+  });
+
+  window.__timelines["s04-answer"] = tl;
+</script>
+</template>
+</body>
+</html>

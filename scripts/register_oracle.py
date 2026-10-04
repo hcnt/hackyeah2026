@@ -1,4 +1,4 @@
-"""Publish this oracle's name and API URL in the presence_pay oracle registry (OracleInfo, PDA ["oracle", key]).
+"""Publish this oracle's name and API URL in the on_sight oracle registry (OracleInfo, PDA ["oracle", key]).
 
     cd backend && ORACLE_KEYPAIR=... uv run python ../scripts/register_oracle.py --name OnSight \
         --url https://hackyeah.kindhome.io [--program <program id>] [--rpc <url>]
@@ -58,7 +58,7 @@ async def main() -> None:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--name", required=True, help="shown to attendees on the consent screen")
     p.add_argument("--url", required=True, help="base URL of this oracle's API, e.g. https://hackyeah.kindhome.io")
-    p.add_argument("--program", default=settings.presence_program_id, help="presence_pay program id")
+    p.add_argument("--program", default=settings.presence_program_id, help="on_sight program id")
     p.add_argument("--rpc", default=settings.solana_rpc_url)
     args = p.parse_args()
     check(args.name, args.url)

@@ -1,4 +1,4 @@
-"""The oracle's EventSource and SightingSink backed by the presence_pay program on Solana.
+"""The oracle's EventSource and SightingSink backed by the on_sight program on Solana.
 
 Installed from main.py when ORACLE_KEYPAIR is set; otherwise the oracle keeps its in-memory dev stubs.
 """
@@ -88,7 +88,7 @@ class SolanaSightingSink:
         ev = await self.chain.get_event(event)
         if ev is None:
             # No account (never created, or closed by withdraw_remaining) or not an Event of this program.
-            raise SightingRejected("no presence_pay Event at this address")
+            raise SightingRejected("no on_sight Event at this address")
         if self.oracle.pubkey() not in ev.oracles:
             # The organizer chose other oracles for this event: the program would reject our signature anyway.
             raise SightingRejected(f"this oracle's key {self.oracle.pubkey()} is not one of the event's oracles")
@@ -103,7 +103,7 @@ class SolanaSightingSink:
         return await self._paid(event, attendee, sig)
 
     async def _paid(self, event: Pubkey, attendee: Pubkey, ours: Signature | None) -> SightingResult:
-        """The payout tx: ours when its logs carry AttendeePaid, else found on the Sighting's history."""
+        """The payout tx: ours when its logs carry AttendeePaid, else found on the Attendance's history."""
         if ours is not None and await self.chain.tx_paid(ours, event, attendee):
             return SightingResult(paid=True, tx=str(ours))
         tx = await self.chain.payout_tx(event, attendee)

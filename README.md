@@ -61,7 +61,7 @@ report pays, which covers its transaction fees and deposits.
 
 ### Where exactly the intermediary disappears
 
-In `report_sighting` (`contracts/presence_pay/lib.rs`). An oracle can only *report* that it sees a wallet; this
+In `report_sighting` (`contracts/on_sight/lib.rs`). An oracle can only *report* that it sees a wallet; this
 instruction decides whether that pays. It accepts the report only from one of the event's oracles, only with the
 attendee's own signed join (`check_join_proof`), and only during the event. It pays only once enough different
 oracles have seen the person for long enough on the chain's clock, and only while the cap isn't reached. Then
@@ -72,8 +72,8 @@ rest to the organizer only before the start or after the end.
 
 ## How it works
 
-1. **Organizer creates the event on chain** (`create_event`): name, venue, reward, cap, window, minimum time on
-   camera, oracles, threshold. The budget moves into escrow.
+1. **Organizer creates the event on chain** on the organizer page (`create_event`): name, venue, reward, cap,
+   window, minimum time on camera, oracles, threshold. The budget moves into escrow.
 2. **Attendee joins** on the event's page through the widget: connects MetaMask (Solana), takes one selfie,
    accepts the consent and signs one message. Free, no transaction. The widget reads the event's terms and
    oracles from the chain and sends the join to every oracle.
@@ -88,12 +88,13 @@ rest to the organizer only before the start or after the end.
 
 | Path | What |
 |---|---|
-| `contracts/presence_pay/` | The Anchor program (`lib.rs`), its IDL, a Solana Playground test, and a README with accounts, instructions, rules and error codes. |
+| `contracts/on_sight/` | The Anchor program (`lib.rs`), its IDL, a Solana Playground test, and a README with accounts, instructions, rules and error codes. |
 | `backend/app/oracle/` | The oracle: join API (signature and photo checks), encrypted in-memory guest lists, face recognition (InsightFace), tracking, camera and stage WebSockets. |
 | `backend/app/chain/` | Solana client for the program: reads events, sends reports with the join proof, finds payout transactions. |
 | `backend/tests/` | Tests, including the compiled program run in LiteSVM (`tests/chain/test_program_litesvm.py`). |
 | `frontend/src/widget/` | The embeddable widget (`<attend-now-widget>`, built to `widget.js`): wallet, selfie, consent, join to every oracle. |
-| `frontend/src/venue/` | Stage screen (`stage.html#<event>`) and camera page (`camera.html`). |
+| `frontend/src/organizer/` | Organizer page (`organizer.html`): create and fund an event from the organizer's wallet. |
+| `frontend/src/venue/` | Stage screen (`stage.html#<event>`, with the deposit and withdrawal) and camera page (`camera.html`). |
 | `frontend/src/event-page/` | An example host page with the widget embedded. |
 | `scripts/` | `devnet_event.py` creates a devnet event; `register_oracle.py` publishes an oracle's name and URL on chain. |
 | `docs/` | The oracle API (`oracle-api.md`) and architecture pages. |
@@ -112,7 +113,7 @@ Embedding the widget on any page:
 | `create_event` | anyone (they become the organizer and fund it) | any time |
 | `report_sighting` | an oracle listed on the event, with the attendee's signed join | during the event |
 | `withdraw_remaining` | that event's organizer | before the start or after the end |
-| `close_sighting` | the oracle that paid the Sighting's deposit | after the end |
+| `close_attendance` | the oracle that paid the Attendance account's deposit | after the end |
 | `register_oracle` | any key, for its own entry | any time |
 
 There's no admin and no other operation: nobody, us included, can change an event's terms or touch its budget.
@@ -137,11 +138,10 @@ oracles stop, nobody is paid and the organizer withdraws everything after the en
   didn't come. Production needs liveness detection.
 - **Biometrics and GDPR.** The lawful setting is a check-in point people step up to after explicit, separate
   consent, with a non-biometric alternative; scanning a whole room isn't.
-- **No organizer UI yet:** events are created with `scripts/devnet_event.py`.
 
 ## Run it
 
-Devnet only. The program ID lives in `contracts/presence_pay/lib.rs` (`declare_id!`), the backend's
+Devnet only. The program ID lives in `contracts/on_sight/lib.rs` (`declare_id!`), the backend's
 `PRESENCE_PROGRAM_ID` and the widget's `DEFAULT_PROGRAM_ID` (`frontend/src/widget/chain.ts`).
 
 ```sh
@@ -149,13 +149,13 @@ Devnet only. The program ID lives in `contracts/presence_pay/lib.rs` (`declare_i
 cd backend && uv run uvicorn app.main:app --reload
 # frontend on :5173, proxies /api -> :8000
 cd frontend && npm run dev
-# tests (add PRESENCE_SO=<built presence_pay.so> to run the program itself in LiteSVM)
+# tests (add PRESENCE_SO=<built on_sight.so> to run the program itself in LiteSVM)
 cd backend && uv run pytest -q
 # a devnet event
 cd backend && uv run python ../scripts/devnet_event.py --name "HackYeah 2026" --venue "Tauron Arena"
 ```
 
-Building and deploying the program: [`contracts/presence_pay/README.md`](contracts/presence_pay/README.md).
+Building and deploying the program: [`contracts/on_sight/README.md`](contracts/on_sight/README.md).
 
 ## Deployment
 

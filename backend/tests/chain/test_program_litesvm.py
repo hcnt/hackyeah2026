@@ -1,7 +1,7 @@
-"""The compiled presence_pay program (contracts/presence_pay/lib.rs) run in LiteSVM, with the chain clock warped.
+"""The compiled on_sight program (contracts/on_sight/lib.rs) run in LiteSVM, with the chain clock warped.
 
-Skipped unless PRESENCE_SO points at a built presence_pay.so (`cargo build-sbf`, see contracts/presence_pay/README.md).
-The program id is PRESENCE_SO_PROGRAM_ID, or else the pubkey of `presence_pay-keypair.json` next to the .so; it must
+Skipped unless PRESENCE_SO points at a built on_sight.so (`cargo build-sbf`, see contracts/on_sight/README.md).
+The program id is PRESENCE_SO_PROGRAM_ID, or else the pubkey of `on_sight-keypair.json` next to the .so; it must
 equal the `declare_id!` the .so was built with. Instructions come from the backend client's own builders, so this
 also checks that the client and the program agree on discriminators, Borsh layouts and account order.
 """
@@ -20,12 +20,13 @@ from solders.system_program import TransferParams, transfer
 from app.chain.presence_chain import (
     FEE_LAMPORTS,
     SIGHTING_GAP_SECS,
+    Attendance,
     Event,
     OracleInfo,
-    Sighting,
     _program_error,
+    attendance_pda,
     attendee_paid,
-    close_sighting_ix,
+    close_attendance_ix,
     create_event_ix,
     ed25519_verify_ix,
     event_pda,
@@ -33,13 +34,12 @@ from app.chain.presence_chain import (
     register_oracle_ix,
     report_sighting_ix,
     report_sighting_ixs,
-    sighting_pda,
     withdraw_remaining_ix,
 )
 from app.oracle.signatures import JoinProof, build_message
 
 SO = os.environ.get("PRESENCE_SO", "")
-pytestmark = pytest.mark.skipif(not SO or not Path(SO).is_file(), reason="PRESENCE_SO (a built presence_pay.so) not set")
+pytestmark = pytest.mark.skipif(not SO or not Path(SO).is_file(), reason="PRESENCE_SO (a built on_sight.so) not set")
 
 FEE = FEE_LAMPORTS  # frozen into every Event at creation
 REWARD = 10_000_000
@@ -61,7 +61,7 @@ def _program_id() -> Pubkey:
     explicit = os.environ.get("PRESENCE_SO_PROGRAM_ID")
     if explicit:
         return Pubkey.from_string(explicit)
-    kp_file = Path(SO).with_name("presence_pay-keypair.json")
+    kp_file = Path(SO).with_name("on_sight-keypair.json")
     return Keypair.from_bytes(bytes(json.loads(kp_file.read_text()))).pubkey()
 
 
@@ -149,9 +149,9 @@ class Chain:
     def report_ix(self, event: Pubkey, attendee: Pubkey, oracle: Keypair | None = None):
         return report_sighting_ix((oracle or self.oracle).pubkey(), self.event(event), attendee, self.pid)
 
-    def sighting(self, event: Pubkey, attendee: Pubkey) -> Sighting | None:
-        acc = self.svm.get_account(sighting_pda(event, attendee, self.pid))
-        return Sighting.decode(bytes(acc.data)) if acc is not None and acc.lamports > 0 else None
+    def attendance(self, event: Pubkey, attendee: Pubkey) -> Attendance | None:
+        acc = self.svm.get_account(attendance_pda(event, attendee, self.pid))
+        return Attendance.decode(bytes(acc.data)) if acc is not None and acc.lamports > 0 else None
 
 
 @pytest.fixture
@@ -263,10 +263,10 @@ def test_threshold_1_pays_after_dwell_exactly_once(chain):
     t0 = START + 10
 
     chain.ok(chain.report(ev_addr, attendee, t0))
-    s = chain.sighting(ev_addr, attendee)
+    s = chain.attendance(ev_addr, attendee)
     assert (s.first_seen, s.last_seen, s.reporters, s.paid, s.payer) == (t0, t0, 1, False, chain.oracle.pubkey())
     chain.ok(chain.report(ev_addr, attendee, t0 + 2))
-    assert chain.balance(attendee) == 0 and not chain.sighting(ev_addr, attendee).paid
+    assert chain.balance(attendee) == 0 and not chain.attendance(ev_addr, attendee).paid
 
     oracle_before = chain.balance(chain.oracle.pubkey())
     res = chain.ok(chain.report(ev_addr, attendee, t0 + 3))  # dwell 3 s on the chain clock
@@ -274,7 +274,7 @@ def test_threshold_1_pays_after_dwell_exactly_once(chain):
     assert chain.balance(attendee) == REWARD
     assert chain.balance(chain.oracle.pubkey()) == oracle_before + FEE - REPORT_TX_FEE  # the reporting oracle earns it
     assert chain.balance(ev_addr) == vault - REWARD - FEE
-    assert chain.event(ev_addr).paid_count == 1 and chain.sighting(ev_addr, attendee).paid
+    assert chain.event(ev_addr).paid_count == 1 and chain.attendance(ev_addr, attendee).paid
 
     for dt in (4, 10, 100):  # later sightings are successful no-ops: no second reward, no second fee
         before = chain.balance(chain.oracle.pubkey())
@@ -298,11 +298,11 @@ def test_threshold_2_of_2_needs_both_oracles(chain):
     t0 = START + 10
     for dt in (0, 5, 10, 20):  # one oracle, long past the dwell: never pays
         chain.ok(chain.report(ev_addr, attendee, t0 + dt))
-    s = chain.sighting(ev_addr, attendee)
+    s = chain.attendance(ev_addr, attendee)
     assert s.reporters == 0b01 and not s.paid and chain.balance(attendee) == 0
     first, second = chain.balance(chain.oracle.pubkey()), chain.balance(chain.oracle2.pubkey())
     chain.ok(chain.report(ev_addr, attendee, t0 + 21, oracle=chain.oracle2))
-    s = chain.sighting(ev_addr, attendee)
+    s = chain.attendance(ev_addr, attendee)
     assert s.reporters == 0b11 and s.paid
     assert chain.balance(attendee) == REWARD
     # The fee goes to the oracle whose report paid (oracle2), not to the one that reported first.
@@ -313,7 +313,7 @@ def test_threshold_2_of_2_needs_both_oracles(chain):
 def test_threshold_2_of_2_fee_goes_to_whichever_oracle_completes_it(chain):
     _, ev_addr = chain.create_event(oracles=[chain.oracle.pubkey(), chain.oracle2.pubkey()], threshold=2, min_seen=0)
     attendee = chain.attendee()
-    chain.ok(chain.report(ev_addr, attendee, START + 10, oracle=chain.oracle2))  # creates the Sighting, no payout
+    chain.ok(chain.report(ev_addr, attendee, START + 10, oracle=chain.oracle2))  # creates the Attendance, no payout
     first, second = chain.balance(chain.oracle.pubkey()), chain.balance(chain.oracle2.pubkey())
     chain.ok(chain.report(ev_addr, attendee, START + 11, oracle=chain.oracle))
     assert chain.balance(attendee) == REWARD
@@ -325,7 +325,7 @@ def test_non_oracle_signer_rejected(chain):
     _, ev_addr = chain.create_event(min_seen=0)
     attendee = chain.attendee()
     assert chain.code(chain.report(ev_addr, attendee, START + 10, oracle=chain.outsider)) == "NotOracle"
-    assert chain.sighting(ev_addr, attendee) is None and chain.balance(attendee) == 0
+    assert chain.attendance(ev_addr, attendee) is None and chain.balance(attendee) == 0
 
 
 def test_sighting_outside_the_window_rejected(chain):
@@ -333,7 +333,7 @@ def test_sighting_outside_the_window_rejected(chain):
     attendee = chain.attendee()
     assert chain.code(chain.report(ev_addr, attendee, START - 1)) == "NotStarted"
     assert chain.code(chain.report(ev_addr, attendee, END + 1)) == "Ended"
-    assert chain.sighting(ev_addr, attendee) is None
+    assert chain.attendance(ev_addr, attendee) is None
     chain.ok(chain.report(ev_addr, attendee, END))  # end is inclusive
     assert chain.balance(attendee) == REWARD
 
@@ -345,7 +345,7 @@ def test_gap_over_60s_restarts_the_dwell(chain):
     chain.ok(chain.report(ev_addr, attendee, t0))
     t1 = t0 + SIGHTING_GAP_SECS + 1  # gone for 61 s
     chain.ok(chain.report(ev_addr, attendee, t1))
-    s = chain.sighting(ev_addr, attendee)
+    s = chain.attendance(ev_addr, attendee)
     assert (s.first_seen, s.last_seen, s.paid) == (t1, t1, False)
     chain.ok(chain.report(ev_addr, attendee, t1 + 2))
     assert chain.balance(attendee) == 0
@@ -368,31 +368,31 @@ def test_cap_reached_returns_error_and_reverts(chain):
     vault = chain.balance(ev_addr)
     assert chain.code(chain.report(ev_addr, b, START + 11)) == "CapReached"
     assert chain.balance(b) == 0 and chain.balance(ev_addr) == vault
-    assert chain.sighting(ev_addr, b) is None  # the whole transaction, incl. the Sighting's creation, reverted
+    assert chain.attendance(ev_addr, b) is None  # the whole transaction, incl. the Attendance's creation, reverted
 
 
-def test_close_sighting_only_after_end_returns_rent_to_payer(chain):
+def test_close_attendance_only_after_end_returns_rent_to_payer(chain):
     _, ev_addr = chain.create_event(min_seen=0)
     attendee = chain.attendee()
     chain.ok(chain.report(ev_addr, attendee, START + 10))
-    sighting = sighting_pda(ev_addr, attendee, chain.pid)
-    sighting_rent = chain.balance(sighting)
-    assert sighting_rent > 0
-    close = close_sighting_ix(chain.oracle.pubkey(), ev_addr, attendee, chain.pid)
+    attendance = attendance_pda(ev_addr, attendee, chain.pid)
+    attendance_rent = chain.balance(attendance)
+    assert attendance_rent > 0
+    close = close_attendance_ix(chain.oracle.pubkey(), ev_addr, attendee, chain.pid)
 
     chain.set_time(END)
     assert chain.code(chain.send([close], chain.oracle)) == "EventRunning"
     chain.set_time(END + 1)
-    other = close_sighting_ix(chain.oracle2.pubkey(), ev_addr, attendee, chain.pid)
+    other = close_attendance_ix(chain.oracle2.pubkey(), ev_addr, attendee, chain.pid)
     assert chain.code(chain.send([other], chain.oracle2)) == "Unauthorized"  # has_one = payer
 
-    # Works after the organizer closed the Event: the end is stored in the Sighting.
+    # Works after the organizer closed the Event: the end is stored in the Attendance.
     chain.ok(chain.send([withdraw_remaining_ix(chain.organizer.pubkey(), ev_addr, chain.pid)], chain.organizer))
     assert chain.svm.get_account(ev_addr) is None or chain.balance(ev_addr) == 0
     before = chain.balance(chain.oracle.pubkey())
     chain.ok(chain.send([close], chain.oracle))
-    assert chain.balance(chain.oracle.pubkey()) == before + sighting_rent - TX_FEE
-    assert chain.sighting(ev_addr, attendee) is None
+    assert chain.balance(chain.oracle.pubkey()) == before + attendance_rent - TX_FEE
+    assert chain.attendance(ev_addr, attendee) is None
 
 
 def test_withdraw_remaining_after_end_returns_the_rest(chain):
@@ -414,7 +414,7 @@ def test_withdraw_remaining_after_end_returns_the_rest(chain):
 
 
 def assert_nothing_happened(chain: Chain, ev_addr: Pubkey, attendee: Pubkey, vault: int) -> None:
-    assert chain.sighting(ev_addr, attendee) is None
+    assert chain.attendance(ev_addr, attendee) is None
     assert chain.balance(attendee) == 0
     assert chain.balance(ev_addr) == vault and chain.event(ev_addr).paid_count == 0
 
@@ -441,8 +441,8 @@ def test_legit_join_proof_pays_exactly_once(chain):
     before = chain.balance(chain.oracle.pubkey())
     res = chain.ok(chain.report(ev_addr, attendee, START + 10))
     assert attendee_paid(res.logs(), ev_addr, attendee)
-    sighting_rent = chain.balance(sighting_pda(ev_addr, attendee, chain.pid))  # first report: the oracle pays it
-    assert chain.balance(chain.oracle.pubkey()) == before + FEE - sighting_rent - REPORT_TX_FEE
+    attendance_rent = chain.balance(attendance_pda(ev_addr, attendee, chain.pid))  # first report: the oracle pays it
+    assert chain.balance(chain.oracle.pubkey()) == before + FEE - attendance_rent - REPORT_TX_FEE
     chain.ok(chain.report(ev_addr, attendee, START + 11))  # a second report is a no-op, not a second payout
     assert chain.balance(attendee) == REWARD
     assert chain.balance(ev_addr) == vault - REWARD - FEE and chain.event(ev_addr).paid_count == 1
@@ -487,7 +487,7 @@ def test_another_attendees_valid_join_is_bad_join_proof(chain):
     ixs = [ed25519_verify_ix(other, other_proof.signature, other_proof.message), chain.report_ix(ev_addr, attendee)]
     assert chain.code(chain.send(ixs, chain.oracle)) == "BadJoinProof"
     assert_nothing_happened(chain, ev_addr, attendee, vault)
-    assert chain.sighting(ev_addr, other) is None and chain.balance(other) == 0
+    assert chain.attendance(ev_addr, other) is None and chain.balance(other) == 0
 
 
 def test_message_that_is_not_a_join_is_bad_join_proof(chain):

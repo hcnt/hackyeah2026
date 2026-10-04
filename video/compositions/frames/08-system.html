@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Satoshi", sans-serif; overflow: hidden; }
+  .disp { font-family: "Satoshi"; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }
+  .acc { color: #2775CA; }
+
+  .wgw { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; }
+  .wg { box-sizing: border-box; width: 400px; display: flex; flex-direction: column; gap: 20px; padding: 20px 24px 16px; background: #fff; border-radius: 20px;
+        box-shadow: inset 0 0 0 1px #e5e5e5, 0 12px 32px -8px rgba(10,10,10,.24); font-family: "Satoshi"; color: #0a0a0a; font-size: 14px; line-height: 1.4; overflow: hidden; }
+  .wg * { box-sizing: border-box; }
+  .wg .body { display: flex; flex-direction: column; gap: 16px; }
+  .wg .center { align-items: center; text-align: center; }
+  .wg .reward { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
+  .wg .rlabel { font-size: 18px; font-weight: 500; color: #171717; }
+  .wg .rlabel b { font-weight: 700; color: #2775CA; }
+  .wg .amt { font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: -0.9px; color: #2775CA; }
+  .wg .split { display: flex; align-items: center; height: 44px; padding: 0 8px 0 20px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; }
+  .wg .split .main { flex: 1; text-align: center; }
+  .wg .split .div { width: 1px; height: 20px; background: rgba(255,255,255,.16); }
+  .wg .split .trig { display: flex; align-items: center; gap: 4px; padding: 0 6px 0 12px; }
+  .wg .tile { position: relative; width: 26px; height: 26px; border-radius: 7px; background: #fff; }
+  .wg .tile img { position: absolute; left: 4px; top: 4px; width: 18px; height: 18px; }
+  .wg .chev { width: 14px; height: 14px; }
+  .wg .foot { display: flex; justify-content: center; font-size: 11px; color: #737373; }
+  .wg .foot.brand { margin-top: 14px; }
+  .wg .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: linear-gradient(rgba(0,0,0,.015), rgba(0,0,0,.045));
+              box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); font-size: 12px; font-weight: 500; line-height: 1.2; color: #8a8a8a; }
+  .wg .pill b { font-weight: 700; color: #404040; }
+  .wg .mark { width: 16px; height: 16px; border-radius: 5px; background: #404040; color: #fff; font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .wg .stepper { display: flex; gap: 6px; height: 3px; }
+  .wg .seg { position: relative; flex: 1; border-radius: 3px; background: #e5e5e5; overflow: hidden; }
+  .wg .seg i { position: absolute; inset: 0; background: #171717; transform-origin: 0 50%; }
+  .wg .btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; border-radius: 999px; background: #171717; color: #fafafa; font-weight: 500; width: 100%; flex: none; }
+  .wg .btn.outline { background: #fff; color: #171717; box-shadow: inset 0 0 0 1px #e5e5e5; }
+  .wg .heading { font-size: 20px; font-weight: 700; letter-spacing: -0.4px; line-height: 1.4; }
+  .wg .question { font-size: 20px; font-weight: 700; line-height: 1.25; letter-spacing: -0.3px; }
+  .wg .display { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -1.2px; }
+  .wg .badge { width: 64px; height: 64px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .vf { position: relative; height: 300px; border-radius: 16px; background: #1a1b1f; overflow: hidden; width: 100%; flex: none; }
+  .wg .vf .sil { position: absolute; left: 100px; bottom: 0; width: 152px; }
+  .wg .vf .cam { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .wg .vf .guide { position: absolute; left: 88px; top: 33px; width: 176px; height: 216px; }
+  .wg .vf .cap { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 6px 12px; border-radius: 999px; background: rgba(10,10,10,.6); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .wg .vf .flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
+  .wg .shutter { width: 64px; height: 64px; border-radius: 999px; border: 4px solid #171717; background: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .shutter span { width: 46px; height: 46px; border-radius: 999px; background: #171717; }
+  .wg .phone { position: relative; width: 96px; height: 180px; border: 3px solid #171717; border-radius: 18px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .wg .phone::before { content: ""; position: absolute; top: 8px; left: 35px; width: 20px; height: 6px; border-radius: 99px; background: #171717; }
+  .wg .phone .ok { width: 40px; height: 40px; border-radius: 999px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; }
+  .wg .status { display: flex; align-items: center; gap: 6px; color: #1F8A5B; font-size: 13px; font-weight: 500; }
+  .wg .status::before { content: ""; width: 7px; height: 7px; border-radius: 99px; background: #1F8A5B; }
+  .wg .qr { width: 188px; height: 188px; padding: 12px; border-radius: 14px; background: #fff; box-shadow: inset 0 0 0 1px #e5e5e5; flex: none; }
+  .wg .qr svg { width: 100%; height: 100%; display: block; }
+  .wg .stage { position: relative; height: 380px; }
+  .wg .pane { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center; }
+
+  #s08-ww, .s08-fw { left: 0; top: 0; }
+  #s08-txt { position: absolute; left: 160px; top: 380px; font-size: 110px; line-height: 1.08; }
+  #s08-txt .ln { display: block; } #s08-txt .w { display: inline-block; }
+  #s08-con { position: absolute; left: 810px; top: 390px; width: 300px; height: 300px; border-radius: 28px; background: #15161A; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; opacity: 0; }
+  #s08-card { position: absolute; left: 960px; top: 540px; width: 640px; height: 470px; border-radius: 28px; background: #15161A; color: #fff; overflow: hidden; opacity: 0; }
+  #s08-card .in { position: absolute; left: 0; top: 0; width: 640px; padding: 34px 40px; }
+  #s08-card .ch { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  #s08-card .ch .t { font-size: 48px; font-weight: 700; letter-spacing: -0.02em; }
+  #s08-card .cr { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; border-top: 2px solid #2A2B30; font-size: 30px; }
+  #s08-card .k { color: #A9ABB2; font-weight: 500; }
+  #s08-card .v { position: relative; min-width: 260px; height: 38px; text-align: right; font-weight: 700; }
+  #s08-card .ph { position: absolute; right: 0; top: 8px; width: 220px; height: 22px; border-radius: 11px; background: #2A2B30; }
+  #s08-card .vt { position: relative; white-space: nowrap; opacity: 0; }
+  #s08-card .tot .vt { color: #4ade80; }
+  #s08-con .t { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; } #s08-con .s { font-size: 20px; color: #A9ABB2; font-weight: 500; }
+  .cb { position: absolute; top: 840px; width: 150px; height: 150px; border-radius: 18px; background: #1B7A50; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; opacity: 0; }
+  .cb .bt { font-size: 19px; font-weight: 700; } .cb .bs { font-size: 15px; font-weight: 500; opacity: .7; }
+  .lk { position: absolute; top: 901px; width: 60px; height: 28px; border-radius: 14px; border: 5px solid #C9C7C0; opacity: 0; }
+  #s08-net { position: absolute; left: 310px; top: 40px; width: 1300px; opacity: 0; }
+  #s08-net .hd { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 700; }
+  #s08-net .hd span:last-child { margin-left: auto; font-size: 20px; color: #6B6D74; font-weight: 500; }
+  #s08-net .om { width: 40px; height: 40px; border-radius: 12px; background: #404040; color: #fff; font-weight: 900; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+  #s08-net .cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  #s08-net .col { border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; padding: 22px; }
+  #s08-net .nt { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; } #s08-net .nt i { width: 10px; height: 10px; border-radius: 9px; background: #1F8A5B; }
+  #s08-net .g { display: grid; grid-template-columns: repeat(2, 74px); gap: 14px; justify-content: center; margin-top: 18px; }
+  #s08-net .av { width: 74px; height: 74px; border-radius: 99px; background: #F3F2EE; box-shadow: inset 0 0 0 2px #E4E2DC; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+  #s08-net .av .fc { height: 70px; width: auto; opacity: 0; }
+  #s08-net .until { margin-top: 12px; text-align: right; font-size: 15px; font-weight: 500; color: #6B6D74; }
+  .fslot { position: relative; width: 96px; height: 110px; display: flex; align-items: flex-end; justify-content: center; }
+  .fslot .fc { height: 110px; width: auto; }
+  .fslot .tick { position: absolute; right: -6px; bottom: 0; width: 30px; height: 30px; border-radius: 99px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #fff; }
+  .s08-fw { opacity: 0; }
+  .s08-fly { position: absolute; left: 0; top: 0; height: 88px; width: auto; opacity: 0; filter: drop-shadow(0 8px 16px rgba(0,0,0,.2)); }
+
+
+</style>
+<div id="root" data-composition-id="s08-system" data-width="1920" data-height="1080">
+
+  <div class="wgw" id="s08-ww">
+    <div class="wg" id="s08-card">
+      <div class="stepper"><span class="seg"><i id="s08-seg0"></i></span><span class="seg"><i id="s08-seg1"></i></span><span class="seg"><i id="s08-seg2"></i></span></div>
+      <div class="body center" style="gap: 12px; height: 167px; justify-content: center"><div class="badge"><svg viewBox="0 0 32 32" width="32" height="32"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="display">You're in.</div><div class="btn outline">Add to calendar</div></div>
+      <div class="foot">Powered by OnSight</div>
+    </div>
+  </div>
+
+  <div id="s08-txt" class="disp"><span class="ln"><span class="w">Organizer</span> <span class="w">sets</span> <span class="w">the</span> <span class="w">rules</span></span><span class="ln acc"><span class="w">and</span> <span class="w">locks</span> <span class="w">the</span> <span class="w">funds.</span></span></div>
+  <div id="s08-card"><div class="in" id="s08-cin"><div class="ch"><span class="t">Contract</span><svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path id="s08-shk" d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div><div class="cr"><span class="k">Reward</span><span class="v"><span class="ph"></span><span class="vt" id="s08-v0">10 USDC each</span></span></div><div class="cr"><span class="k">For</span><span class="v"><span class="ph"></span><span class="vt" id="s08-v1">First 2 people</span></span></div><div class="cr"><span class="k">Until</span><span class="v"><span class="ph"></span><span class="vt" id="s08-v2">Oct 13 · 23:59</span></span></div><div class="cr tot"><span class="k">Locked</span><span class="v"><span class="ph"></span><span class="vt" id="s08-v3">20 USDC</span></span></div></div></div>
+  <div id="s08-con"><svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="t">Contract</div><div class="s">20 USDC locked</div></div>
+
+  <span class="lk" id="s08-lk0" style="left:310px"></span><div class="cb" id="s08-cb0" style="left:370px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">7xKX…9fQe</div><div class="bs">enrolled</div></div><span class="lk" id="s08-lk1" style="left:520px"></span><div class="cb" id="s08-cb1" style="left:580px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">Bq4n…T1zc</div><div class="bs">enrolled</div></div><span class="lk" id="s08-lk2" style="left:730px"></span><div class="cb" id="s08-cb2" style="left:790px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">9fLm…a8Pw</div><div class="bs">enrolled</div></div><span class="lk" id="s08-lk3" style="left:940px"></span><div class="cb" id="s08-cb3" style="left:1000px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">Hd2R…kq7V</div><div class="bs">enrolled</div></div>
+
+  <div id="s08-net"><div class="cols"><div class="col"><div class="nt"><i></i>Oracle node 1</div><div class="g"><span class="av"><img class="fc s08-nf0" src="assets/faces/szymon.png" alt=""></span><span class="av"><img class="fc s08-nf1" src="assets/faces/jaca.png" alt=""></span><span class="av"><img class="fc s08-nf2" src="assets/faces/bzdon.png" alt=""></span><span class="av"><img class="fc s08-nf3" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col"><div class="nt"><i></i>Oracle node 2</div><div class="g"><span class="av"><img class="fc s08-nf0" src="assets/faces/szymon.png" alt=""></span><span class="av"><img class="fc s08-nf1" src="assets/faces/jaca.png" alt=""></span><span class="av"><img class="fc s08-nf2" src="assets/faces/bzdon.png" alt=""></span><span class="av"><img class="fc s08-nf3" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col"><div class="nt"><i></i>Oracle node 3</div><div class="g"><span class="av"><img class="fc s08-nf0" src="assets/faces/szymon.png" alt=""></span><span class="av"><img class="fc s08-nf1" src="assets/faces/jaca.png" alt=""></span><span class="av"><img class="fc s08-nf2" src="assets/faces/bzdon.png" alt=""></span><span class="av"><img class="fc s08-nf3" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col"><div class="nt"><i></i>Oracle node 4</div><div class="g"><span class="av"><img class="fc s08-nf0" src="assets/faces/szymon.png" alt=""></span><span class="av"><img class="fc s08-nf1" src="assets/faces/jaca.png" alt=""></span><span class="av"><img class="fc s08-nf2" src="assets/faces/bzdon.png" alt=""></span><span class="av"><img class="fc s08-nf3" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div></div></div>
+
+  <div class="wgw s08-fw" id="s08-fw0"><div class="wg" style="gap:16px"><div class="stepper"><span class="seg"><i id="s08f0-seg0"></i></span><span class="seg"><i id="s08f0-seg1"></i></span><span class="seg"><i id="s08f0-seg2"></i></span></div>
+      <div class="body center" style="gap:12px"><div class="fslot"><img class="fc" id="s08-fwf0" src="assets/faces/szymon.png" alt=""><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="display">You're in.</div><div class="btn outline">Add to calendar</div></div>
+      <div class="foot">Powered by OnSight</div></div></div><div class="wgw s08-fw" id="s08-fw1"><div class="wg" style="gap:16px"><div class="stepper"><span class="seg"><i id="s08f1-seg0"></i></span><span class="seg"><i id="s08f1-seg1"></i></span><span class="seg"><i id="s08f1-seg2"></i></span></div>
+      <div class="body center" style="gap:12px"><div class="fslot"><img class="fc" id="s08-fwf1" src="assets/faces/jaca.png" alt=""><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="display">You're in.</div><div class="btn outline">Add to calendar</div></div>
+      <div class="foot">Powered by OnSight</div></div></div><div class="wgw s08-fw" id="s08-fw2"><div class="wg" style="gap:16px"><div class="stepper"><span class="seg"><i id="s08f2-seg0"></i></span><span class="seg"><i id="s08f2-seg1"></i></span><span class="seg"><i id="s08f2-seg2"></i></span></div>
+      <div class="body center" style="gap:12px"><div class="fslot"><img class="fc" id="s08-fwf2" src="assets/faces/bzdon.png" alt=""><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="display">You're in.</div><div class="btn outline">Add to calendar</div></div>
+      <div class="foot">Powered by OnSight</div></div></div><div class="wgw s08-fw" id="s08-fw3"><div class="wg" style="gap:16px"><div class="stepper"><span class="seg"><i id="s08f3-seg0"></i></span><span class="seg"><i id="s08f3-seg1"></i></span><span class="seg"><i id="s08f3-seg2"></i></span></div>
+      <div class="body center" style="gap:12px"><div class="fslot"><img class="fc" id="s08-fwf3" src="assets/faces/face4.png" alt=""><span class="tick"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+        <div class="display">You're in.</div><div class="btn outline">Add to calendar</div></div>
+      <div class="foot">Powered by OnSight</div></div></div>
+  <img class="s08-fly" id="s08-fly0-0" src="assets/faces/szymon.png" alt=""><img class="s08-fly" id="s08-fly0-1" src="assets/faces/szymon.png" alt=""><img class="s08-fly" id="s08-fly0-2" src="assets/faces/szymon.png" alt=""><img class="s08-fly" id="s08-fly0-3" src="assets/faces/szymon.png" alt=""><img class="s08-fly" id="s08-fly1-0" src="assets/faces/jaca.png" alt=""><img class="s08-fly" id="s08-fly1-1" src="assets/faces/jaca.png" alt=""><img class="s08-fly" id="s08-fly1-2" src="assets/faces/jaca.png" alt=""><img class="s08-fly" id="s08-fly1-3" src="assets/faces/jaca.png" alt=""><img class="s08-fly" id="s08-fly2-0" src="assets/faces/bzdon.png" alt=""><img class="s08-fly" id="s08-fly2-1" src="assets/faces/bzdon.png" alt=""><img class="s08-fly" id="s08-fly2-2" src="assets/faces/bzdon.png" alt=""><img class="s08-fly" id="s08-fly2-3" src="assets/faces/bzdon.png" alt=""><img class="s08-fly" id="s08-fly3-0" src="assets/faces/face4.png" alt=""><img class="s08-fly" id="s08-fly3-1" src="assets/faces/face4.png" alt=""><img class="s08-fly" id="s08-fly3-2" src="assets/faces/face4.png" alt=""><img class="s08-fly" id="s08-fly3-3" src="assets/faces/face4.png" alt="">
+
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+
+  // the 07 card (centre 960,540 at 1.9x) zooms out and leaves
+  tl.set("#s08-ww", { xPercent: -50, yPercent: -50, x: 960, y: 540 }, 0);
+  tl.set(["#s08-seg0", "#s08-seg1", "#s08-seg2"], { scaleX: 1 }, 0);
+  tl.fromTo("#s08-ww", { scale: 1.9, opacity: 1 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.in" }, 0.05);
+
+  // "Organizer sets the rules" ... 0.5s later "and locks the funds."
+  tl.fromTo("#s08-txt .ln:nth-child(1) .w", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.5, ease: "power4.out", stagger: 0.08 }, 0.45);
+  tl.fromTo("#s08-txt .ln:nth-child(2) .w", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.5, ease: "power4.out", stagger: 0.08 }, 1.45);
+
+  // the sentence collapses into the contract square
+  tl.to("#s08-txt", { scale: 0.25, x: 380, y: 0, opacity: 0, filter: "blur(4px)", duration: 0.55, ease: "power3.in", transformOrigin: "50% 50%" }, 2.75);
+  // an empty contract card: the rules fill in row by row, then it locks itself
+  tl.set("#s08-card", { xPercent: -50, yPercent: -50 }, 0);
+  tl.fromTo("#s08-shk", { y: -4.5 }, { y: -4.5, duration: 0.01 }, 0);
+  tl.fromTo("#s08-card", { opacity: 0, scale: 0.3 }, { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.7)" }, 3.15);
+  [0, 1, 2].forEach((i) => {
+    const t = 3.85 + i * 0.4;
+    tl.to(`#s08-card .cr:nth-child(${i + 2}) .ph`, { opacity: 0, duration: 0.15 }, t);
+    tl.fromTo(`#s08-v${i}`, { opacity: 0, clipPath: "inset(0 0 0 100%)" }, { opacity: 1, clipPath: "inset(0 0 0 0%)", duration: 0.35, ease: "power2.out" }, t);
+  });
+  tl.to("#s08-shk", { y: 0, duration: 0.25, ease: "back.in(3)" }, 5.15);
+  tl.fromTo("#s08-card", { scale: 1 }, { keyframes: { scale: [1, 1.04, 1] }, duration: 0.3, ease: "power2.out", immediateRender: false }, 5.4);
+  tl.to("#s08-card .tot .ph", { opacity: 0, duration: 0.15 }, 5.4);
+  tl.fromTo("#s08-v3", { opacity: 0, clipPath: "inset(0 0 0 100%)" }, { opacity: 1, clipPath: "inset(0 0 0 0%)", duration: 0.35, ease: "power2.out" }, 5.4);
+  // the locked card folds into the contract square
+  tl.to("#s08-cin", { opacity: 0, duration: 0.2, ease: "power1.in" }, 5.75);
+  tl.to("#s08-card", { width: 300, height: 300, duration: 0.4, ease: "power3.inOut" }, 5.8);
+  tl.set("#s08-card", { opacity: 0 }, 6.2);
+  tl.set("#s08-con", { opacity: 1 }, 6.0);
+  tl.fromTo("#s08-con > *", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 6.0);
+
+  // the contract drops to the bottom-left: first block of the chain (150px at 160,840)
+  tl.to("#s08-con", { x: -725, y: 375, scale: 0.5, duration: 0.75, ease: "power3.inOut" }, 6.1);
+
+  // the oracle network arrives at the top, empty
+  tl.fromTo("#s08-net", { opacity: 0, y: -60 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 6.7);
+
+  // widgets stream in; each one sends its face to every node and its address onto the chain
+  ['szymon', 'jaca', 'bzdon', 'face4'].forEach((n, i) => {
+    const SLOW = [1.3, 1.15, 1, 1], S = 0.75 * SLOW[i];
+    const t = 7.300000000000001 + 1.2 * SLOW.slice(0, i).reduce((a, b) => a + b, 0);
+    const w = `#s08-fw${i}`;
+    tl.set(w, { xPercent: -50, yPercent: -50, y: 540, scale: 0.8 }, 0);
+    tl.fromTo(w, { x: 2150, opacity: 1 }, { x: 960, duration: 0.9 * S, ease: "power3.out" }, t);
+    // the face splits into four copies that travel all the way into this person's slot on every node
+    tl.set(`#s08-fwf${i}`, { opacity: 0 }, t + 1.0 * S);
+    [0, 1, 2, 3].forEach((k) => {
+      const sx = 421 + k * 330 + (i % 2) * 88, sy = 148 + Math.floor(i / 2) * 88;
+      const go = t + 1.0 * S + k * 0.07 * S, land = go + 0.75 * S;
+      const f = `#s08-fly${i}-${k}`;
+      tl.fromTo(f, { xPercent: -50, yPercent: -50, x: 960, y: 492, scale: 1, opacity: 0 }, { opacity: 1, duration: 0.01 }, go);
+      tl.to(f, { x: sx, y: sy, scale: 0.8, duration: 0.75 * S, ease: "power2.inOut" }, go);
+      tl.to(f, { opacity: 0, duration: 0.06 * S }, land);
+      tl.fromTo(`#s08-net .col:nth-child(${k + 1}) .s08-nf${i}`, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.2 * S, ease: "back.out(2)" }, land);
+    });
+    // the widget empties out; its address drops down and links onto the chain
+    tl.to(w, { opacity: 0, scale: 0.6, duration: 0.35 * S, ease: "power2.in" }, t + 1.1 * S);
+    const cx = [370, 580, 790, 1000][i];
+    tl.fromTo(`#s08-cb${i}`, { opacity: 0, x: 885 - cx, y: -300, scale: 0.6 }, { opacity: 1, x: 0, y: 0, scale: 1, duration: 0.6 * S, ease: "power3.inOut" }, t + 1.15 * S);
+    tl.fromTo(`#s08-lk${i}`, { opacity: 0, scaleX: 0.3 }, { opacity: 1, scaleX: 1, duration: 0.25 * S, ease: "power2.out" }, t + 1.75 * S);
+  });
+
+  window.__timelines["s08-system"] = tl;
+</script>
+</template>
+</body>
+</html>

@@ -34,7 +34,7 @@ def chain_event(
 
 class FakeChain:
     """`pays_after`: the report number (1-based) at which the fake program pays; None = never. `paid_tx`: what
-    payout_tx finds on the Sighting's history; `ours_paid`: whether our own report's logs carry AttendeePaid."""
+    payout_tx finds on the Attendance's history; `ours_paid`: whether our own report's logs carry AttendeePaid."""
 
     def __init__(self, events: dict[Pubkey, Event] | None = None, report_error: str | None = None,
                  pays_after: int | None = 1, already_paid: bool = False, paid_tx: Signature | None = PAID_TX,

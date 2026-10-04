@@ -1,4 +1,4 @@
-"""Account decoding and instruction building of the presence_pay client, offline."""
+"""Account decoding and instruction building of the on_sight client, offline."""
 
 import asyncio
 import base64
@@ -17,14 +17,15 @@ from app.chain.presence_chain import (
     FEE_LAMPORTS,
     PROGRAM_ERRORS,
     PROGRAM_ID,
+    Attendance,
     Event,
     OracleInfo,
     PresenceChain,
     PresenceError,
-    Sighting,
     _program_error,
+    attendance_pda,
     attendee_paid,
-    close_sighting_ix,
+    close_attendance_ix,
     create_event_ix,
     ed25519_verify_ix,
     event_pda,
@@ -32,7 +33,6 @@ from app.chain.presence_chain import (
     register_oracle_ix,
     report_sighting_ix,
     report_sighting_ixs,
-    sighting_pda,
 )
 from app.oracle.signatures import JoinProof, build_message
 
@@ -135,14 +135,16 @@ def test_event_decode_rejects_short_foreign_or_oracleless_data(data):
         Event.decode(ADDRESS, data, 0)
 
 
-def test_sighting_decode():
+def test_attendance_decode():
     payer = Keypair().pubkey()
-    data = disc("account", "Sighting") + struct.pack("<qqB?", 1_000, 1_003, 0b11, True) + bytes(payer) + struct.pack(
+    data = disc("account", "Attendance") + struct.pack("<qqB?", 1_000, 1_003, 0b11, True) + bytes(payer) + struct.pack(
         "<qB", 2_000, 253
     )
-    assert Sighting.decode(data) == Sighting(1_000, 1_003, 3, True, payer, 2_000)
+    assert Attendance.decode(data) == Attendance(1_000, 1_003, 3, True, payer, 2_000)
     with pytest.raises(ValueError):
-        Sighting.decode(data[:-1])
+        Attendance.decode(data[:-1])
+    with pytest.raises(ValueError):  # the pre-rename discriminator is not an Attendance
+        Attendance.decode(disc("account", "Sighting") + data[8:])
 
 
 def test_fee_constant_mirrors_lib_rs():
@@ -158,20 +160,20 @@ def test_report_sighting_ix_accounts_in_lib_rs_order():
     assert ix.program_id == PROGRAM_ID
     assert bytes(ix.data) == disc("global", "report_sighting")
     keys = [m.pubkey for m in ix.accounts]
-    assert keys == [ORACLE, ADDRESS, sighting_pda(ADDRESS, ATTENDEE), ATTENDEE, SYSTEM_PROGRAM_ID, SYSVAR_INSTRUCTIONS]
+    assert keys == [ORACLE, ADDRESS, attendance_pda(ADDRESS, ATTENDEE), ATTENDEE, SYSTEM_PROGRAM_ID, SYSVAR_INSTRUCTIONS]
     assert [m.is_signer for m in ix.accounts] == [True, False, False, False, False, False]
     assert [m.is_writable for m in ix.accounts] == [True, True, True, True, False, False]
 
 
-def test_sighting_pda_seeds():
-    expected = Pubkey.find_program_address([b"sighting", bytes(ADDRESS), bytes(ATTENDEE)], PROGRAM_ID)[0]
-    assert sighting_pda(ADDRESS, ATTENDEE) == expected
+def test_attendance_pda_seeds():
+    expected = Pubkey.find_program_address([b"attendance", bytes(ADDRESS), bytes(ATTENDEE)], PROGRAM_ID)[0]
+    assert attendance_pda(ADDRESS, ATTENDEE) == expected
 
 
-def test_close_sighting_ix():
-    ix = close_sighting_ix(ORACLE, ADDRESS, ATTENDEE)
-    assert bytes(ix.data) == disc("global", "close_sighting")
-    assert [m.pubkey for m in ix.accounts] == [ORACLE, sighting_pda(ADDRESS, ATTENDEE)]
+def test_close_attendance_ix():
+    ix = close_attendance_ix(ORACLE, ADDRESS, ATTENDEE)
+    assert bytes(ix.data) == disc("global", "close_attendance")
+    assert [m.pubkey for m in ix.accounts] == [ORACLE, attendance_pda(ADDRESS, ATTENDEE)]
     assert [m.is_signer for m in ix.accounts] == [True, False]
 
 
@@ -325,7 +327,7 @@ def test_oracle_info_decode_reads_padded_account_and_round_trips():
     "data",
     [
         b"",
-        disc("account", "Sighting") + bytes(200),  # another account type
+        disc("account", "Attendance") + bytes(200),  # another account type
         disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 33) + b"x" * 33 + bytes(200),  # name > 32
         disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 7) + b"OnSight",  # truncated before url
         disc("account", "OracleInfo") + bytes(ORACLE) + struct.pack("<I", 2) + b"\xff\xfe" + bytes(200),  # bad UTF-8

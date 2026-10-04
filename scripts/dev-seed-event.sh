@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Creates the widget's demo event on a dev backend (events live in memory, so rerun after a restart).
-# Usage: scripts/dev-seed-event.sh [backend_url]   (default http://localhost:8000)
+# Usage: [ORGANIZER=<wallet>] scripts/dev-seed-event.sh [backend_url]   (default http://localhost:8000)
+# ORGANIZER is the wallet allowed to pair the event camera; set it to a wallet whose key you hold.
 set -euo pipefail
 BACKEND=${1:-http://localhost:8000}
+ORGANIZER=${ORGANIZER:-3JSNyprAEU5iC7BxPhEk61KykP54meF5K6vh88RuhaCH}
 NOW=$(date +%s)
 curl -fsS -X POST "$BACKEND/api/oracle/dev/events" -H 'Content-Type: application/json' -d @- <<JSON
 {
   "event_id": "AttendNowDemoEvent1111111111111111111111111",
-  "organizer": "3JSNyprAEU5iC7BxPhEk61KykP54meF5K6vh88RuhaCH",
+  "organizer": "$ORGANIZER",
   "start_ts": $((NOW - 3600)),
   "end_ts": $((NOW + 2 * 86400)),
   "min_seen_secs": 3,

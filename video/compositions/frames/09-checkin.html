@@ -1,0 +1,373 @@
+<!doctype html>
+<html>
+<head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Medium.ttf"); font-weight: 500; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Bold.ttf"); font-weight: 700; }
+  @font-face { font-family: "Satoshi"; src: url("assets/fonts/satoshi/Satoshi-Black.ttf"); font-weight: 900; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-SemiBold.ttf"); font-weight: 600; }
+  @font-face { font-family: "Geist"; src: url("assets/fonts/geist/Geist-Bold.ttf"); font-weight: 700; }
+  #root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Satoshi", sans-serif; overflow: hidden; }
+  .disp { font-family: "Satoshi"; font-weight: 700; letter-spacing: -0.03em; line-height: 1.02; white-space: nowrap; }
+  .acc { color: #2775CA; }
+
+  #s08-ww, .s08-fw { left: 0; top: 0; }
+  #s08-txt { position: absolute; left: 160px; top: 380px; font-size: 110px; line-height: 1.08; }
+  #s08-txt .ln { display: block; } #s08-txt .w { display: inline-block; }
+  #s08-con { position: absolute; left: 810px; top: 390px; width: 300px; height: 300px; border-radius: 28px; background: #15161A; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; opacity: 0; }
+  #s08-card { position: absolute; left: 960px; top: 540px; width: 640px; height: 470px; border-radius: 28px; background: #15161A; color: #fff; overflow: hidden; opacity: 0; }
+  #s08-card .in { position: absolute; left: 0; top: 0; width: 640px; padding: 34px 40px; }
+  #s08-card .ch { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  #s08-card .ch .t { font-size: 48px; font-weight: 700; letter-spacing: -0.02em; }
+  #s08-card .cr { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; border-top: 2px solid #2A2B30; font-size: 30px; }
+  #s08-card .k { color: #A9ABB2; font-weight: 500; }
+  #s08-card .v { position: relative; min-width: 260px; height: 38px; text-align: right; font-weight: 700; }
+  #s08-card .ph { position: absolute; right: 0; top: 8px; width: 220px; height: 22px; border-radius: 11px; background: #2A2B30; }
+  #s08-card .vt { position: relative; white-space: nowrap; opacity: 0; }
+  #s08-card .tot .vt { color: #4ade80; }
+  #s08-con .t { font-size: 44px; font-weight: 700; letter-spacing: -0.02em; } #s08-con .s { font-size: 20px; color: #A9ABB2; font-weight: 500; }
+  .cb { position: absolute; top: 840px; width: 150px; height: 150px; border-radius: 18px; background: #1B7A50; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; opacity: 0; }
+  .cb .bt { font-size: 19px; font-weight: 700; } .cb .bs { font-size: 15px; font-weight: 500; opacity: .7; }
+  .lk { position: absolute; top: 901px; width: 60px; height: 28px; border-radius: 14px; border: 5px solid #C9C7C0; opacity: 0; }
+  #s08-net { position: absolute; left: 310px; top: 40px; width: 1300px; opacity: 0; }
+  #s08-net .hd { display: flex; align-items: center; gap: 14px; font-size: 30px; font-weight: 700; }
+  #s08-net .hd span:last-child { margin-left: auto; font-size: 20px; color: #6B6D74; font-weight: 500; }
+  #s08-net .om { width: 40px; height: 40px; border-radius: 12px; background: #404040; color: #fff; font-weight: 900; font-size: 22px; display: flex; align-items: center; justify-content: center; }
+  #s08-net .cols { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  #s08-net .col { border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 2px #D9D7D0; padding: 22px; }
+  #s08-net .nt { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 700; } #s08-net .nt i { width: 10px; height: 10px; border-radius: 9px; background: #1F8A5B; }
+  #s08-net .g { display: grid; grid-template-columns: repeat(2, 74px); gap: 14px; justify-content: center; margin-top: 18px; }
+  #s08-net .av { width: 74px; height: 74px; border-radius: 99px; background: #F3F2EE; box-shadow: inset 0 0 0 2px #E4E2DC; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
+  #s08-net .av .fc { height: 70px; width: auto; opacity: 0; }
+  #s08-net .until { margin-top: 12px; text-align: right; font-size: 15px; font-weight: 500; color: #6B6D74; }
+  .fslot { position: relative; width: 96px; height: 110px; display: flex; align-items: flex-end; justify-content: center; }
+  .fslot .fc { height: 110px; width: auto; }
+  .fslot .tick { position: absolute; right: -6px; bottom: 0; width: 30px; height: 30px; border-radius: 99px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px #fff; }
+  .s08-fw { opacity: 0; }
+  .s08-fly { position: absolute; left: 0; top: 0; height: 88px; width: auto; opacity: 0; filter: drop-shadow(0 8px 16px rgba(0,0,0,.2)); }
+
+  #s08-net { opacity: 1; }
+  #s09-all { position: absolute; inset: 0; transform-origin: 960px 540px; }
+  #s09-timer { position: absolute; left: 0; right: 0; top: 380px; display: flex; flex-direction: column; align-items: center; gap: 22px; opacity: 0; }
+  #s09-timer .lab { font-size: 26px; font-weight: 500; color: #6B6D74; }
+  #s09-timer .row { display: flex; align-items: center; gap: 12px; }
+  #s09-timer .tile { position: relative; width: 112px; height: 150px; border-radius: 18px; background: #15161A; color: #fff; font-size: 112px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; justify-content: center; }
+  #s09-timer .tile::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: rgba(243,242,238,.18); }
+  #s09-timer .colon { font-size: 100px; font-weight: 700; color: #15161A; padding: 0 4px 14px; }
+  #s09-d3 .b { display: none; }
+  #s09-brand { position: absolute; left: 0; right: 0; top: 400px; height: 170px; display: flex; align-items: center; justify-content: center; font-family: "Geist"; }
+  #s09-mark { width: 150px; height: 150px; border-radius: 40px; background: #15161A; color: #fff; font-weight: 700; font-size: 92px; letter-spacing: -0.04em; display: flex; align-items: center; justify-content: center; flex: none; opacity: 0; }
+  #s09-wmw { display: block; width: 0; overflow: hidden; flex: none; }
+  #s09-wm { display: block; width: 596px; padding-left: 40px; font-size: 150px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.1; color: #15161A; white-space: nowrap; }
+  #s09-motto { position: absolute; left: 0; right: 0; top: 620px; text-align: center; font-family: "Geist"; font-size: 54px; font-weight: 400; letter-spacing: -0.02em; color: #6B6D74; opacity: 0; }
+  #s09-motto b { font-weight: 600; color: #2775CA; }
+  #s08-net .av .fc { opacity: 1; }
+  .cb, .lk { opacity: 1; }
+  #s09-con { position: absolute; left: 160px; top: 840px; width: 150px; height: 150px; border-radius: 18px; background: #15161A; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+  #s09-con .t { font-size: 22px; font-weight: 700; } #s09-con .s { font-size: 10px; color: #A9ABB2; font-weight: 500; }
+  .nt { position: relative; }
+  .nt .ok { position: absolute; right: -8px; top: -6px; width: 34px; height: 34px; border-radius: 99px; background: #1F8A5B; display: flex; align-items: center; justify-content: center; opacity: 0; }
+  .s09-col.on { box-shadow: inset 0 0 0 3px #1F8A5B; }
+  #s08-net .av.me { position: relative; }
+
+  #s09-floor { position: absolute; left: 370px; width: 1200px; top: 759px; height: 2px; background: linear-gradient(90deg, rgba(201,199,191,0), #C9C7BF 15%, #C9C7BF 85%, rgba(201,199,191,0)); transform-origin: 50% 50%; }
+  #s09-door { position: absolute; left: 850px; top: 400px; width: 220px; height: 360px; border: 10px solid #C9C7BF; border-bottom: 0; border-radius: 16px 16px 0 0; background: #EAE8E2; transform-origin: 50% 100%; }
+  #s09-door i { position: absolute; inset: 0; border-radius: 6px 6px 0 0; background: linear-gradient(180deg, rgba(21,22,26,.10), rgba(21,22,26,0)); }
+  #s09-dlab { position: absolute; left: 850px; top: 352px; width: 220px; text-align: center; font-weight: 700; font-size: 22px; letter-spacing: .28em; color: #6B6D74; }
+  #s09-cam { position: absolute; left: 782px; top: 408px; width: 78px; height: 40px; transform-origin: 100% 50%; transform: rotate(-24deg); }
+  #s09-cam .b { position: absolute; left: 14px; top: 0; width: 64px; height: 40px; border-radius: 10px; background: #E4E2DC; border: 3px solid #8A8C93; }
+  #s09-cam .l { position: absolute; left: 0; top: 8px; width: 22px; height: 24px; border-radius: 6px 3px 3px 6px; background: #6B6D74; }
+  #s09-cam .d { position: absolute; left: 54px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: #D9D7D0; }
+  #s09-led { position: absolute; left: 54px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: #15161A; box-shadow: 0 0 10px rgba(21,22,26,.35); opacity: 0; }
+  #s09-arm { position: absolute; left: 844px; top: 426px; width: 16px; height: 6px; background: #8A8C93; }
+
+  #s09-av { position: absolute; left: 655px; top: 480px; width: 130px; height: 280px; }
+  #s09-avb { position: absolute; inset: 0; transform-origin: 50% 100%; }
+  #s09-torso { position: absolute; left: 0; top: 120px; width: 130px; height: 160px; border-radius: 65px 65px 22px 22px; background: #8A8C93; box-shadow: 0 10px 24px rgba(21,22,26,.16); }
+  #s09-head { position: absolute; left: 50%; bottom: 145px; height: 150px; width: auto; transform: translateX(-50%); }
+
+  #s09-scan { position: absolute; left: 630px; top: 445px; width: 180px; height: 180px; transform-origin: 50% 50%; opacity: 0; }
+  .br { position: absolute; width: 38px; height: 38px; border: 0 solid #15161A; }
+  #s09-tl { left: 0; top: 0; border-left-width: 5px; border-top-width: 5px; border-top-left-radius: 8px; }
+  #s09-tr { right: 0; top: 0; border-right-width: 5px; border-top-width: 5px; border-top-right-radius: 8px; }
+  #s09-bl { left: 0; bottom: 0; border-left-width: 5px; border-bottom-width: 5px; border-bottom-left-radius: 8px; }
+  #s09-brr { right: 0; bottom: 0; border-right-width: 5px; border-bottom-width: 5px; border-bottom-right-radius: 8px; }
+  #s09-line { position: absolute; left: 6px; right: 6px; top: 0; height: 4px; border-radius: 2px; background: linear-gradient(90deg, rgba(21,22,26,.15), #15161A 50%, rgba(21,22,26,.15)); box-shadow: 0 0 16px rgba(21,22,26,.25); opacity: 0; }
+  .s09-mesh { position: absolute; left: 0; top: 0; width: 180px; height: 180px; overflow: visible; }
+  .s09-mesh line, .s09-mesh polyline { stroke: #15161A; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .s09-mesh circle { fill: #15161A; opacity: 0; }
+  .s09-jtok, .s09-ftok, .s09-tok { position: absolute; left: 702px; top: 517px; width: 36px; height: 36px; border-radius: 50%; background: #15161A; border: 4px solid #fff; box-shadow: 0 0 0 3px rgba(21,22,26,.15), 0 0 26px rgba(21,22,26,.3); opacity: 0; }
+  #s09-pay { left: 1210px; background: #2775CA; opacity: 0; }
+  #s09-pay .bt { font-size: 24px; } #s09-pay .bs { font-size: 12px; opacity: .85; }
+  #s09-plk { opacity: 0; }
+  .s09-cash { position: absolute; left: 1262px; top: 900px; width: 46px; height: 28px; border-radius: 6px; background: #2775CA; color: #fff; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 2px rgba(255,255,255,.45), 0 6px 14px rgba(39,117,202,.35); opacity: 0; }
+  .s09-cash::after { content: "$"; }
+  #s09-plus { position: absolute; left: 1185px; top: 770px; width: 200px; text-align: center; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #2775CA; opacity: 0; }
+  .nt .no { position: absolute; right: -8px; top: -6px; width: 34px; height: 34px; border-radius: 99px; background: #D93D42; color: #fff; font-size: 18px; font-weight: 900; display: flex; align-items: center; justify-content: center; opacity: 0; }
+  #s09-fav { position: absolute; left: 655px; top: 480px; width: 130px; height: 280px; opacity: 0; }
+  #s09-favb { position: absolute; inset: 0; transform-origin: 50% 100%; }
+  #s09-ftorso { position: absolute; left: 0; top: 120px; width: 130px; height: 160px; border-radius: 65px 65px 22px 22px; background: #8A8C93; box-shadow: 0 10px 24px rgba(21,22,26,.16); }
+  #s09-fhead { position: absolute; left: 5px; top: -15px; }
+  #s09-scan2 { position: absolute; left: 630px; top: 445px; width: 180px; height: 180px; transform-origin: 50% 50%; opacity: 0; }
+  #s09-tl2 { left: 0; top: 0; border-left-width: 5px; border-top-width: 5px; border-top-left-radius: 8px; }
+  #s09-tr2 { right: 0; top: 0; border-right-width: 5px; border-top-width: 5px; border-top-right-radius: 8px; }
+  #s09-bl2 { left: 0; bottom: 0; border-left-width: 5px; border-bottom-width: 5px; border-bottom-left-radius: 8px; }
+  #s09-br2 { right: 0; bottom: 0; border-right-width: 5px; border-bottom-width: 5px; border-bottom-right-radius: 8px; }
+  #s09-line2 { position: absolute; left: 6px; right: 6px; top: 0; height: 4px; border-radius: 2px; background: linear-gradient(90deg, rgba(21,22,26,.15), #15161A 50%, rgba(21,22,26,.15)); box-shadow: 0 0 16px rgba(21,22,26,.25); opacity: 0; }
+  #s09-av2 { position: absolute; left: 655px; top: 480px; width: 130px; height: 280px; opacity: 0; }
+  #s09-avb2 { position: absolute; inset: 0; transform-origin: 50% 100%; }
+  #s09-avb2 .torso2 { position: absolute; left: 0; top: 120px; width: 130px; height: 160px; border-radius: 65px 65px 22px 22px; background: #8A8C93; box-shadow: 0 10px 24px rgba(21,22,26,.16); }
+  #s09-head2 { position: absolute; left: 50%; bottom: 145px; height: 150px; width: auto; transform: translateX(-50%); }
+  #s09-scan3 { position: absolute; left: 630px; top: 445px; width: 180px; height: 180px; transform-origin: 50% 50%; opacity: 0; }
+  #s09-tl3 { left: 0; top: 0; border-left-width: 5px; border-top-width: 5px; border-top-left-radius: 8px; }
+  #s09-tr3 { right: 0; top: 0; border-right-width: 5px; border-top-width: 5px; border-top-right-radius: 8px; }
+  #s09-bl3 { left: 0; bottom: 0; border-left-width: 5px; border-bottom-width: 5px; border-bottom-left-radius: 8px; }
+  #s09-br3 { right: 0; bottom: 0; border-right-width: 5px; border-bottom-width: 5px; border-bottom-right-radius: 8px; }
+  #s09-line3 { position: absolute; left: 6px; right: 6px; top: 0; height: 4px; border-radius: 2px; background: #15161A; box-shadow: 0 0 16px rgba(21,22,26,.25); opacity: 0; }
+  #s09-pay2 { left: 1420px; background: #2775CA; opacity: 0; }
+  #s09-pay2 .bt { font-size: 24px; } #s09-pay2 .bs { font-size: 12px; opacity: .85; }
+  #s09-plk2 { opacity: 0; }
+  .s09-cash2 { left: 1472px; }
+  #s09-plus2 { position: absolute; left: 1395px; top: 770px; width: 200px; text-align: center; font-size: 40px; font-weight: 700; letter-spacing: -0.02em; color: #2775CA; opacity: 0; }
+  #s09-verdict { position: absolute; left: 1110px; top: 540px; font-size: 56px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; color: #D93D42; white-space: nowrap; opacity: 0; }
+  .s09-ring { position: absolute; inset: -5px; border-radius: 99px; box-shadow: 0 0 0 4px #1F8A5B; opacity: 0; }
+
+</style>
+<div id="root" data-composition-id="s09-checkin" data-width="1920" data-height="1080">
+
+  <div id="s09-all">
+  <div id="s08-net"><div class="cols"><div class="col s09-col" id="s09-col0"><div class="nt"><i></i>Oracle node 1<span class="ok" id="s09-ok0"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="no" id="s09-no0">✕</span></div><div class="g"><span class="av me" id="s09-me0"><img class="fc" src="assets/faces/szymon.png" alt=""></span><span class="av" id="s09-j0"><img class="fc" src="assets/faces/jaca.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/bzdon.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col s09-col" id="s09-col1"><div class="nt"><i></i>Oracle node 2<span class="ok" id="s09-ok1"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="no" id="s09-no1">✕</span></div><div class="g"><span class="av me" id="s09-me1"><img class="fc" src="assets/faces/szymon.png" alt=""></span><span class="av" id="s09-j1"><img class="fc" src="assets/faces/jaca.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/bzdon.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col s09-col" id="s09-col2"><div class="nt"><i></i>Oracle node 3<span class="ok" id="s09-ok2"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="no" id="s09-no2">✕</span></div><div class="g"><span class="av me" id="s09-me2"><img class="fc" src="assets/faces/szymon.png" alt=""></span><span class="av" id="s09-j2"><img class="fc" src="assets/faces/jaca.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/bzdon.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div><div class="col s09-col" id="s09-col3"><div class="nt"><i></i>Oracle node 4<span class="ok" id="s09-ok3"><svg viewBox="0 0 32 32" width="18" height="18"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="no" id="s09-no3">✕</span></div><div class="g"><span class="av me" id="s09-me3"><img class="fc" src="assets/faces/szymon.png" alt=""></span><span class="av" id="s09-j3"><img class="fc" src="assets/faces/jaca.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/bzdon.png" alt=""></span><span class="av" id=""><img class="fc" src="assets/faces/face4.png" alt=""></span></div><div class="until">until Oct 13 · 23:59</div></div></div></div>
+  <div id="s09-con"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><div class="t">Contract</div><div class="s"><span id="s09-amt0">20 USDC locked</span><span id="s09-amt1" style="display:none">10 USDC locked</span><span id="s09-amt2" style="display:none">0 USDC locked</span></div></div>
+  <span class="lk" style="left:310px"></span><div class="cb" id="s09-cb0" style="left:370px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">7xKX…9fQe</div><div class="bs">enrolled</div></div><span class="lk" style="left:520px"></span><div class="cb" id="s09-cb1" style="left:580px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">Bq4n…T1zc</div><div class="bs">enrolled</div></div><span class="lk" style="left:730px"></span><div class="cb" id="s09-cb2" style="left:790px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">9fLm…a8Pw</div><div class="bs">enrolled</div></div><span class="lk" style="left:940px"></span><div class="cb" id="s09-cb3" style="left:1000px"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">Hd2R…kq7V</div><div class="bs">enrolled</div></div>
+
+  <div id="s09-floor"></div>
+  <div id="s09-dlab">ENTRANCE</div>
+  <div id="s09-door"><i></i></div>
+  <div id="s09-arm"></div>
+  <div id="s09-cam"><div class="b"></div><div class="l"></div><div class="d"></div><div id="s09-led"></div></div>
+
+  <div id="s09-av"><div id="s09-avb"><div id="s09-torso"></div><img id="s09-head" src="assets/faces/szymon.png" alt=""></div></div>
+
+  <div id="s09-scan"><svg class="s09-mesh" viewBox="0 0 180 180">
+  <polyline pathLength="1" points="90,38 52,60 40,95 58,130 90,146 122,130 140,95 128,60 90,38" />
+  <line pathLength="1" x1="72" y1="84" x2="108" y2="84" /><line pathLength="1" x1="72" y1="84" x2="90" y2="106" />
+  <line pathLength="1" x1="108" y1="84" x2="90" y2="106" /><line pathLength="1" x1="90" y1="106" x2="90" y2="124" />
+  <line pathLength="1" x1="90" y1="124" x2="58" y2="130" /><line pathLength="1" x1="90" y1="124" x2="122" y2="130" />
+  <line pathLength="1" x1="52" y1="60" x2="72" y2="84" /><line pathLength="1" x1="128" y1="60" x2="108" y2="84" />
+  <line pathLength="1" x1="90" y1="38" x2="72" y2="84" /><line pathLength="1" x1="90" y1="38" x2="108" y2="84" />
+  <circle cx="90" cy="38" r="5" /><circle cx="52" cy="60" r="5" /><circle cx="128" cy="60" r="5" /><circle cx="40" cy="95" r="5" /><circle cx="140" cy="95" r="5" /><circle cx="58" cy="130" r="5" /><circle cx="122" cy="130" r="5" /><circle cx="90" cy="146" r="5" /><circle cx="72" cy="84" r="5" /><circle cx="108" cy="84" r="5" /><circle cx="90" cy="106" r="5" /><circle cx="90" cy="124" r="5" /></svg><div id="s09-line"></div><div class="br" id="s09-tl"></div><div class="br" id="s09-tr"></div><div class="br" id="s09-bl"></div><div class="br" id="s09-brr"></div></div>
+  <div class="s09-tok" id="s09-tok0"></div><div class="s09-tok" id="s09-tok1"></div><div class="s09-tok" id="s09-tok2"></div><div class="s09-tok" id="s09-tok3"></div>
+  <span class="lk" id="s09-plk" style="left:1150px"></span>
+  <div class="cb" id="s09-pay"><svg viewBox="0 0 32 32" width="26" height="26"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">+10 USDC</div><div class="bs">paid · 7xKX…9fQe</div></div>
+  <span class="s09-cash" id="s09-cash0"></span><span class="s09-cash" id="s09-cash1"></span><span class="s09-cash" id="s09-cash2"></span><span class="s09-cash" id="s09-cash3"></span><span class="s09-cash" id="s09-cash4"></span><span class="s09-cash" id="s09-cash5"></span><span class="s09-cash" id="s09-cash6"></span>
+  <div id="s09-plus">+10 USDC</div>
+
+  <div id="s09-fav"><div id="s09-favb"><div id="s09-ftorso"></div><svg id="s09-fhead" viewBox="0 0 120 140" width="120" height="140"><path d="M60 4C28 4 8 30 8 62v74h104V62C112 30 92 4 60 4z" fill="#2A2B30"/><ellipse cx="60" cy="72" rx="34" ry="42" fill="#8A8C93"/><rect x="26" y="58" width="68" height="16" rx="8" fill="#15161A"/><path d="M40 98c8 5 32 5 40 0" stroke="#15161A" stroke-width="4" fill="none" stroke-linecap="round"/></svg></div></div>
+  <div id="s09-scan2"><svg class="s09-mesh" viewBox="0 0 180 180">
+  <polyline pathLength="1" points="90,38 52,60 40,95 58,130 90,146 122,130 140,95 128,60 90,38" />
+  <line pathLength="1" x1="72" y1="84" x2="108" y2="84" /><line pathLength="1" x1="72" y1="84" x2="90" y2="106" />
+  <line pathLength="1" x1="108" y1="84" x2="90" y2="106" /><line pathLength="1" x1="90" y1="106" x2="90" y2="124" />
+  <line pathLength="1" x1="90" y1="124" x2="58" y2="130" /><line pathLength="1" x1="90" y1="124" x2="122" y2="130" />
+  <line pathLength="1" x1="52" y1="60" x2="72" y2="84" /><line pathLength="1" x1="128" y1="60" x2="108" y2="84" />
+  <line pathLength="1" x1="90" y1="38" x2="72" y2="84" /><line pathLength="1" x1="90" y1="38" x2="108" y2="84" />
+  <circle cx="90" cy="38" r="5" /><circle cx="52" cy="60" r="5" /><circle cx="128" cy="60" r="5" /><circle cx="40" cy="95" r="5" /><circle cx="140" cy="95" r="5" /><circle cx="58" cy="130" r="5" /><circle cx="122" cy="130" r="5" /><circle cx="90" cy="146" r="5" /><circle cx="72" cy="84" r="5" /><circle cx="108" cy="84" r="5" /><circle cx="90" cy="106" r="5" /><circle cx="90" cy="124" r="5" /></svg><div id="s09-line2"></div><div class="br" id="s09-tl2"></div><div class="br" id="s09-tr2"></div><div class="br" id="s09-bl2"></div><div class="br" id="s09-br2"></div></div>
+  <div class="s09-ftok" id="s09-ftok0"></div><div class="s09-ftok" id="s09-ftok1"></div><div class="s09-ftok" id="s09-ftok2"></div><div class="s09-ftok" id="s09-ftok3"></div>
+  <div id="s09-av2"><div id="s09-avb2"><div class="torso2"></div><img id="s09-head2" src="assets/faces/jaca.png" alt=""></div></div>
+  <div id="s09-scan3"><svg class="s09-mesh" viewBox="0 0 180 180">
+  <polyline pathLength="1" points="90,38 52,60 40,95 58,130 90,146 122,130 140,95 128,60 90,38" />
+  <line pathLength="1" x1="72" y1="84" x2="108" y2="84" /><line pathLength="1" x1="72" y1="84" x2="90" y2="106" />
+  <line pathLength="1" x1="108" y1="84" x2="90" y2="106" /><line pathLength="1" x1="90" y1="106" x2="90" y2="124" />
+  <line pathLength="1" x1="90" y1="124" x2="58" y2="130" /><line pathLength="1" x1="90" y1="124" x2="122" y2="130" />
+  <line pathLength="1" x1="52" y1="60" x2="72" y2="84" /><line pathLength="1" x1="128" y1="60" x2="108" y2="84" />
+  <line pathLength="1" x1="90" y1="38" x2="72" y2="84" /><line pathLength="1" x1="90" y1="38" x2="108" y2="84" />
+  <circle cx="90" cy="38" r="5" /><circle cx="52" cy="60" r="5" /><circle cx="128" cy="60" r="5" /><circle cx="40" cy="95" r="5" /><circle cx="140" cy="95" r="5" /><circle cx="58" cy="130" r="5" /><circle cx="122" cy="130" r="5" /><circle cx="90" cy="146" r="5" /><circle cx="72" cy="84" r="5" /><circle cx="108" cy="84" r="5" /><circle cx="90" cy="106" r="5" /><circle cx="90" cy="124" r="5" /></svg><div id="s09-line3"></div><div class="br" id="s09-tl3"></div><div class="br" id="s09-tr3"></div><div class="br" id="s09-bl3"></div><div class="br" id="s09-br3"></div></div>
+  <div class="s09-jtok" id="s09-jtok0"></div><div class="s09-jtok" id="s09-jtok1"></div><div class="s09-jtok" id="s09-jtok2"></div><div class="s09-jtok" id="s09-jtok3"></div>
+  <span class="lk" id="s09-plk2" style="left:1360px"></span>
+  <div class="cb" id="s09-pay2"><svg viewBox="0 0 32 32" width="26" height="26"><path d="M6.667 17.333l6 6L25.333 10.667" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="bt">+10 USDC</div><div class="bs">paid · Bq4n…T1zc</div></div>
+  <span class="s09-cash s09-cash2" id="s09-cashb0"></span><span class="s09-cash s09-cash2" id="s09-cashb1"></span><span class="s09-cash s09-cash2" id="s09-cashb2"></span><span class="s09-cash s09-cash2" id="s09-cashb3"></span><span class="s09-cash s09-cash2" id="s09-cashb4"></span><span class="s09-cash s09-cash2" id="s09-cashb5"></span><span class="s09-cash s09-cash2" id="s09-cashb6"></span>
+  <div id="s09-plus2">+10 USDC</div>
+  <div id="s09-verdict">No match.<br>No payout.</div>
+  <div id="s09-timer"><div class="lab">Oct 13 · faces deleted at</div><div class="row"><span class="tile">2</span><span class="tile">3</span><span class="colon">:</span><span class="tile">5</span><span class="tile" id="s09-d3"><span class="a">8</span><span class="b">9</span></span></div></div>
+  </div>
+  <div id="s09-brand"><span id="s09-mark">O</span><span id="s09-wmw"><span id="s09-wm">OnSight</span></span></div>
+  <div id="s09-motto">Seen on site, <b>paid on-chain.</b></div>
+
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+
+  // the door, camera and floor appear under the oracle nodes
+  tl.fromTo("#s09-floor", { scaleX: 0 }, { scaleX: 1, duration: 0.5, ease: "power3.out" }, 0.05);
+  tl.fromTo(["#s09-door", "#s09-dlab"], { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.08 }, 0.15);
+  tl.fromTo(["#s09-arm", "#s09-cam"], { opacity: 0 }, { opacity: 1, duration: 0.3 }, 0.35);
+
+  // a person walks up to the door
+  tl.fromTo("#s09-av", { x: -900 }, { x: 0, duration: 1.2, ease: "power2.out" }, 0.4);
+  tl.fromTo("#s09-avb", { y: 0, rotation: 5 }, { keyframes: { y: [0, -12, 0, -10, 0, -6, 0], rotation: [5, 4, 3, 2, 1, 0.5, 0], easeEach: "sine.inOut" }, duration: 1.2, ease: "none" }, 0.4);
+
+  // the camera scans the face
+  tl.fromTo("#s09-led", { opacity: 0 }, { opacity: 1, duration: 0.09 }, 1.65);
+  tl.fromTo("#s09-scan", { opacity: 0, scale: 1.25 }, { opacity: 1, scale: 1, duration: 0.225, ease: "power3.out" }, 1.6875);
+  tl.fromTo("#s09-line", { opacity: 0, y: 4 }, { opacity: 1, y: 4, duration: 0.045 }, 1.8375);
+  tl.to("#s09-line", { y: 172, duration: 0.4125, ease: "sine.inOut" }, 1.8825);
+  tl.to("#s09-line", { opacity: 0, duration: 0.075 }, 2.2875);
+  tl.fromTo("#s09-scan .s09-mesh circle", { opacity: 0, scale: 0, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.15, ease: "back.out(2.5)", stagger: 0.0188 }, 1.9125);
+  tl.to("#s09-scan .s09-mesh polyline, #s09-scan .s09-mesh line", { strokeDashoffset: 0, duration: 0.2625, ease: "power2.inOut", stagger: 0.015 }, 2.1375);
+
+  // the scan goes to every oracle node; each one confirms the match against szymon's face
+  tl.to("#s09-scan", { scale: 0.18, opacity: 0, duration: 0.1875, ease: "power3.in" }, 2.55);
+  tl.to("#s09-led", { opacity: 0, duration: 0.09 }, 2.5875);
+  tl.fromTo(".s09-tok", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.135, ease: "back.out(3)" }, 2.6625);
+  [[421, 148], [751, 148], [1081, 148], [1411, 148]].forEach(([sx, sy], k) => {
+    const go = 2.7525 + k * 0.06, hit = go + 0.3375;
+    tl.to(`#s09-tok${k}`, { x: sx - 720, y: sy - 535, duration: 0.3375, ease: "power2.inOut" }, go);
+    tl.to(`#s09-tok${k}`, { scale: 0, opacity: 0, duration: 0.075, ease: "power2.in" }, hit);
+    tl.fromTo(`#s09-me${k}`, { boxShadow: "inset 0 0 0 2px #E4E2DC, 0 0 0 0px #1F8A5B" }, { boxShadow: "inset 0 0 0 2px #E4E2DC, 0 0 0 5px #1F8A5B", duration: 0.15 }, hit);
+    tl.fromTo(`#s09-col${k}`, { boxShadow: "inset 0 0 0 2px #D9D7D0" }, { boxShadow: "inset 0 0 0 3px #1F8A5B", duration: 0.15 }, hit);
+    tl.fromTo(`#s09-ok${k}`, { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.225, ease: "back.out(2.6)" }, hit + 0.0225);
+  });
+
+  // the matching wallet on the chain lights up
+  tl.fromTo("#s09-cb0", { boxShadow: "0 0 0 0px rgba(31,138,91,.0)" }, { boxShadow: "0 0 0 8px rgba(31,138,91,.25)", duration: 0.2625, ease: "power2.out" }, 3.375);
+  tl.to("#s09-cb0", { keyframes: { scale: [1, 1.08, 1], easeEach: "sine.inOut" }, duration: 0.3, ease: "none" }, 3.375);
+
+
+  // payout: a payment block attaches to the chain and money pops out of it
+  tl.fromTo("#s09-pay", { opacity: 0, y: -260, x: -40, scale: 0.7 }, { opacity: 1, y: 0, x: 0, scale: 1, duration: 0.55, ease: "power3.in" }, 3.525);
+  tl.fromTo("#s09-plk", { opacity: 0, scaleX: 0.3 }, { opacity: 1, scaleX: 1, duration: 0.2, ease: "power2.out" }, 4.025);
+  tl.to("#s09-pay", { keyframes: { scale: [1, 1.12, 1], easeEach: "sine.inOut" }, duration: 0.35, ease: "none" }, 4.075);
+  [[-150, -190, -24], [-80, -250, -10], [-10, -280, 6], [60, -240, 14], [130, -200, 26], [-120, -120, -30], [110, -130, 30]].forEach(([dx, dy, r], i) => {
+    const t = 4.075 + i * 0.03;
+    tl.fromTo(`#s09-cash${i}`, { opacity: 0, x: 0, y: 0, rotation: 0, scale: 0.4 }, { opacity: 1, x: dx, y: dy, rotation: r, scale: 1, duration: 0.5, ease: "power3.out" }, t);
+    tl.to(`#s09-cash${i}`, { y: dy + 60, opacity: 0, duration: 0.45, ease: "power2.in" }, t + 0.55);
+  });
+  tl.fromTo("#s09-plus", { opacity: 0, y: 20, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "back.out(2)" }, 4.175);
+  tl.to("#s09-plus", { opacity: 0, y: -20, duration: 0.245 }, 5.485);
+  // paid: szymon's face is greyed out on every node
+  tl.to("#s08-net .av.me .fc", { filter: "grayscale(1)", opacity: 0.35, duration: 0.5, ease: "power2.out", stagger: 0.05 }, 4.275);
+  tl.set("#s09-amt0", { display: "none" }, 4.125);
+  tl.set("#s09-amt1", { display: "inline" }, 4.125);
+
+  // szymon walks in through the door; the nodes reset
+  tl.to("#s09-av", { x: 360, opacity: 0, duration: 0.7, ease: "power2.in" }, 4.675);
+  tl.to(["#s09-ok0", "#s09-ok1", "#s09-ok2", "#s09-ok3"], { opacity: 0, duration: 0.3 }, 4.975);
+  [0, 1, 2, 3].forEach((k) => {
+    tl.to(`#s09-col${k}`, { boxShadow: "inset 0 0 0 2px #D9D7D0", duration: 0.3 }, 4.975);
+    tl.to(`#s09-me${k}`, { boxShadow: "inset 0 0 0 2px #E4E2DC, 0 0 0 0px #1F8A5B", duration: 0.3 }, 4.975);
+  });
+
+  // a fraudulent actor walks up; nobody enrolled this face
+  tl.fromTo("#s09-fav", { x: -900, opacity: 1 }, { x: 0, opacity: 1, duration: 0.84, ease: "power2.out" }, 5.275);
+  tl.fromTo("#s09-favb", { y: 0, rotation: 5 }, { keyframes: { y: [0, -12, 0, -10, 0, -6, 0], rotation: [5, 4, 3, 2, 1, 0.5, 0], easeEach: "sine.inOut" }, duration: 0.84, ease: "none" }, 5.275);
+  tl.to("#s09-led", { opacity: 1, duration: 0.063 }, 6.15);
+  tl.fromTo("#s09-scan2", { opacity: 0, scale: 1.25 }, { opacity: 1, scale: 1, duration: 0.1575, ease: "power3.out" }, 6.1762);
+  tl.fromTo("#s09-line2", { opacity: 0, y: 4 }, { opacity: 1, y: 4, duration: 0.0315 }, 6.2812);
+  tl.to("#s09-line2", { y: 172, duration: 0.2888, ease: "sine.inOut" }, 6.3128);
+  tl.to("#s09-line2", { opacity: 0, duration: 0.0525 }, 6.5963);
+  tl.fromTo("#s09-scan2 .s09-mesh circle", { opacity: 0, scale: 0, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.105, ease: "back.out(2.5)", stagger: 0.0128 }, 6.3337);
+  tl.to("#s09-scan2 .s09-mesh polyline, #s09-scan2 .s09-mesh line", { strokeDashoffset: 0, duration: 0.1837, ease: "power2.inOut", stagger: 0.0105 }, 6.4912);
+  tl.to("#s09-scan2", { scale: 0.18, opacity: 0, duration: 0.1312, ease: "power3.in" }, 6.78);
+  tl.to("#s09-led", { opacity: 0, duration: 0.063 }, 6.8063);
+  tl.fromTo(".s09-ftok", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.0945, ease: "back.out(3)" }, 6.8587);
+  [[465, 190], [795, 190], [1125, 190], [1455, 190]].forEach(([sx, sy], k) => {
+    const go = 6.9218 + k * 0.042, hit = go + 0.2363;
+    tl.to(`#s09-ftok${k}`, { x: sx - 720, y: sy - 535, duration: 0.2363, ease: "power2.inOut" }, go);
+    tl.to(`#s09-ftok${k}`, { scale: 0, opacity: 0, duration: 0.0525, ease: "power2.in" }, hit);
+    tl.to(`#s09-col${k}`, { boxShadow: "inset 0 0 0 3px #D93D42", duration: 0.105 }, hit);
+    tl.to(`#s09-col${k}`, { keyframes: { x: [0, -6, 6, -4, 4, 0] }, duration: 0.1837, ease: "none" }, hit);
+    tl.fromTo(`#s09-no${k}`, { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.1575, ease: "back.out(2.6)" }, hit + 0.0158);
+  });
+  tl.fromTo("#s09-verdict", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.245, ease: "power3.out" }, 7.3575);
+  // the actor leaves, the nodes reset
+  tl.to("#s09-verdict", { opacity: 0, duration: 0.21 }, 8.1625);
+  tl.to("#s09-fav", { x: -900, duration: 0.7, ease: "power2.in" }, 8.1625);
+  [0, 1, 2, 3].forEach((k) => {
+    tl.to(`#s09-col${k}`, { boxShadow: "inset 0 0 0 2px #D9D7D0", duration: 0.21 }, 8.1625);
+    tl.to(`#s09-no${k}`, { opacity: 0, duration: 0.21 }, 8.1625);
+  });
+
+  // another enrolled attendee (jaca) walks up and is recognised
+  tl.fromTo("#s09-av2", { x: -900, opacity: 1 }, { x: 0, opacity: 1, duration: 0.84, ease: "power2.out" }, 8.5125);
+  tl.fromTo("#s09-avb2", { y: 0, rotation: 5 }, { keyframes: { y: [0, -12, 0, -10, 0, -6, 0], rotation: [5, 4, 3, 2, 1, 0.5, 0], easeEach: "sine.inOut" }, duration: 0.84, ease: "none" }, 8.5125);
+  tl.to("#s09-led", { opacity: 1, duration: 0.063 }, 9.3875);
+  tl.fromTo("#s09-scan3", { opacity: 0, scale: 1.25 }, { opacity: 1, scale: 1, duration: 0.1575, ease: "power3.out" }, 9.4138);
+  tl.fromTo("#s09-line3", { opacity: 0, y: 4 }, { opacity: 1, y: 4, duration: 0.0315 }, 9.5188);
+  tl.to("#s09-line3", { y: 172, duration: 0.2888, ease: "sine.inOut" }, 9.5503);
+  tl.to("#s09-line3", { opacity: 0, duration: 0.0525 }, 9.8338);
+  tl.fromTo("#s09-scan3 .s09-mesh circle", { opacity: 0, scale: 0, transformOrigin: "50% 50%" }, { opacity: 1, scale: 1, duration: 0.105, ease: "back.out(2.5)", stagger: 0.0128 }, 9.5712);
+  tl.to("#s09-scan3 .s09-mesh polyline, #s09-scan3 .s09-mesh line", { strokeDashoffset: 0, duration: 0.1837, ease: "power2.inOut", stagger: 0.0105 }, 9.7287);
+  tl.to("#s09-scan3", { scale: 0.18, opacity: 0, duration: 0.1312, ease: "power3.in" }, 10.0175);
+  tl.to("#s09-led", { opacity: 0, duration: 0.063 }, 10.0437);
+  tl.fromTo(".s09-jtok", { opacity: 0, scale: 0 }, { opacity: 1, scale: 1, duration: 0.0945, ease: "back.out(3)" }, 10.0962);
+  [[509, 148], [839, 148], [1169, 148], [1499, 148]].forEach(([sx, sy], k) => {
+    const go = 10.1593 + k * 0.042, hit = go + 0.2363;
+    tl.to(`#s09-jtok${k}`, { x: sx - 720, y: sy - 535, duration: 0.2363, ease: "power2.inOut" }, go);
+    tl.to(`#s09-jtok${k}`, { scale: 0, opacity: 0, duration: 0.0525, ease: "power2.in" }, hit);
+    tl.to(`#s09-j${k}`, { boxShadow: "inset 0 0 0 2px #E4E2DC, 0 0 0 5px #1F8A5B", duration: 0.105 }, hit);
+    tl.to(`#s09-col${k}`, { boxShadow: "inset 0 0 0 3px #1F8A5B", duration: 0.105 }, hit);
+    tl.to(`#s09-ok${k}`, { opacity: 1, scale: 1, duration: 0.1575, ease: "back.out(2.6)" }, hit + 0.0158);
+  });
+
+  // his payout attaches and pops
+  tl.fromTo("#s09-pay2", { opacity: 0, y: -260, x: -40, scale: 0.7 }, { opacity: 1, y: 0, x: 0, scale: 1, duration: 0.385, ease: "power3.in" }, 10.595);
+  tl.fromTo("#s09-plk2", { opacity: 0, scaleX: 0.3 }, { opacity: 1, scaleX: 1, duration: 0.14, ease: "power2.out" }, 10.945);
+  tl.to("#s09-pay2", { keyframes: { scale: [1, 1.12, 1], easeEach: "sine.inOut" }, duration: 0.245, ease: "none" }, 10.98);
+  [[-150, -190, -24], [-80, -250, -10], [-10, -280, 6], [60, -240, 14], [130, -200, 26], [-120, -120, -30], [110, -130, 30]].forEach(([dx, dy, r], i) => {
+    const t = 10.98 + i * 0.021;
+    tl.fromTo(`#s09-cashb${i}`, { opacity: 0, x: 0, y: 0, rotation: 0, scale: 0.4 }, { opacity: 1, x: dx, y: dy, rotation: r, scale: 1, duration: 0.35, ease: "power3.out" }, t);
+    tl.to(`#s09-cashb${i}`, { y: dy + 60, opacity: 0, duration: 0.315, ease: "power2.in" }, t + 0.385);
+  });
+  tl.fromTo("#s09-plus2", { opacity: 0, y: 20, scale: 0.8 }, { opacity: 1, y: 0, scale: 1, duration: 0.28, ease: "back.out(2)" }, 11.05);
+  tl.to("#s09-plus2", { opacity: 0, y: -20, duration: 0.35 }, 12.01);
+  tl.set("#s09-amt1", { display: "none" }, 11.015);
+  tl.set("#s09-amt2", { display: "inline" }, 11.015);
+  tl.to("#s08-net .av:nth-child(2) .fc", { filter: "grayscale(1)", opacity: 0.35, duration: 0.35, ease: "power2.out", stagger: 0.035 }, 11.12);
+
+  // he walks in; the nodes reset
+  tl.to("#s09-av2", { x: 360, opacity: 0, duration: 0.49, ease: "power2.in" }, 11.4);
+  tl.to(["#s09-ok0", "#s09-ok1", "#s09-ok2", "#s09-ok3"], { opacity: 0, duration: 0.21 }, 11.61);
+  [0, 1, 2, 3].forEach((k) => {
+    tl.to(`#s09-col${k}`, { boxShadow: "inset 0 0 0 2px #D9D7D0", duration: 0.21 }, 11.61);
+    tl.to(`#s09-j${k}`, { boxShadow: "inset 0 0 0 2px #E4E2DC, 0 0 0 0px #1F8A5B", duration: 0.21 }, 11.61);
+  });
+
+  // the gate goes away entirely
+  tl.to(["#s09-door", "#s09-dlab", "#s09-cam", "#s09-arm"], { opacity: 0, y: 30, duration: 0.45, ease: "power2.in", stagger: 0.05 }, 12.11);
+  tl.to("#s09-floor", { scaleX: 0, opacity: 0, duration: 0.45, ease: "power2.in" }, 12.26);
+
+  // a timer ticks over to the deletion minute and pulses; every node's end date flips red
+  tl.fromTo("#s09-timer", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 12.75);
+  tl.fromTo("#s09-d3", { rotationX: 0 }, { rotationX: -90, duration: 0.15, ease: "power2.in", transformPerspective: 600 }, 13.35);
+  tl.set("#s09-d3 .a", { display: "none" }, 13.5);
+  tl.set("#s09-d3 .b", { display: "inline" }, 13.5);
+  tl.fromTo("#s09-d3", { rotationX: 90 }, { rotationX: 0, duration: 0.3, ease: "back.out(2)", transformPerspective: 600, immediateRender: false }, 13.5);
+  tl.to("#s09-timer .row", { keyframes: { scale: [1, 1.12, 1, 1.06, 1], easeEach: "sine.inOut" }, duration: 0.6, ease: "none" }, 13.9);
+  tl.to("#s09-timer .tile", { backgroundColor: "#C4323A", duration: 0.2 }, 13.9);
+  tl.to("#s09-timer .colon", { color: "#C4323A", duration: 0.2 }, 13.9);
+  [0, 1, 2, 3].forEach((k) => {
+    const u = `#s09-col${k} .until`, t = 14.45 + k * 0.1;
+    tl.fromTo(u, { rotationX: 0 }, { rotationX: 90, duration: 0.12, ease: "power2.in", transformPerspective: 400 }, t);
+    tl.set(u, { color: "#C4323A", fontWeight: 700 }, t + 0.12);
+    tl.fromTo(u, { rotationX: -90 }, { rotationX: 0, duration: 0.22, ease: "back.out(2)", transformPerspective: 400, immediateRender: false }, t + 0.12);
+  });
+
+  // then the oracles clear every face
+  tl.to("#s08-net .fc", { opacity: 0, scale: 0.5, duration: 0.35, ease: "power2.in", stagger: { each: 0.03, from: "start" } }, 14.95);
+
+  // outro: everything pulls into the middle and becomes the OnSight lockup
+  tl.to("#s09-all", { scale: 0.04, duration: 0.8, ease: "power3.in" }, 15.71);
+  tl.to("#s09-all", { opacity: 0, duration: 0.3, ease: "power1.in" }, 16.21);
+  tl.fromTo("#s09-mark", { scale: 0, rotation: -20, opacity: 0 }, { scale: 1, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(2)" }, 16.41);
+  tl.to("#s09-wmw", { width: 596, duration: 0.75, ease: "power3.inOut" }, 17.01);
+  tl.fromTo("#s09-wm", { x: -40 }, { x: 0, duration: 0.75, ease: "power3.out" }, 17.01);
+  tl.fromTo("#s09-motto", { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 17.76);
+
+  window.__timelines["s09-checkin"] = tl;
+</script>
+</template>
+</body>
+</html>
