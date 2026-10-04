@@ -62,7 +62,7 @@ class DevEventSource:
 
 # 2. Reporting sightings ----------------------------------------------------------------------------
 #
-# The oracle is a SENSOR, not a judge: it reports "I see wallet W at event E now" and the presence_pay program
+# The oracle is a SENSOR, not a judge: it reports "I see wallet W at event E now" and the on_sight program
 # decides whether that pays (dwell time on the chain clock, oracle threshold, window, cap, once per wallet). The
 # oracle keeps reporting a recognised wallet every few seconds until a report comes back paid. Every report carries the
 # wallet's signed join message (JoinProof), which the program checks: an oracle cannot report someone who never joined.

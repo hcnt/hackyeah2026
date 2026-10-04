@@ -29,6 +29,7 @@ import {
   stageWsUrl,
 } from './payload'
 import { Button, Chip, CopyButton, Notice, Spinner, type Tone } from './ui'
+import { eventLamports, eventRent, formatSol, withdrawRemaining } from '../organizer/program'
 
 /** Wall clock for status labels, refreshed every 30 s (kept out of render for purity). */
 function useNow(): number {
@@ -203,6 +204,18 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
   }
 
   const ev = chain.event
+  const depositPanel = (refreshKey = 0) =>
+    ev.meta && (
+      <DepositPanel
+        eventId={eventId}
+        rpcUrl={rpcUrl}
+        programId={programId}
+        conn={isOrganizer ? conn : null}
+        end={ev.meta.end}
+        now={now}
+        refreshKey={refreshKey}
+      />
+    )
 
   return (
     <>
@@ -235,6 +248,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
             threshold={ev.threshold}
             busy={pairing.kind === 'busy'}
             onRepair={() => void pair(conn)}
+            deposit={(refreshKey) => depositPanel(refreshKey)}
           />
         </>
       ) : (
@@ -295,6 +309,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
               <PairList results={results} />
             </>
           )}
+          {conn && isOrganizer && <div className="text-left">{depositPanel()}</div>}
         </Centered>
       )}
     </>
@@ -413,6 +428,7 @@ function Live({
   threshold,
   busy,
   onRepair,
+  deposit,
 }: {
   eventId: string
   paired: { oracle: OracleEntry; tokens: CameraTokenResponse }[]
@@ -420,6 +436,8 @@ function Live({
   threshold: number
   busy: boolean
   onRepair: () => void
+  /** The deposit panel; `refreshKey` changes with every payout so the balance is re-read. */
+  deposit: (refreshKey: number) => ReactNode
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [oracles, setOracles] = useState<OracleLive[]>(() =>
@@ -643,6 +661,8 @@ function Live({
           <Counter label="paid" value={paid} money />
         </div>
 
+        {deposit(payouts.length)}
+
         <Panel title={`Oracles · ${liveCount} of ${paired.length} connected · ${threshold} needed to pay`}>
           <ul className="grid gap-2">
             {paired.map((p, i) => (
@@ -744,6 +764,112 @@ function ConnChip({ o }: { o: OracleLive }) {
     <Chip tone={tone} pulse={o.conn === 'live'}>
       {text}
     </Chip>
+  )
+}
+
+/** How often the deposit balance is re-read besides after each payout (the public RPC is rate limited). */
+const DEPOSIT_POLL_MS = 20_000
+
+type Withdraw = { kind: 'idle' } | { kind: 'busy'; step: string } | { kind: 'error'; message: string } | { kind: 'done'; tx: string; lamports: bigint | null }
+
+/**
+ * What is left of the event's deposit (the Event account's lamports minus its rent) and the organizer's
+ * withdraw_remaining button, which unlocks once the event has ended. Withdrawing closes the account.
+ */
+function DepositPanel({
+  eventId,
+  rpcUrl,
+  programId,
+  conn,
+  end,
+  now,
+  refreshKey,
+}: {
+  eventId: string
+  rpcUrl: string
+  programId: string
+  /** The organizer's connection, or null when no organizer wallet is connected. */
+  conn: Connection | null
+  /** Unix seconds. */
+  end: number
+  now: number
+  refreshKey: number
+}) {
+  const [balance, setBalance] = useState<{ lamports: bigint | null; rent: bigint } | null>(null)
+  const [readTry, setReadTry] = useState(0)
+  const [withdraw, setWithdraw] = useState<Withdraw>({ kind: 'idle' })
+
+  useEffect(() => {
+    let cancelled = false
+    const read = () =>
+      Promise.all([eventLamports(rpcUrl, eventId), eventRent(rpcUrl)]).then(
+        ([lamports, rent]) => !cancelled && setBalance({ lamports, rent }),
+        () => {},
+      )
+    void read()
+    const id = window.setInterval(read, DEPOSIT_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [eventId, rpcUrl, refreshKey, readTry])
+
+  const closed = balance !== null && balance.lamports === null
+  const left = balance?.lamports != null ? (balance.lamports > balance.rent ? balance.lamports - balance.rent : 0n) : null
+  const ended = now > end * 1000
+
+  async function onWithdraw() {
+    if (!conn || withdraw.kind === 'busy') return
+    const returned = balance?.lamports ?? null
+    setWithdraw({ kind: 'busy', step: 'Preparing the transaction…' })
+    try {
+      const tx = await withdrawRemaining(conn, rpcUrl, programId, eventId, (step) => setWithdraw({ kind: 'busy', step }))
+      setWithdraw({ kind: 'done', tx, lamports: returned })
+      setReadTry((n) => n + 1)
+    } catch (err) {
+      setWithdraw({ kind: 'error', message: walletErrorText(err) })
+    }
+  }
+
+  return (
+    <Panel title="Deposit">
+      <div className="grid gap-0.5">
+        <span className="text-4xl font-bold text-emerald-300 tabular-nums">
+          {closed ? '0' : left === null ? '–' : formatSol(left)} <span className="text-xl font-semibold">SOL</span>
+        </span>
+        <span className="text-sm text-neutral-400">
+          {closed ? 'withdrawn, the event account is closed' : 'left for rewards and oracle fees'}
+        </span>
+      </div>
+      {withdraw.kind === 'done' ? (
+        <Notice tone="ok" title="Deposit withdrawn">
+          {withdraw.lamports !== null && <>{formatSol(withdraw.lamports)} SOL (with the account rent) went back to your wallet. </>}
+          <a className="underline" href={explorerTxUrl(withdraw.tx)} target="_blank" rel="noreferrer">
+            View transaction ↗
+          </a>
+        </Notice>
+      ) : (
+        !closed && (
+          <>
+            <Button
+              variant={ended ? 'primary' : 'ghost'}
+              disabled={!ended || !conn || withdraw.kind === 'busy' || balance === null}
+              onClick={() => void onWithdraw()}
+            >
+              {withdraw.kind === 'busy' ? <Spinner label={withdraw.step} /> : 'Withdraw remaining deposit'}
+            </Button>
+            <p className="text-xs text-neutral-400">
+              {!ended
+                ? `Unlocks when the event ends (${fmtTime(end)}).`
+                : !conn
+                  ? 'Connect the organizer wallet to withdraw.'
+                  : 'Returns what wasn’t paid out, plus the account rent, to your wallet.'}
+            </p>
+          </>
+        )
+      )}
+      {withdraw.kind === 'error' && <Notice tone="bad" title="Withdraw failed">{withdraw.message}</Notice>}
+    </Panel>
   )
 }
 

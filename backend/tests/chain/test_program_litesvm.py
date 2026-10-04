@@ -1,7 +1,7 @@
-"""The compiled presence_pay program (contracts/presence_pay/lib.rs) run in LiteSVM, with the chain clock warped.
+"""The compiled on_sight program (contracts/on_sight/lib.rs) run in LiteSVM, with the chain clock warped.
 
-Skipped unless PRESENCE_SO points at a built presence_pay.so (`cargo build-sbf`, see contracts/presence_pay/README.md).
-The program id is PRESENCE_SO_PROGRAM_ID, or else the pubkey of `presence_pay-keypair.json` next to the .so; it must
+Skipped unless PRESENCE_SO points at a built on_sight.so (`cargo build-sbf`, see contracts/on_sight/README.md).
+The program id is PRESENCE_SO_PROGRAM_ID, or else the pubkey of `on_sight-keypair.json` next to the .so; it must
 equal the `declare_id!` the .so was built with. Instructions come from the backend client's own builders, so this
 also checks that the client and the program agree on discriminators, Borsh layouts and account order.
 """
@@ -39,7 +39,7 @@ from app.chain.presence_chain import (
 from app.oracle.signatures import JoinProof, build_message
 
 SO = os.environ.get("PRESENCE_SO", "")
-pytestmark = pytest.mark.skipif(not SO or not Path(SO).is_file(), reason="PRESENCE_SO (a built presence_pay.so) not set")
+pytestmark = pytest.mark.skipif(not SO or not Path(SO).is_file(), reason="PRESENCE_SO (a built on_sight.so) not set")
 
 FEE = FEE_LAMPORTS  # frozen into every Event at creation
 REWARD = 10_000_000
@@ -61,7 +61,7 @@ def _program_id() -> Pubkey:
     explicit = os.environ.get("PRESENCE_SO_PROGRAM_ID")
     if explicit:
         return Pubkey.from_string(explicit)
-    kp_file = Path(SO).with_name("presence_pay-keypair.json")
+    kp_file = Path(SO).with_name("on_sight-keypair.json")
     return Keypair.from_bytes(bytes(json.loads(kp_file.read_text()))).pubkey()
 
 

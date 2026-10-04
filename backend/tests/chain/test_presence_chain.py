@@ -1,4 +1,4 @@
-"""Account decoding and instruction building of the presence_pay client, offline."""
+"""Account decoding and instruction building of the on_sight client, offline."""
 
 import asyncio
 import base64

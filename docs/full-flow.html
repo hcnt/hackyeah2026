@@ -108,7 +108,7 @@
     <div class="role"><strong>Attendee</strong><span class="muted">Has a MetaMask Solana wallet. Joins through the widget on the organizer's page with one selfie and one signature.</span></div>
     <div class="role"><strong>Oracles (1 to 3)</strong><span class="muted">Face-recognition services, like ours (OnSight). Each holds its own key and reports sightings to the program. They can't move money; the program pays an oracle 0.002 SOL when its report triggers a payout.</span></div>
     <div class="role"><strong>Camera phone</strong><span class="muted">Any phone at the pay lane or kiosk. Opens a link from a QR code and streams frames to every oracle.</span></div>
-    <div class="role chain"><strong>presence_pay program</strong><span class="muted">Holds the budget, stores the rules, and makes every payout decision on the chain clock.</span></div>
+    <div class="role chain"><strong>on_sight program</strong><span class="muted">Holds the budget, stores the rules, and makes every payout decision on the chain clock.</span></div>
   </div>
 </section>
 
@@ -179,14 +179,14 @@ Time: 2026-10-03T12:00:00Z</div></div></li>
 
 <!-- 5 -->
 <section class="phase">
-  <div class="phase-head"><span class="num">5</span><h2>The oracle reports a sighting, and the program decides</h2><span class="who">oracle key → presence_pay</span></div>
+  <div class="phase-head"><span class="num">5</span><h2>The oracle reports a sighting, and the program decides</h2><span class="who">oracle key → on_sight</span></div>
   <p>While a wallet stays identified, the oracle sends a report every 2 seconds until one comes back paid. Each report is <b>one transaction with two instructions</b>:</p>
   <div class="tx">Transaction (fee payer and signer: oracle key)
  ├─ #0  Ed25519SigVerify          native Solana program
  │       pubkey   = attendee wallet
  │       message  = the signed "Attend Now / Action: join / Event / Wallet …" from step 2
  │       signature= the attendee's signature from step 2
- └─ #1  presence_pay.report_sighting
+ └─ #1  on_sight.report_sighting
          accounts: oracle, event, sighting PDA ["sighting", event, attendee],
                    attendee, system program, Instructions sysvar</div>
   <p>If the signature in #0 is invalid, Solana rejects the whole transaction. Then the program runs these checks, in order:</p>

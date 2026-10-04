@@ -1,7 +1,7 @@
-"""Client for the presence_pay Solana program (contracts/presence_pay).
+"""Client for the on_sight Solana program (contracts/on_sight).
 
 Instructions are built by hand (Anchor discriminator = sha256("global:<name>")[:8] + Borsh args), so no anchorpy.
-Account layouts mirror contracts/presence_pay/lib.rs; changing them there means changing them here.
+Account layouts mirror contracts/on_sight/lib.rs; changing them there means changing them here.
 Each Event carries its own oracles (1-3, with an M-of-N threshold) and fee, fixed at creation. The fee is the program
 constant FEE_LAMPORTS at that moment and goes, on each payout, to the oracle whose report paid (there is no treasury
 and no Config account).
@@ -488,7 +488,7 @@ class PresenceChain:
         if ev is None:
             ev = await self.get_event(event)
         if ev is None or ev.address != event:
-            raise PresenceError("NoEvent", f"no presence_pay Event at {event}")
+            raise PresenceError("NoEvent", f"no on_sight Event at {event}")
         if oracle.pubkey() not in ev.oracles:
             raise PresenceError("NotOracle", f"{oracle.pubkey()} is not one of the event's oracles")
         return await self._send(report_sighting_ixs(oracle.pubkey(), ev, attendee, proof), oracle)

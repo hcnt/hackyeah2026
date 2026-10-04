@@ -13,7 +13,7 @@ from app.oracle.routes import router as oracle_router
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    # With an oracle key, events come from and sightings go to the presence_pay program on Solana; without one
+    # With an oracle key, events come from and sightings go to the on_sight program on Solana; without one
     # the oracle keeps its in-memory dev event source and sighting sink (which simulates the program rules).
     settings = get_settings()
     key = settings.oracle_keypair.get_secret_value() if settings.oracle_keypair else ""

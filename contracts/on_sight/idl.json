@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "presence_pay",
+  "name": "on_sight",
   "constants": [
     {
       "name": "MAX_ORACLES",
