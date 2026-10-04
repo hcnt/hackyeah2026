@@ -41,17 +41,19 @@ type Errors = Partial<Record<keyof Form, string>>
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const dateValue = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const timeValue = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
 
 function initialForm(demo: boolean, nowMs: number): Form {
-  // Demo: the placeholder terms. Live: tomorrow evening.
-  const day = demo ? new Date(2026, 10, 12) : new Date(nowMs + 86_400_000)
+  // Demo: the placeholder terms. Live: starts now and ends in 15 minutes, ready for a test run.
+  const start = demo ? new Date(2026, 10, 12, 18, 0) : new Date(nowMs)
+  const end = demo ? new Date(2026, 10, 12, 22, 0) : new Date(nowMs + 15 * 60_000)
   return {
     name: '',
     venue: '',
-    startDate: dateValue(day),
-    startTime: '18:00',
-    endDate: dateValue(day),
-    endTime: '22:00',
+    startDate: dateValue(start),
+    startTime: timeValue(start),
+    endDate: dateValue(end),
+    endTime: timeValue(end),
     reward: '0.02',
     entrants: '10',
     minSeen: '5',

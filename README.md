@@ -24,8 +24,8 @@ giveaway and the attendee who gets paid.
 0.3 devnet SOL from [faucet.solana.com](https://faucet.solana.com).
 
 1. **Create the event.** Open [onsight.site](https://onsight.site), sign
-   in with MetaMask and click **Create event**. Enter a name and start it now, ending in an hour. The defaults
-   are made for this test: 0.02 SOL for each of 10 attendees, 5 seconds on camera, and the OnSight oracle. Click
+   in with MetaMask and click **Create event**. Enter a name. The defaults are made for this test: it starts
+   now and ends in 15 minutes, 0.02 SOL for each of 10 attendees, 5 seconds on camera, and the OnSight oracle. Click
    **Save terms**, then **Launch event** and approve the transaction: about 0.222 SOL is now locked in the program
    (rewards, oracle fees and the account deposit).
 2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature),
