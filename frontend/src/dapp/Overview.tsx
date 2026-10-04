@@ -11,6 +11,7 @@ import {
   prizePool,
   prizesPaid,
   remaining,
+  withdrawable,
   sol,
   statusOf,
   type EventRow,
@@ -191,7 +192,7 @@ function Row({ event: e, status, now, onSettings }: { event: EventRow; status: S
       <span className="os-cell-num">
         {sol(remaining(e))} SOL
         {e.withdrawn && e.returnedLamports !== null && e.returnedLamports > 0n && <small>{sol(e.returnedLamports)} SOL returned</small>}
-        {!e.withdrawn && status === 'past' && remaining(e) > 0n && <small>ready to withdraw</small>}
+        {status === 'past' && withdrawable(e) > 0n && <small>ready to withdraw</small>}
       </span>
       <span className="os-cell-num">
         {e.paidCount} / {e.maxPaid}

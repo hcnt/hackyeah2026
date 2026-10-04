@@ -17,7 +17,7 @@ interface ProgramAccount {
   account: { data: [string, string]; owner: string; lamports: number }
 }
 
-function decodeRow(id: string, data: Uint8Array, disc: Uint8Array): EventRow | null {
+function decodeRow(id: string, data: Uint8Array, lamports: number, disc: Uint8Array): EventRow | null {
   const oracles = decodeEventOracles(data, disc)
   const meta = oracles && decodeEventMeta(data)
   if (!oracles || !meta) return null
@@ -34,6 +34,7 @@ function decodeRow(id: string, data: Uint8Array, disc: Uint8Array): EventRow | n
     paidCount: meta.paidCount,
     oracles: oracles.oracles,
     threshold: oracles.threshold,
+    balanceLamports: BigInt(lamports),
     withdrawn: false,
     returnedLamports: null,
   }
@@ -51,7 +52,7 @@ export async function listOrganizerEvents(rpcUrl: string, programId: string, org
     },
   ])
   return accounts.flatMap((a) => {
-    const row = decodeRow(a.pubkey, base64Bytes(a.account.data[0]), disc)
+    const row = decodeRow(a.pubkey, base64Bytes(a.account.data[0]), a.account.lamports, disc)
     return row ? [row] : []
   })
 }
@@ -61,7 +62,7 @@ export async function readEvent(rpcUrl: string, programId: string, id: string): 
   const disc = await discriminator('Event')
   const [acc] = await getMultipleAccounts(rpcUrl, [id])
   if (!acc || acc.owner !== programId) return null
-  return decodeRow(id, base64Bytes(acc.data[0]), disc)
+  return decodeRow(id, base64Bytes(acc.data[0]), acc.lamports, disc)
 }
 
 // ---------- Payouts ----------

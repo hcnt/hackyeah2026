@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Copy, ExternalLink, UserRound } from 'lucide-react'
 import { shortAddress } from '../widget/wallet'
 import { useAccount, useBackend, walletErrorText } from './account'
-import { fmtDate, fmtTime, remaining, sol, statusOf, type EventRow } from './model'
+import { fmtDate, fmtTime, sol, statusOf, withdrawable, type EventRow } from './model'
 import { Modal, Notice, Spinner, StatusPill, useCopy, useNow, useToast } from './ui'
 
 /** Links that keep ?rpc= and ?program=, so the attendee page reads the same deployment. */
@@ -25,7 +25,7 @@ export function EventSettings({ event, onClose, onChanged }: { event: EventRow; 
   const [step, setStep] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const isOrganizer = account.address === event.organizer
-  const left = remaining(event)
+  const left = withdrawable(event)
   const canWithdraw = !event.withdrawn && status !== 'ongoing' && isOrganizer
 
   async function withdraw() {
@@ -95,7 +95,7 @@ export function EventSettings({ event, onClose, onChanged }: { event: EventRow; 
         </p>
         {event.withdrawn ? (
           <Notice tone="ok" title="Deposit withdrawn">
-            {event.returnedLamports !== null && `${sol(event.returnedLamports)} SOL in unpaid rewards went back to the organiser.`}
+            {event.returnedLamports !== null && `${sol(event.returnedLamports)} SOL went back to the organiser: unpaid rewards and oracle fees plus the account deposit.`}
           </Notice>
         ) : (
           <>

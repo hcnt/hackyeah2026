@@ -18,6 +18,9 @@ export interface EventRow {
   paidCount: number
   oracles: string[]
   threshold: number
+  /** Lamports in the Event account. withdraw_remaining closes it and sends all of them to the organizer: unpaid rewards,
+   *  unpaid oracle fees and the account deposit. */
+  balanceLamports: bigint
   /** True once withdraw_remaining closed the account; `returnedLamports` is what went back to the organizer. */
   withdrawn: boolean
   returnedLamports: bigint | null
@@ -51,6 +54,8 @@ export const prizePool = (e: EventRow) => e.rewardLamports * BigInt(e.maxPaid)
 export const prizesPaid = (e: EventRow) => e.rewardLamports * BigInt(e.paidCount)
 /** Rewards still in the event's pool (0 once withdrawn). */
 export const remaining = (e: EventRow) => (e.withdrawn ? 0n : e.rewardLamports * BigInt(Math.max(0, e.maxPaid - e.paidCount)))
+/** What withdraw_remaining would send back now: the whole Event account (0 once withdrawn). */
+export const withdrawable = (e: EventRow) => (e.withdrawn ? 0n : e.balanceLamports)
 
 export function sol(lamports: bigint, digits = 4): string {
   const [whole, frac = ''] = formatSol(lamports).split('.')

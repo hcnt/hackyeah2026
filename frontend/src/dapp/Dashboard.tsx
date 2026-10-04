@@ -28,6 +28,7 @@ import {
   prizePool,
   prizesPaid,
   remaining,
+  withdrawable,
   sol,
   statusOf,
   type EventRow,
@@ -322,14 +323,14 @@ function StatusBar({ event, now, onWithdraw }: { event: EventRow; now: number; o
           <span>Paid so far</span>
           <b>{sol(prizesPaid(event))} SOL</b>
         </div>
-        {status === 'past' && !event.withdrawn && remaining(event) > 0n ? (
+        {status === 'past' && withdrawable(event) > 0n ? (
           <button type="button" className="os-btn" onClick={onWithdraw}>
-            Withdraw {sol(remaining(event))} SOL
+            Withdraw {sol(withdrawable(event))} SOL
           </button>
         ) : (
           <div>
             <span>{event.withdrawn ? 'Returned' : 'Locked in contract'}</span>
-            <b>{sol(event.withdrawn ? (event.returnedLamports ?? 0n) : remaining(event))} SOL</b>
+            <b>{sol(event.withdrawn ? (event.returnedLamports ?? 0n) : withdrawable(event))} SOL</b>
           </div>
         )}
       </div>

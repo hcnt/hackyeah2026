@@ -1,6 +1,6 @@
 """The compiled on_sight program (contracts/on_sight/lib.rs) run in LiteSVM, with the chain clock warped.
 
-Skipped unless PRESENCE_SO points at a built on_sight.so (`cargo build-sbf`, see contracts/on_sight/README.md).
+Skipped unless PRESENCE_SO points at a built on_sight.so (`cargo build-sbf` in an Anchor project with contracts/on_sight/lib.rs).
 The program id is PRESENCE_SO_PROGRAM_ID, or else the pubkey of `on_sight-keypair.json` next to the .so; it must
 equal the `declare_id!` the .so was built with. Instructions come from the backend client's own builders, so this
 also checks that the client and the program agree on discriminators, Borsh layouts and account order.

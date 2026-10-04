@@ -14,7 +14,7 @@ import {
 } from '../organizer/program'
 import { explorerTxUrl } from '../venue/payload'
 import { listOrganizerEvents, readEvent, readOracleStatus, readPayouts } from './chainData'
-import { remaining, type EventRow, type OracleStatus, type Payout } from './model'
+import { type EventRow, type OracleStatus, type Payout } from './model'
 
 export type Step = (step: string) => void
 
@@ -46,9 +46,10 @@ export interface Backend {
 /** Events of this organizer seen in this browser, so withdrawn (closed) accounts still show up under "Past". */
 const cacheKey = (organizer: string, programId: string) => `onsight:events:${programId}:${organizer}`
 
-type Stored = Omit<EventRow, 'rewardLamports' | 'feeLamports' | 'returnedLamports'> & {
+type Stored = Omit<EventRow, 'rewardLamports' | 'feeLamports' | 'balanceLamports' | 'returnedLamports'> & {
   rewardLamports: string
   feeLamports: string
+  balanceLamports: string
   returnedLamports: string | null
 }
 
@@ -59,6 +60,7 @@ function loadCache(organizer: string, programId: string): EventRow[] {
       ...r,
       rewardLamports: BigInt(r.rewardLamports),
       feeLamports: BigInt(r.feeLamports),
+      balanceLamports: BigInt(r.balanceLamports),
       returnedLamports: r.returnedLamports === null ? null : BigInt(r.returnedLamports),
     }))
   } catch {
@@ -71,6 +73,7 @@ function saveCache(organizer: string, programId: string, rows: EventRow[]) {
     ...r,
     rewardLamports: r.rewardLamports.toString(),
     feeLamports: r.feeLamports.toString(),
+    balanceLamports: r.balanceLamports.toString(),
     returnedLamports: r.returnedLamports === null ? null : r.returnedLamports.toString(),
   }))
   try {
@@ -108,7 +111,7 @@ export function liveBackend(): Backend {
       // A cached event whose account is gone was withdrawn (closed); keep its last known numbers.
       const closed = loadCache(organizer, programId)
         .filter((e) => !openIds.has(e.id))
-        .map((e) => (e.withdrawn ? e : { ...e, withdrawn: true, returnedLamports: e.returnedLamports ?? remaining(e) }))
+        .map((e) => (e.withdrawn ? e : { ...e, withdrawn: true, returnedLamports: e.returnedLamports ?? e.balanceLamports }))
       const rows = [...open, ...closed]
       saveCache(organizer, programId, rows)
       return rows
@@ -121,7 +124,7 @@ export function liveBackend(): Backend {
         return row
       }
       const cached = organizer ? loadCache(organizer, programId).find((e) => e.id === id) : undefined
-      return cached ? { ...cached, withdrawn: true, returnedLamports: cached.returnedLamports ?? remaining(cached) } : null
+      return cached ? { ...cached, withdrawn: true, returnedLamports: cached.returnedLamports ?? cached.balanceLamports } : null
     },
 
     checkTerms: (organizer, params) => checkCreateEvent(rpcUrl, programId, organizer, params),
@@ -129,6 +132,7 @@ export function liveBackend(): Backend {
     async launch(conn, organizer, params, onStep) {
       if (!conn) throw new Error('Connect your wallet first.')
       const created = await createEvent(conn, rpcUrl, programId, params, onStep)
+      const rent = await eventRent(rpcUrl)
       patchCache(organizer, programId, {
         id: created.event,
         name: params.name,
@@ -142,6 +146,7 @@ export function liveBackend(): Backend {
         paidCount: 0,
         oracles: params.oracles,
         threshold: params.threshold,
+        balanceLamports: (params.rewardLamports + FEE_LAMPORTS) * BigInt(params.maxPaid) + rent,
         withdrawn: false,
         returnedLamports: null,
       })
@@ -152,7 +157,7 @@ export function liveBackend(): Backend {
       if (!conn) throw new Error('Connect the organizer wallet first.')
       const before = await eventLamports(rpcUrl, event.id).catch(() => null)
       const tx = await withdrawRemaining(conn, rpcUrl, programId, event.id, onStep)
-      patchCache(event.organizer, programId, { ...event, withdrawn: true, returnedLamports: before ?? remaining(event) })
+      patchCache(event.organizer, programId, { ...event, withdrawn: true, returnedLamports: before ?? event.balanceLamports })
       return tx
     },
 
@@ -201,6 +206,7 @@ function demoRow(
     paidCount,
     oracles: DEMO_ORACLES,
     threshold: 2,
+    balanceLamports: returned === undefined ? (sol(reward) + FEE_LAMPORTS) * BigInt(maxPaid - paidCount) + DEMO_RENT : 0n,
     withdrawn: returned !== undefined,
     returnedLamports: returned === undefined ? null : sol(returned),
   }
@@ -241,6 +247,7 @@ export function demoBackend(): Backend {
     const live = find(DEMO_LIVE_ID)
     if (!live || live.paidCount >= live.maxPaid || now() / 1000 > live.end) return
     live.paidCount += 1
+    live.balanceLamports -= live.rewardLamports + live.feeLamports
     const [a, b] = signatures.get(DEMO_LIVE_ID) ?? [0, 0]
     signatures.set(DEMO_LIVE_ID, [a + 1, b + 1])
     payouts.get(DEMO_LIVE_ID)?.unshift({ tx: randomKey() + randomKey(), wallet: randomKey(), lamports: live.rewardLamports, at: now() })
@@ -269,7 +276,12 @@ export function demoBackend(): Backend {
       await wait(1100)
       const id = randomKey()
       balance -= (p.rewardLamports + FEE_LAMPORTS) * BigInt(p.maxPaid) + DEMO_RENT
-      events.unshift({ ...demoRow(id, p.name, p.venue, p.start, p.end, 0, p.maxPaid, 0), rewardLamports: p.rewardLamports, organizer })
+      events.unshift({
+        ...demoRow(id, p.name, p.venue, p.start, p.end, 0, p.maxPaid, 0),
+        rewardLamports: p.rewardLamports,
+        balanceLamports: (p.rewardLamports + FEE_LAMPORTS) * BigInt(p.maxPaid) + DEMO_RENT,
+        organizer,
+      })
       return { event: id, signature: randomKey() + randomKey() }
     },
     async withdraw(_conn, event, onStep) {
@@ -277,8 +289,8 @@ export function demoBackend(): Backend {
       await wait(900)
       const row = find(event.id)
       if (row) {
-        row.returnedLamports = remaining(row)
-        balance += remaining(row) + DEMO_RENT
+        row.returnedLamports = row.balanceLamports
+        balance += row.balanceLamports
         row.withdrawn = true
       }
       return randomKey() + randomKey()

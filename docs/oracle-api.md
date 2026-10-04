@@ -125,7 +125,7 @@ version: production adds a certified liveness provider in front of submit.
 ```
 
 A join cannot be cancelled: the entry stays until the event ends. The oracle keeps the signed join message with it
-and sends it with every sighting report; the program checks it on chain (see contracts/on_sight/README.md).
+and sends it with every sighting report; the program checks it on chain (`check_join_proof` in contracts/on_sight/lib.rs).
 
 ### Status
 

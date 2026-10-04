@@ -62,6 +62,7 @@ export class ChainError extends Error {}
 interface RpcAccount {
   data: [string, string]
   owner: string
+  lamports: number
 }
 
 /** Waits before each retry of a rate-limited call; the public devnet RPC allows only a few connections per IP. */

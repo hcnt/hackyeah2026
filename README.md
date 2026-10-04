@@ -122,7 +122,7 @@ would carry on.
 
 | Path | What |
 |---|---|
-| `contracts/on_sight/` | The Anchor program (`lib.rs`), its IDL, a Solana Playground test, and a README with accounts, instructions, rules and error codes. |
+| `contracts/on_sight/` | The Anchor program (`lib.rs`), its IDL and a Solana Playground test. |
 | `backend/app/oracle/` | The oracle: join API (signature and photo checks), encrypted in-memory guest lists, face recognition (InsightFace), tracking, camera and stage WebSockets. |
 | `backend/app/chain/` | Solana client for the program: reads events, sends reports with the join proof, finds payout transactions. |
 | `backend/tests/` | Tests, including the compiled program run in LiteSVM (`tests/chain/test_program_litesvm.py`). |
@@ -194,7 +194,6 @@ cd backend && uv run pytest -q
 cd backend && uv run python ../scripts/devnet_event.py --name "HackYeah 2026" --venue "Tauron Arena"
 ```
 
-Building and deploying the program: [`contracts/on_sight/README.md`](contracts/on_sight/README.md).
 
 ## Deployment
 
