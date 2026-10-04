@@ -17,6 +17,30 @@ import bs58 from 'bs58'
 import { nowIso, signedMessage, type SignAction, type Signed } from './api'
 
 export const METAMASK_DOWNLOAD_URL = 'https://metamask.io/download/'
+export const PHANTOM_DOWNLOAD_URL = 'https://phantom.com/download'
+
+export type WalletId = 'metamask' | 'phantom'
+export const WALLET_NAMES: Record<WalletId, string> = { metamask: 'MetaMask', phantom: 'Phantom' }
+
+/** Phones and tablets, where wallets live in an app instead of a browser extension. */
+export function isMobile(): boolean {
+  const ua = navigator.userAgent
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+}
+
+/**
+ * Phantom's universal link that reopens `href` in the Phantom app's browser, where Phantom is in the page like the
+ * extension on desktop. Without the app it lands on Phantom's download page. Phantom's own SDK does the same.
+ */
+export function phantomBrowseUrl(href = window.location.href): string {
+  return `https://phantom.app/ul/browse/${encodeURIComponent(href)}?ref=${encodeURIComponent(window.location.origin)}`
+}
+
+/** True inside Phantom: its app's browser, or desktop with only the Phantom extension. */
+export function prefersPhantom(): boolean {
+  const w = window as { phantom?: { solana?: { isPhantom?: boolean } }; ethereum?: { isMetaMask?: boolean; isPhantom?: boolean } }
+  return !!w.phantom?.solana?.isPhantom && !(w.ethereum?.isMetaMask && !w.ethereum.isPhantom)
+}
 
 let metaMaskConnect: Promise<SolanaClient> | null = null
 
@@ -57,6 +81,10 @@ export function isSolanaWallet(wallet: Wallet): boolean {
 
 export function isMetaMask(wallet: Wallet): boolean {
   return /metamask/i.test(wallet.name)
+}
+
+export function isPhantom(wallet: Wallet): boolean {
+  return /phantom/i.test(wallet.name)
 }
 
 /** Solana-capable wallets in the page, MetaMask first. Updates when wallets register late. */

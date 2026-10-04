@@ -14,10 +14,17 @@ import Selfie from './Selfie'
 import {
   connect,
   isMetaMask,
+  isMobile,
+  isPhantom,
   isLockedWallet,
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
   metaMaskConnectWallet,
+  PHANTOM_DOWNLOAD_URL,
+  phantomBrowseUrl,
+  prefersPhantom,
+  WALLET_NAMES,
+  type WalletId,
   signAction,
   useSolanaWallets,
   type Connection,
@@ -55,10 +62,10 @@ const STEPPER: Record<Stage['name'], [Fill, Fill, Fill] | null> = {
   done: ['full', 'full', 'full'],
 }
 
-/** Wallets shown in the picker. Only MetaMask is wired up; the rest are shown greyed out. */
+/** Wallets shown in the picker. MetaMask and Phantom are wired up; the rest are shown greyed out. */
 const PICKER = [
   { id: 'metamask', name: 'MetaMask', enabled: true },
-  { id: 'phantom', name: 'Phantom', enabled: false },
+  { id: 'phantom', name: 'Phantom', enabled: true },
   { id: 'coinbase', name: 'Coinbase Wallet', enabled: false },
   { id: 'trust', name: 'Trust Wallet', enabled: false },
   { id: 'walletconnect', name: 'WalletConnect', enabled: false },
@@ -83,6 +90,10 @@ export type WidgetProps = {
 export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: WidgetProps) {
   const wallets = useSolanaWallets()
   const metamask = wallets.find(isMetaMask)
+  const phantom = wallets.find(isPhantom)
+  /** The wallet the sign-up button uses; the picker changes it. */
+  const [choice, setChoice] = useState<WalletId>(() => (prefersPhantom() ? 'phantom' : 'metamask'))
+  const walletName = WALLET_NAMES[choice]
 
   const [oracleSet, setOracleSet] = useState<OracleSet | null>(null)
   /** The oracle whose consent text is shown (the first to answer); also tests selfies. Event terms come from the
@@ -133,25 +144,36 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     )
   }
 
-  async function signUp(wallet: Wallet | undefined) {
+  async function signUp(id: WalletId) {
     setError(null)
     setPickerOpen(false)
-    wallet ??= (await metaMaskConnectWallet()) ?? undefined
+    setChoice(id)
+    let wallet: Wallet | undefined
+    if (id === 'phantom') {
+      wallet = phantom
+      if (!wallet && isMobile()) {
+        // Phone browsers have no Phantom in the page: continue in the Phantom app's browser instead.
+        window.location.assign(phantomBrowseUrl())
+        return
+      }
+    } else {
+      wallet = metamask ?? (await metaMaskConnectWallet()) ?? undefined
+    }
     if (!wallet) {
-      window.open(METAMASK_DOWNLOAD_URL, '_blank', 'noopener')
-      setError('Install MetaMask, then reload this page.')
+      window.open(id === 'phantom' ? PHANTOM_DOWNLOAD_URL : METAMASK_DOWNLOAD_URL, '_blank', 'noopener')
+      setError(`Install ${WALLET_NAMES[id]}, then reload this page.`)
       return
     }
     setStage({ name: 'connecting' })
     try {
-      // MetaMask asks only the first time; after that it reuses this site's stored connection silently.
+      // The wallet asks only the first time; after that it reuses this site's stored connection silently.
       const c = await connect(wallet)
       setConn(c)
       const s = await attendance(oracleSet!, c.account.address)
       setStatus(s)
       setStage(s.status === 'not_joined' ? { name: 'connected' } : { name: 'done' })
     } catch (err) {
-      setError(isUserRejection(err) ? 'Connection cancelled in MetaMask.' : (err as Error).message)
+      setError(isUserRejection(err) ? `Connection cancelled in ${WALLET_NAMES[id]}.` : (err as Error).message)
       setStage({ name: 'signup' })
     }
   }
@@ -167,7 +189,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
       const signed = await signAction(conn, 'join', eventId, event.consent.version) // the embedded id, never the oracle's
       body = { ...signed, consent: { version: event.consent.version, accepted: true }, image }
     } catch (err) {
-      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
+      setError(isUserRejection(err) ? `Signature cancelled in ${conn.wallet.name}.` : walletErrorMessage(err))
       setStage({ name: 'consent', image })
       return
     }
@@ -224,8 +246,8 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
             {errorLine}
             {event.joining_open ? (
               <div className="an-split">
-                <button type="button" className="an-split-main" onClick={() => signUp(metamask)}>
-                  Sign up with MetaMask
+                <button type="button" className="an-split-main" onClick={() => signUp(choice)}>
+                  Sign up with {walletName}
                 </button>
                 <span className="an-split-divider" />
                 <button
@@ -237,11 +259,11 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
                   onClick={() => setPickerOpen(!pickerOpen)}
                 >
                   <span className="an-wallet-tile">
-                    <img src={WALLET_LOGOS.metamask} alt="" />
+                    <img src={WALLET_LOGOS[choice]} alt="" />
                   </span>
                   <Chevron />
                 </button>
-                {pickerOpen && <WalletPicker onPick={() => signUp(metamask)} onClose={() => setPickerOpen(false)} />}
+                {pickerOpen && <WalletPicker selected={choice} onPick={signUp} onClose={() => setPickerOpen(false)} />}
               </div>
             ) : (
               <p className="an-note">This event has ended.</p>
@@ -252,9 +274,9 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
         return (
           <div className="an-body an-body--center an-stage">
             <div className="an-ring">
-              <img src={WALLET_LOGOS.metamask} alt="" />
+              <img src={WALLET_LOGOS[choice]} alt="" />
             </div>
-            <p className="an-heading">Confirm in MetaMask</p>
+            <p className="an-heading">Confirm in {walletName}</p>
           </div>
         )
       case 'connected':
@@ -312,7 +334,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
                 sending ? (
                   'Sending to oracles…'
                 ) : (
-                  'Confirm in MetaMask…'
+                  `Confirm in ${conn?.wallet.name ?? walletName}…`
                 )
               ) : canRetry ? (
                 `Retry ${failedOracles.map((o) => o.name).join(', ')}`
@@ -394,7 +416,7 @@ function OracleProgress({ oracles, progress }: { oracles: Oracle[]; progress: Pr
   )
 }
 
-/** Readable text for a failed MetaMask call. */
+/** Readable text for a failed wallet call. */
 function walletErrorMessage(err: unknown): string {
   if (isLockedWallet(err)) return 'MetaMask is locked. Unlock it (click the MetaMask icon), then try again.'
   return (err as Error).message
@@ -461,7 +483,15 @@ function Reward({ event }: { event: EventDetails }) {
   )
 }
 
-function WalletPicker({ onPick, onClose }: { onPick: () => void; onClose: () => void }) {
+function WalletPicker({
+  selected,
+  onPick,
+  onClose,
+}: {
+  selected: WalletId
+  onPick: (id: WalletId) => void
+  onClose: () => void
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -477,10 +507,10 @@ function WalletPicker({ onPick, onClose }: { onPick: () => void; onClose: () => 
               type="button"
               role="menuitemradio"
               className="an-picker-item"
-              aria-checked={w.id === 'metamask'}
+              aria-checked={w.id === selected}
               disabled={!w.enabled}
               title={w.enabled ? undefined : 'Coming soon'}
-              onClick={onPick}
+              onClick={() => onPick(w.id as WalletId)}
             >
               <span className="an-picker-logo">
                 <img src={WALLET_LOGOS[w.id]} alt="" />
