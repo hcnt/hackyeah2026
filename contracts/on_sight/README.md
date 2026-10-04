@@ -145,7 +145,7 @@ anchor-lang = { version = "0.31.2", features = ["init-if-needed"] }
 3. Paste `anchor.test.ts` into `tests/` and run `test`.
 4. **Each oracle registers once** under the new program id, signed by its own key, so widgets can find it:
    `cd backend && ORACLE_KEYPAIR=… uv run python ../scripts/register_oracle.py --program <PROGRAM_ID> --name OnSight
-   --url https://hackyeah.kindhome.io`. Running it again updates the entry. Other oracles run the same with their own
+   --url https://onsight.site`. Running it again updates the entry. Other oracles run the same with their own
    key, name and url.
 
 There is no config step: the fee is a constant in the program, and the program has no admin.

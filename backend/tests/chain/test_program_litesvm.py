@@ -543,8 +543,8 @@ def oracle_info(chain: Chain, oracle: Pubkey) -> OracleInfo | None:
 def test_register_oracle_publishes_name_and_url_paid_by_the_oracle(chain):
     me = chain.oracle
     before = chain.balance(me.pubkey())
-    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://hackyeah.kindhome.io", chain.pid)], me))
-    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://hackyeah.kindhome.io")
+    chain.ok(chain.send([register_oracle_ix(me.pubkey(), "OnSight", "https://onsight.site", chain.pid)], me))
+    assert oracle_info(chain, me.pubkey()) == OracleInfo(me.pubkey(), "OnSight", "https://onsight.site")
     info_addr = oracle_info_pda(me.pubkey(), chain.pid)
     assert chain.balance(me.pubkey()) == before - rent(chain, info_addr) - TX_FEE
 

@@ -1,6 +1,6 @@
 name: Preview
 
-# One isolated stack per PR at https://pr-<N>-hackyeah.kindhome.io, removed on close.
+# One isolated stack per PR at https://pr-<N>.onsight.site, removed on close.
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
@@ -29,7 +29,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: pr-${{ github.event.pull_request.number }}
-      url: https://pr-${{ github.event.pull_request.number }}-hackyeah.kindhome.io
+      url: https://pr-${{ github.event.pull_request.number }}.onsight.site
     steps:
       - uses: actions/checkout@v7
 

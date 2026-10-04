@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 N=${1:?usage: deploy-preview.sh <PR number>}
 [[ $N =~ ^[0-9]+$ ]] || { echo "bad PR number: $N" >&2; exit 2; }
 export STACK="pr-$N" ENV=preview
-HOST="pr-$N-hackyeah.kindhome.io"
+HOST="pr-$N.onsight.site"
 
 docker network inspect edge >/dev/null 2>&1 \
   || { echo "edge network missing: deploy main first" >&2; exit 1; }

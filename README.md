@@ -23,7 +23,7 @@ giveaway and the attendee who gets paid.
 **You need:** a laptop with a webcam, a phone, MetaMask with Solana enabled and switched to **devnet**, and about
 0.3 devnet SOL from [faucet.solana.com](https://faucet.solana.com).
 
-1. **Create the event.** Open [hackyeah.kindhome.io/events.html](https://hackyeah.kindhome.io/events.html), sign
+1. **Create the event.** Open [onsight.site](https://onsight.site), sign
    in with MetaMask and click **Create event**. Enter a name and start it now, ending in an hour. The defaults
    are made for this test: 0.02 SOL for each of 10 attendees, 5 seconds on camera, and the OnSight oracle. Click
    **Save terms**, then **Launch event** and approve the transaction: about 0.222 SOL is now locked in the program
@@ -101,7 +101,7 @@ rest to the organizer only before the start or after the end.
 The events app, the widget and the camera page are static files with no OnSight server or database behind them.
 They read the program's accounts from a Solana RPC, sign with the user's wallet, and talk to the oracles listed on
 the event; the only thing they keep is a cache in the browser. Anyone can build `frontend/` and host it themselves,
-or point it at their own RPC with `?rpc=<url>`. If hackyeah.kindhome.io went down, events, budgets and payouts
+or point it at their own RPC with `?rpc=<url>`. If onsight.site went down, events, budgets and payouts
 would carry on.
 
 ## How it works
@@ -137,7 +137,7 @@ would carry on.
 Embedding the widget on any page:
 
 ```html
-<script src="https://hackyeah.kindhome.io/widget.js"></script>
+<script src="https://onsight.site/widget.js"></script>
 <attend-now-widget event-id="<Event address>"></attend-now-widget>
 ```
 
@@ -195,13 +195,13 @@ Building and deploying the program: [`contracts/on_sight/README.md`](contracts/o
 ## Deployment
 
 ```
-hackyeah.kindhome.io ───────┐
-pr-12-hackyeah.kindhome.io ─┼─ Cloudflare ─ tunnel ─ cloudflared (host, systemd) ─ 127.0.0.1:8080
-pr-15-hackyeah.kindhome.io ─┘                                                         │
-                                                                  edge router (edge/, routes by Host)
-                                                          ┌───────────────┼───────────────┐
-                                                     prod stack      pr-12 stack     pr-15 stack
-                                                  (caddy + backend, each its own compose project)
+onsight.site ───────┐
+pr-12.onsight.site ─┼─ Cloudflare ─ tunnel ─ cloudflared (host, systemd) ─ 127.0.0.1:8080
+pr-15.onsight.site ─┘                                                         │
+                                                          edge router (edge/, routes by Host)
+                                                  ┌───────────────┼───────────────┐
+                                             prod stack      pr-12 stack     pr-15 stack
+                                          (caddy + backend, each its own compose project)
 ```
 
 - Cloudflare terminates TLS. The VPS needs **no inbound ports** (only SSH).
@@ -216,7 +216,7 @@ pr-15-hackyeah.kindhome.io ─┘                                               
 | `preview.yml` | PR closed/merged | `scripts/teardown-preview.sh N` (containers, volumes, images, checkout) |
 | `preview-cleanup.yml` | daily 03:00 UTC | removes previews of PRs that are no longer open |
 
-Each PR gets `https://pr-<N>-hackyeah.kindhome.io`. Repo secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
+Each PR gets `https://pr-<N>.onsight.site`. Repo secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
 `DEPLOY_KNOWN_HOSTS`. Every other repo variable and secret (e.g. `ORACLE_KEYPAIR`, `PRESENCE_PROGRAM_ID`, see
 `.env.example`) is written to prod's `.env` on every deploy; previews get no `.env` and use the in-memory stand-in.
 
@@ -228,5 +228,5 @@ docker compose -p prod up -d --build                # http://localhost:8080
 ```
 
 If the site breaks, test the origin first on the VPS:
-`curl -H 'Host: hackyeah.kindhome.io' http://127.0.0.1:8080/api/health`. Origin OK means the problem is in the
+`curl -H 'Host: onsight.site' http://127.0.0.1:8080/api/health`. Origin OK means the problem is in the
 tunnel or Cloudflare, not the app.

@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
-      url: https://hackyeah.kindhome.io
+      url: https://onsight.site
     env:
       DIR: /opt/hackyeah2026
       TARGET: root@${{ secrets.DEPLOY_HOST }}

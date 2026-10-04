@@ -10,7 +10,7 @@
 }
 
 :80 {
-	@preview header_regexp pr Host ^pr-(\d+)-hackyeah\.kindhome\.io$
+	@preview header_regexp pr Host ^pr-(\d+)(-hackyeah\.kindhome\.io|\.onsight\.site)$
 	handle @preview {
 		# Resolved per request, so new previews need no reload. No such stack -> 502.
 		reverse_proxy pr-{re.pr.1}:80

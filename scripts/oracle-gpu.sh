@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs the oracle backend on an on-demand AWS GPU instance, reachable from this laptop at localhost:8000
-# through an SSH tunnel (so the Vite dev server and oracle.kindhome.io keep working unchanged).
+# through an SSH tunnel (so the Vite dev server and oracle.onsight.site keep working unchanged).
 #
 #   scripts/oracle-gpu.sh up        start (or create) the instance, ship backend/, start the oracle, open the tunnel
 #   scripts/oracle-gpu.sh down      close the tunnel and stop the instance (only the disk keeps costing)

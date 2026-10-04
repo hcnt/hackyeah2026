@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export STACK=prod
-PROD_HOST=${PROD_HOST:-hackyeah.kindhome.io}
+PROD_HOST=${PROD_HOST:-onsight.site}
 
 # Build before touching anything running: a failed build leaves the old version up.
 docker compose -p prod build

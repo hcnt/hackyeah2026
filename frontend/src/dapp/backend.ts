@@ -286,8 +286,8 @@ export function demoBackend(): Backend {
     async oracles(event) {
       const [a, b] = signatures.get(event.id) ?? [0, 0]
       return [
-        { key: DEMO_ORACLES[0], name: 'Oracle 1', url: 'https://oracle.kindhome.io', signatures: a, online: true },
-        { key: DEMO_ORACLES[1], name: 'Oracle 2', url: 'https://oracle-2.kindhome.io', signatures: b, online: true },
+        { key: DEMO_ORACLES[0], name: 'Oracle 1', url: 'https://oracle.onsight.site', signatures: a, online: true },
+        { key: DEMO_ORACLES[1], name: 'Oracle 2', url: 'https://oracle-2.onsight.site', signatures: b, online: true },
       ]
     },
     payouts: async (event) => [...(payouts.get(event.id) ?? [])],

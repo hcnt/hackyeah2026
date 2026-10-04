@@ -37,7 +37,7 @@ RPC = "https://api.devnet.solana.com"
 # OLD program id (superseded). Its create_event accounts do NOT match what this script builds (no Config account
 # any more): replace with the new id after the redeploy, or pass --program <new id>.
 DEFAULT_PROGRAM = "4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf"
-# The demo oracle, registered as OnSight at https://oracle.kindhome.io.
+# The demo oracle, registered as OnSight at https://oracle.onsight.site.
 DEFAULT_ORACLE = "9c4e1HNxQM1GsbPNrUwRAo3eDghR6xLeGGzuKauUsPD3"
 KEY_FILE = Path.home() / ".config/attend-now/organizer-devnet.json"
 LAMPORTS = 1_000_000_000

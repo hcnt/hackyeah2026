@@ -310,7 +310,7 @@ pub struct OracleInfo {
     #[max_len(32)]
     pub name: String, // nazwa pokazywana uczestnikowi w zgodzie, np. "OnSight"
     #[max_len(128)]
-    pub url: String, // bazowy adres API oracla, np. "https://hackyeah.kindhome.io"
+    pub url: String, // bazowy adres API oracla, np. "https://onsight.site"
     pub bump: u8,
 }
 

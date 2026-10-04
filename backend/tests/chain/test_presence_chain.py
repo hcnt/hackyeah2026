@@ -314,9 +314,9 @@ def oracle_info_bytes(oracle: Pubkey, name: str, url: str, pad_to: int = 8 + 32 
 
 
 def test_oracle_info_decode_reads_padded_account_and_round_trips():
-    data = oracle_info_bytes(ORACLE, "OnSight", "https://hackyeah.kindhome.io")
+    data = oracle_info_bytes(ORACLE, "OnSight", "https://onsight.site")
     info = OracleInfo.decode(data)
-    assert info == OracleInfo(ORACLE, "OnSight", "https://hackyeah.kindhome.io")
+    assert info == OracleInfo(ORACLE, "OnSight", "https://onsight.site")
     assert OracleInfo.decode(info.encode()) == info
     assert data.startswith(info.encode(bump=253))
     utf8 = OracleInfo(ORACLE, "Óracle łódź", "https://example.com/ścieżka")
