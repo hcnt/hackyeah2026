@@ -1,0 +1,11 @@
+{
+  "name": "judge-walkthrough",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "python3 build.py",
+    "dev": "npx --yes hyperframes@0.8.117 preview",
+    "check": "npx --yes hyperframes@0.8.117 check",
+    "render": "npx --yes hyperframes@0.8.117 render"
+  }
+}

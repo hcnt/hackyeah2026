@@ -1,0 +1,98 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-ExtraBold.ttf"); font-weight: 800; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Medium.ttf"); font-weight: 500; }
+#root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Geist", sans-serif; overflow: hidden; }
+.side { position: absolute; left: 80px; top: 0; bottom: 0; width: 420px; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+.kicker { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #1F8A5B; }
+.title { font-size: 54px; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+.bullets { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+.b { display: flex; gap: 14px; font-size: 25px; line-height: 1.3; color: #3A3C42; font-weight: 500; }
+.b i { flex: none; width: 10px; height: 10px; border-radius: 99px; background: #1F8A5B; margin-top: 12px; }
+.b strong { color: #15161A; font-weight: 700; }
+.win { position: absolute; left: 560px; top: 160px; width: 1280px; height: 764px; border-radius: 18px; overflow: hidden;
+  background: #fff; box-shadow: 0 30px 80px rgba(21,22,26,0.16), 0 0 0 1px rgba(21,22,26,0.08); }
+.bar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #ECEBE6; border-bottom: 1px solid #D9D7D0; }
+.dot { width: 12px; height: 12px; border-radius: 99px; background: #D0CEC7; }
+.url { margin-left: 18px; flex: 1; height: 28px; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 12px;
+  font-family: "Geist Mono", monospace; font-size: 14px; color: #55575E; white-space: nowrap; overflow: hidden; }
+.view { position: absolute; left: 0; top: 44px; width: 1280px; height: 720px; overflow: hidden; }
+.cam { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+.scr { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; opacity: 0; }
+.hl { position: absolute; border: 3px solid #1F8A5B; border-radius: 12px; box-shadow: 0 0 0 6px rgba(31,138,91,0.18); opacity: 0; }
+.cursor { position: absolute; left: 0; top: 0; width: 30px; height: 36px; }
+.ripple { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 99px; background: rgba(31,138,91,0.45); opacity: 0; }
+.mm { position: absolute; right: 16px; top: 8px; width: 340px; height: 500px; border-radius: 14px; background: #fff; opacity: 0;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
+.mm-top { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #EEE; font-size: 15px; font-weight: 700; }
+.mm-logo { width: 26px; height: 26px; background: url("assets/metamask.svg") center / contain no-repeat; }
+.mm-net { margin-left: auto; font-size: 12px; font-weight: 500; color: #555; background: #F2F2F2; border-radius: 99px; padding: 4px 10px; }
+.mm-body { flex: 1; padding: 18px 18px 0; display: flex; flex-direction: column; gap: 12px; }
+.mm-h { font-size: 21px; font-weight: 800; }
+.mm-site { font-size: 14px; color: #555; }
+.mm-acct { font-size: 14px; color: #222; background: #F7F7F7; border-radius: 10px; padding: 10px 12px; }
+.mm-msg { font-family: "Geist Mono", monospace; font-size: 12px; line-height: 1.5; color: #333; background: #F7F7F7; border-radius: 10px;
+  padding: 10px 12px; white-space: pre-wrap; word-break: break-all; }
+.mm-amt { font-size: 30px; font-weight: 800; }
+.mm-row { display: flex; justify-content: space-between; font-size: 14px; color: #444; }
+.mm-btns { display: flex; gap: 12px; padding: 16px 18px 20px; }
+.mm-btns div { flex: 1; height: 44px; border-radius: 99px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+.mm-cancel { border: 1px solid #222; }
+.mm-ok { background: #0376C9; color: #fff; }
+.phone { position: absolute; right: 40px; bottom: 36px; width: 318px; height: 672px; border-radius: 46px; background: #15161A; padding: 12px;
+  box-shadow: 0 30px 80px rgba(21,22,26,0.35); opacity: 0; }
+.phone img { width: 294px; height: 648px; border-radius: 36px; display: block; object-fit: cover; }
+.card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; text-align: center; }
+.mark { width: 84px; height: 84px; border-radius: 22px; background: #15161A; color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 48px; font-weight: 800; }
+.big { font-size: 96px; font-weight: 800; letter-spacing: -0.04em; margin: 0; line-height: 1; }
+.sub { font-size: 34px; color: #55575E; font-weight: 500; margin: 0; }
+.chips { display: flex; gap: 18px; margin-top: 18px; }
+.chip { background: #fff; border: 1px solid #D9D7D0; border-radius: 16px; padding: 18px 24px; font-size: 24px; font-weight: 500; color: #3A3C42; max-width: 420px; }
+.chip strong { display: block; color: #15161A; font-weight: 700; margin-bottom: 4px; }
+.addr { font-family: "Geist Mono", monospace; font-size: 46px; font-weight: 500; color: #15161A; background: #fff; border: 1px solid #D9D7D0;
+  border-radius: 18px; padding: 18px 32px; }
+.note { font-size: 24px; color: #6B6D74; font-weight: 500; margin: 0; max-width: 1100px; }
+</style>
+<div id="root" data-composition-id="signin" data-width="1920" data-height="1080" data-duration="6">
+  <div class="side" id="signin-side">
+    <div class="kicker">Step 1 of 6</div>
+    <h1 class="title">Sign in</h1>
+    <div class="bullets"><div class="b" id="signin-b0"><i></i><span>Open <strong>onsight.site</strong></span></div><div class="b" id="signin-b1"><i></i><span>Sign in with <strong>MetaMask</strong>. Free: it's a signature, not a transaction.</span></div></div>
+  </div>
+  <div class="win" id="signin-win">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">onsight.site</span></div>
+    <div class="view"><div class="cam" id="signin-cam" data-layout-allow-overflow><img class="scr" id="signin-i0" src="assets/screens/a1-signin.webp" alt=""><img class="scr" id="signin-i1" src="assets/screens/a2-overview.webp" alt=""><div class="mm" id="signin-mm0"><div class="mm-top"><span class="mm-logo"></span>MetaMask<span class="mm-net">Solana Devnet</span></div><div class="mm-body"><div class="mm-h">Signature request</div><div class="mm-site">onsight.site</div><div class="mm-msg">Sign in to OnSight as an event organiser.
+
+Wallet: WiKX…E5bj
+
+This costs nothing and sends no transaction.</div></div><div class="mm-btns"><div class="mm-cancel">Cancel</div><div class="mm-ok">Confirm</div></div></div><div class="ripple" id="signin-rip"></div><div class="cursor" id="signin-cur"><svg viewBox="0 0 30 36" width="30" height="36"><path d="M2 2 L2 28 L9 21.5 L14 33 L19 31 L14 19.5 L24 19.5 Z" fill="#15161A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div></div></div>
+  </div>
+  
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#signin-side", {opacity: 0, x: -24}, {opacity: 1, x: 0, duration: 0.5, ease: "power3.out"}, 0);
+tl.fromTo("#signin-win", {opacity: 0, y: 24}, {opacity: 1, y: 0, duration: 0.5, ease: "power3.out"}, 0.1);
+tl.fromTo("#signin-b0", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 0.6);
+tl.fromTo("#signin-b1", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 1.6);
+tl.fromTo("#signin-i0", {opacity: 0}, {opacity: 1, duration: 0.01}, 0);
+tl.fromTo("#signin-i1", {opacity: 0}, {opacity: 1, duration: 0.25}, 3.7);
+tl.fromTo("#signin-mm0", {opacity: 0, y: -14}, {opacity: 1, y: 0, duration: 0.25, ease: "power2.out"}, 2.0);
+tl.to("#signin-mm0", {opacity: 0, y: -10, duration: 0.2}, 3.4);
+tl.fromTo("#signin-cur", {x: 920.0, y: 608.0, opacity: 0}, {x: 920.0, y: 608.0, opacity: 1, duration: 0.15}, 0.5);
+tl.to("#signin-cur", {x: 576.0, y: 446.40000000000003, duration: 0.8, ease: "power2.inOut"}, 0.9);
+tl.to("#signin-cur", {x: 1170.0, y: 466.0, duration: 0.6, ease: "power2.inOut"}, 2.4);
+tl.to("#signin-cur", {scale: 0.82, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "2px 2px"}, 1.8);
+tl.fromTo("#signin-rip", {opacity: 0.7, scale: 0.3, x: 576.0, y: 446.40000000000003}, {opacity: 0, scale: 1.6, duration: 0.5, ease: "power2.out", immediateRender: false}, 1.8);
+tl.to("#signin-cur", {scale: 0.82, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "2px 2px"}, 3.1);
+tl.fromTo("#signin-rip", {opacity: 0.7, scale: 0.3, x: 1170.0, y: 466.0}, {opacity: 0, scale: 1.6, duration: 0.5, ease: "power2.out", immediateRender: false}, 3.1);
+window.__timelines["signin"] = tl;
+</script>
+</template>
+</body></html>

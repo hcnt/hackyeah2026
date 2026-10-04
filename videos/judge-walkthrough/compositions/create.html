@@ -1,0 +1,110 @@
+<!doctype html>
+<html><head><meta charset="UTF-8" /></head>
+<body>
+<template>
+<style>
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "Geist"; src: url("assets/fonts/Geist-ExtraBold.ttf"); font-weight: 800; }
+@font-face { font-family: "Geist Mono"; src: url("assets/fonts/GeistMono-Medium.ttf"); font-weight: 500; }
+#root { position: absolute; inset: 0; background: #F3F2EE; color: #15161A; font-family: "Geist", sans-serif; overflow: hidden; }
+.side { position: absolute; left: 80px; top: 0; bottom: 0; width: 420px; display: flex; flex-direction: column; justify-content: center; gap: 22px; }
+.kicker { font-size: 20px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #1F8A5B; }
+.title { font-size: 54px; line-height: 1.05; font-weight: 800; letter-spacing: -0.03em; margin: 0; }
+.bullets { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+.b { display: flex; gap: 14px; font-size: 25px; line-height: 1.3; color: #3A3C42; font-weight: 500; }
+.b i { flex: none; width: 10px; height: 10px; border-radius: 99px; background: #1F8A5B; margin-top: 12px; }
+.b strong { color: #15161A; font-weight: 700; }
+.win { position: absolute; left: 560px; top: 160px; width: 1280px; height: 764px; border-radius: 18px; overflow: hidden;
+  background: #fff; box-shadow: 0 30px 80px rgba(21,22,26,0.16), 0 0 0 1px rgba(21,22,26,0.08); }
+.bar { height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #ECEBE6; border-bottom: 1px solid #D9D7D0; }
+.dot { width: 12px; height: 12px; border-radius: 99px; background: #D0CEC7; }
+.url { margin-left: 18px; flex: 1; height: 28px; border-radius: 8px; background: #fff; display: flex; align-items: center; padding: 0 12px;
+  font-family: "Geist Mono", monospace; font-size: 14px; color: #55575E; white-space: nowrap; overflow: hidden; }
+.view { position: absolute; left: 0; top: 44px; width: 1280px; height: 720px; overflow: hidden; }
+.cam { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; }
+.scr { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; opacity: 0; }
+.hl { position: absolute; border: 3px solid #1F8A5B; border-radius: 12px; box-shadow: 0 0 0 6px rgba(31,138,91,0.18); opacity: 0; }
+.cursor { position: absolute; left: 0; top: 0; width: 30px; height: 36px; }
+.ripple { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; border-radius: 99px; background: rgba(31,138,91,0.45); opacity: 0; }
+.mm { position: absolute; right: 16px; top: 8px; width: 340px; height: 500px; border-radius: 14px; background: #fff; opacity: 0;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
+.mm-top { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #EEE; font-size: 15px; font-weight: 700; }
+.mm-logo { width: 26px; height: 26px; background: url("assets/metamask.svg") center / contain no-repeat; }
+.mm-net { margin-left: auto; font-size: 12px; font-weight: 500; color: #555; background: #F2F2F2; border-radius: 99px; padding: 4px 10px; }
+.mm-body { flex: 1; padding: 18px 18px 0; display: flex; flex-direction: column; gap: 12px; }
+.mm-h { font-size: 21px; font-weight: 800; }
+.mm-site { font-size: 14px; color: #555; }
+.mm-acct { font-size: 14px; color: #222; background: #F7F7F7; border-radius: 10px; padding: 10px 12px; }
+.mm-msg { font-family: "Geist Mono", monospace; font-size: 12px; line-height: 1.5; color: #333; background: #F7F7F7; border-radius: 10px;
+  padding: 10px 12px; white-space: pre-wrap; word-break: break-all; }
+.mm-amt { font-size: 30px; font-weight: 800; }
+.mm-row { display: flex; justify-content: space-between; font-size: 14px; color: #444; }
+.mm-btns { display: flex; gap: 12px; padding: 16px 18px 20px; }
+.mm-btns div { flex: 1; height: 44px; border-radius: 99px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; }
+.mm-cancel { border: 1px solid #222; }
+.mm-ok { background: #0376C9; color: #fff; }
+.phone { position: absolute; right: 40px; bottom: 36px; width: 318px; height: 672px; border-radius: 46px; background: #15161A; padding: 12px;
+  box-shadow: 0 30px 80px rgba(21,22,26,0.35); opacity: 0; }
+.phone img { width: 294px; height: 648px; border-radius: 36px; display: block; object-fit: cover; }
+.card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; text-align: center; }
+.mark { width: 84px; height: 84px; border-radius: 22px; background: #15161A; color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 48px; font-weight: 800; }
+.big { font-size: 96px; font-weight: 800; letter-spacing: -0.04em; margin: 0; line-height: 1; }
+.sub { font-size: 34px; color: #55575E; font-weight: 500; margin: 0; }
+.chips { display: flex; gap: 18px; margin-top: 18px; }
+.chip { background: #fff; border: 1px solid #D9D7D0; border-radius: 16px; padding: 18px 24px; font-size: 24px; font-weight: 500; color: #3A3C42; max-width: 420px; }
+.chip strong { display: block; color: #15161A; font-weight: 700; margin-bottom: 4px; }
+.addr { font-family: "Geist Mono", monospace; font-size: 46px; font-weight: 500; color: #15161A; background: #fff; border: 1px solid #D9D7D0;
+  border-radius: 18px; padding: 18px 32px; }
+.note { font-size: 24px; color: #6B6D74; font-weight: 500; margin: 0; max-width: 1100px; }
+</style>
+<div id="root" data-composition-id="create" data-width="1920" data-height="1080" data-duration="13">
+  <div class="side" id="create-side">
+    <div class="kicker">Step 2 of 6</div>
+    <h1 class="title">Create the event</h1>
+    <div class="bullets"><div class="b" id="create-b0"><i></i><span>Click <strong>Create event</strong></span></div><div class="b" id="create-b1"><i></i><span>Name it, start it <strong>now</strong>, end it in an hour</span></div><div class="b" id="create-b2"><i></i><span>Defaults: <strong>0.001 SOL</strong> for <strong>10</strong> people</span></div><div class="b" id="create-b3"><i></i><span>Payout rules: <strong>5 s</strong> on camera and the OnSight oracle</span></div><div class="b" id="create-b4"><i></i><span><strong>Save terms</strong></span></div></div>
+  </div>
+  <div class="win" id="create-win">
+    <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">onsight.site/#/new</span></div>
+    <div class="view"><div class="cam" id="create-cam" data-layout-allow-overflow><img class="scr" id="create-i0" src="assets/screens/a2-overview.webp" alt=""><img class="scr" id="create-i1" src="assets/screens/b2-setup-details.webp" alt=""><img class="scr" id="create-i2" src="assets/screens/b3-rewards.webp" alt=""><img class="scr" id="create-i3" src="assets/screens/b4-rules.webp" alt=""><div class="hl" id="create-h0" style="left:377.6px;top:246.4px;width:524.8px;height:292.0px"></div><div class="hl" id="create-h1" style="left:378.40000000000003px;top:236.8px;width:521.6px;height:60.800000000000004px"></div><div class="hl" id="create-h2" style="left:389.6px;top:292.8px;width:253.60000000000002px;height:59.2px"></div><div class="ripple" id="create-rip"></div><div class="cursor" id="create-cur"><svg viewBox="0 0 30 36" width="30" height="36"><path d="M2 2 L2 28 L9 21.5 L14 33 L19 31 L14 19.5 L24 19.5 Z" fill="#15161A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg></div></div></div>
+  </div>
+  
+</div>
+<script>
+const tl = gsap.timeline({ paused: true });
+tl.fromTo("#create-side", {opacity: 0, x: -24}, {opacity: 1, x: 0, duration: 0.5, ease: "power3.out"}, 0);
+tl.fromTo("#create-win", {opacity: 0, y: 24}, {opacity: 1, y: 0, duration: 0.5, ease: "power3.out"}, 0.1);
+tl.fromTo("#create-b0", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 0.4);
+tl.fromTo("#create-b1", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 1.9);
+tl.fromTo("#create-b2", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 5.2);
+tl.fromTo("#create-b3", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 8.8);
+tl.fromTo("#create-b4", {opacity: 0, y: 12}, {opacity: 1, y: 0, duration: 0.4, ease: "power2.out"}, 11.8);
+tl.fromTo("#create-i0", {opacity: 0}, {opacity: 1, duration: 0.01}, 0);
+tl.fromTo("#create-i1", {opacity: 0}, {opacity: 1, duration: 0.25}, 1.6);
+tl.fromTo("#create-i2", {opacity: 0}, {opacity: 1, duration: 0.25}, 5.0);
+tl.fromTo("#create-i3", {opacity: 0}, {opacity: 1, duration: 0.25}, 8.6);
+tl.fromTo("#create-h0", {opacity: 0, scale: 1.06}, {opacity: 1, scale: 1, duration: 0.3, ease: "power2.out"}, 2.4);
+tl.to("#create-h0", {opacity: 0, duration: 0.25}, 4.8);
+tl.fromTo("#create-h1", {opacity: 0, scale: 1.06}, {opacity: 1, scale: 1, duration: 0.3, ease: "power2.out"}, 5.6);
+tl.to("#create-h1", {opacity: 0, duration: 0.25}, 8.4);
+tl.fromTo("#create-h2", {opacity: 0, scale: 1.06}, {opacity: 1, scale: 1, duration: 0.3, ease: "power2.out"}, 9.3);
+tl.to("#create-h2", {opacity: 0, duration: 0.25}, 11.4);
+tl.to("#create-cam", {scale: 1.45, transformOrigin: "640.0px 312.0px", duration: 0.7, ease: "power2.inOut"}, 5.5);
+tl.to("#create-cam", {scale: 1, duration: 0.6, ease: "power2.inOut"}, 8.2);
+tl.to("#create-cam", {scale: 1.5, transformOrigin: "512.0px 336.0px", duration: 0.7, ease: "power2.inOut"}, 9.2);
+tl.to("#create-cam", {scale: 1, duration: 0.6, ease: "power2.inOut"}, 11.3);
+tl.fromTo("#create-cur", {x: 880.0, y: 320.0, opacity: 0}, {x: 880.0, y: 320.0, opacity: 1, duration: 0.15}, 0.2);
+tl.to("#create-cur", {x: 1145.6000000000001, y: 125.60000000000001, duration: 0.7, ease: "power2.inOut"}, 0.4);
+tl.to("#create-cur", {x: 560.0, y: 224.0, duration: 0.6, ease: "power2.inOut"}, 2.2);
+tl.to("#create-cur", {x: 736.0, y: 264.0, duration: 0.6, ease: "power2.inOut"}, 5.3);
+tl.to("#create-cur", {x: 512.0, y: 323.20000000000005, duration: 0.6, ease: "power2.inOut"}, 9.0);
+tl.to("#create-cur", {x: 640.0, y: 497.6, duration: 0.6, ease: "power2.inOut"}, 11.6);
+tl.to("#create-cur", {scale: 0.82, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "2px 2px"}, 1.25);
+tl.fromTo("#create-rip", {opacity: 0.7, scale: 0.3, x: 1145.6000000000001, y: 125.60000000000001}, {opacity: 0, scale: 1.6, duration: 0.5, ease: "power2.out", immediateRender: false}, 1.25);
+tl.to("#create-cur", {scale: 0.82, duration: 0.08, yoyo: true, repeat: 1, transformOrigin: "2px 2px"}, 12.35);
+tl.fromTo("#create-rip", {opacity: 0.7, scale: 0.3, x: 640.0, y: 497.6}, {opacity: 0, scale: 1.6, duration: 0.5, ease: "power2.out", immediateRender: false}, 12.35);
+window.__timelines["create"] = tl;
+</script>
+</template>
+</body></html>
