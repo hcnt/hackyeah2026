@@ -108,12 +108,16 @@ Embedding the widget on any page:
 
 ## Trust and permissions
 
-| Who | Can | Can't |
+| Operation | Who may do it | When |
 |---|---|---|
-| Organizer | create an event and fund it; withdraw the rest before the start or after the end | take the budget during the event, change the terms, pay anyone |
-| Oracle (listed on the event) | report sightings; close its Sighting accounts after the end; publish its name and URL | report a wallet that didn't sign up, pay anyone, change amounts |
-| Attendee | sign up with one message signature; receive the reward. Nothing to do on chain. | |
-| Us | run one of the oracles | anything an oracle can't; there is no admin. Until the program is made final, its deployer can still upgrade it (see Limitations). |
+| `create_event` | anyone (they become the organizer and fund it) | any time |
+| `report_sighting` | an oracle listed on the event, with the attendee's signed join | during the event |
+| `withdraw_remaining` | that event's organizer | before the start or after the end |
+| `close_sighting` | the oracle that paid the Sighting's deposit | after the end |
+| `register_oracle` | any key, for its own entry | any time |
+
+There's no admin and no other operation: nobody, us included, can change an event's terms or touch its budget.
+Until the program is made final, whoever deployed it can still upgrade the code.
 
 **If a party disappears halfway:** if the organizer vanishes, the budget stays in escrow and payouts keep working;
 after the end, only the organizer can take back what's left, so it stays in the escrow until they return. If the
