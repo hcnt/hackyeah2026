@@ -1,6 +1,7 @@
 // Cameras on the dashboard. Live: the organizer pairs once (one free signature, posted to every oracle of the event,
 // tokens kept in this browser until the event ends, same as the stage screen), then one stage socket per oracle brings
-// annotated frames and payouts. A phone streaming to the event shows up as that oracle's camera feed.
+// annotated frames and payouts. The phone streams the same frames to every oracle, so the dashboard shows one camera
+// feed: online while any oracle relays frames, drawn from the first such oracle, with each oracle's state in the note.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readEventOracles, type OracleEntry } from '../widget/chain'
 import type { Connection } from '../widget/wallet'
@@ -41,6 +42,8 @@ export interface CameraFeed {
 
 type Frame = { jpeg: string; width: number; height: number; faces: LiveFace[] }
 const STALE_MS = 4000
+/** Id of the single camera feed (frames and online state keyed by oracle key otherwise). */
+const FEED = 'feed'
 
 export function useCameraFeed(backend: Backend, event: EventRow | null, conn: Connection | null): CameraFeed {
   const demo = useDemoFeed(backend.mode === 'demo')
@@ -151,8 +154,18 @@ function useLiveFeed(backend: Backend | null, event: EventRow | null, conn: Conn
           if (!msg || disposed) return
           if (msg.type === 'frame') {
             const frame = { jpeg: msg.jpeg, width: msg.width, height: msg.height, faces: msg.faces ?? [] }
-            lastFrame.current.set(oracle.key, { frame, at: performance.now() })
-            watchers.current.get(oracle.key)?.forEach((w) => w(frame))
+            const now = performance.now()
+            lastFrame.current.set(oracle.key, { frame, at: now })
+            // The feed shows the first oracle (in the event's order) that is relaying, so the picture doesn't flicker
+            // between two oracles' boxes.
+            const shown = tokens.find(({ oracle: o }) => {
+              const last = lastFrame.current.get(o.key)
+              return last && now - last.at < STALE_MS
+            })
+            if (shown?.oracle.key === oracle.key) {
+              lastFrame.current.set(FEED, { frame, at: now })
+              watchers.current.get(FEED)?.forEach((w) => w(frame))
+            }
           } else if (msg.type === 'payout' && msg.tx) {
             const at = msg.at ? new Date(msg.at).getTime() : Date.now()
             const p: Payout = { tx: msg.tx, wallet: msg.wallet, lamports: reward, at: Number.isFinite(at) ? at : Date.now() }
@@ -246,12 +259,22 @@ function useLiveFeed(backend: Backend | null, event: EventRow | null, conn: Conn
     [eventId, tokens],
   )
 
-  const cameras: Camera[] = (tokens ?? []).map(({ oracle }) => ({
-    id: oracle.key,
-    name: `Camera feed · ${oracle.name || 'oracle'}`,
-    online: !!online[oracle.key],
-    note: online[oracle.key] ? undefined : notes[oracle.key] ?? 'Connecting…',
-  }))
+  const cameras: Camera[] = tokens?.length ? [feedCamera(tokens.map((t) => t.oracle), online, notes)] : []
 
   return { cameras, cameraUrl, pair, pairNow: () => void pairNow(), watch, livePayouts }
+}
+
+/** The one camera feed: online while any oracle relays frames; the note says which oracles get it and why others don't. */
+function feedCamera(oracles: OracleEntry[], online: Record<string, boolean>, notes: Record<string, string>): Camera {
+  const label = (o: OracleEntry) => o.name || 'oracle'
+  const live = oracles.filter((o) => online[o.key])
+  const others = oracles.filter((o) => !online[o.key])
+  const reason = (o: OracleEntry) => notes[o.key] ?? 'Connecting…'
+  if (live.length === 0) {
+    const reasons = new Set(oracles.map(reason))
+    const note = reasons.size === 1 ? [...reasons][0] : oracles.map((o) => `${label(o)}: ${reason(o)}`).join(' · ')
+    return { id: FEED, name: 'Camera feed', online: false, note }
+  }
+  const note = [`Streaming to ${live.map(label).join(', ')}`, ...others.map((o) => `${label(o)}: ${reason(o)}`)].join(' · ')
+  return { id: FEED, name: 'Camera feed', online: true, note }
 }

@@ -461,7 +461,7 @@ function Cameras({ feed, status, isOrganizer }: { feed: CameraFeed; status: stri
               <div className="os-list-body">
                 <strong>{c.name}</strong>
                 <span className="os-online" data-on={c.online}>
-                  <span className="os-dot" data-on={c.online} /> {c.online ? 'Online' : c.note ? `Offline · ${c.note}` : 'Offline'}
+                  <span className="os-dot" data-on={c.online} /> {c.online ? (c.note ? `Online · ${c.note}` : 'Online') : c.note ? `Offline · ${c.note}` : 'Offline'}
                 </span>
               </div>
               <button
