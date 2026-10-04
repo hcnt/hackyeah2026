@@ -8,7 +8,9 @@
 //   OracleInfo: oracle 32 | name (u32 LE length + UTF-8) | url (u32 LE length + UTF-8) | bump u8   (PDA ["oracle", key])
 import bs58 from 'bs58'
 
-export const DEFAULT_RPC_URL = 'https://api.devnet.solana.com'
+// Prod builds bake in a private RPC (VITE_SOLANA_RPC_URL, an origin-restricted key: it is visible in the bundle)
+// because the public devnet RPC rate-limits shared IPs. Pages still take ?rpc=<url> to use any other RPC.
+export const DEFAULT_RPC_URL: string = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com'
 // TODO after the new deploy: the on_sight program id that has the oracle registry. The id below is the OLD
 // program (no OracleInfo accounts, different Event layout), so until then reads fail and the widget falls back to
 // single-oracle mode (api-base). Override per page with the `program-id` attribute.

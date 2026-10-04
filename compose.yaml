@@ -7,6 +7,9 @@ services:
     build:
       context: .
       dockerfile: caddy/Dockerfile
+      # From prod's .env (written by deploy.yml); previews have none and get the public devnet RPC.
+      args:
+        VITE_SOLANA_RPC_URL: ${VITE_SOLANA_RPC_URL:-}
     networks:
       default: {}
       edge:
