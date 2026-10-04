@@ -3,7 +3,7 @@
 //   #/new          new attendance reward
 //   #/events/<id>  event dashboard
 import { useEffect, useRef, useState } from 'react'
-import { CalendarDays, Copy, ExternalLink, FlaskConical, LogOut, Plus, Radio, Wallet } from 'lucide-react'
+import { Copy, ExternalLink, FlaskConical, LogOut, Radio, Wallet } from 'lucide-react'
 import { shortAddress } from '../widget/wallet'
 import { AccountProvider, useAccount, useBackend } from './account'
 import type { Backend } from './backend'
@@ -59,7 +59,7 @@ function Shell() {
     <div className="os">
       <div className="os-wash" aria-hidden />
       <div className="os-main">
-        <Nav route={route} />
+        <Nav />
         {needsWallet && !account.address ? (
           account.restoring ? (
             <div className="os-signin">
@@ -77,13 +77,11 @@ function Shell() {
         )}
         <footer className="os-footer">
           <span>OnSight · attendance rewards paid by a Solana program</span>
-          <span>
-            {backend.mode === 'demo' ? (
+          {backend.mode === 'demo' && (
+            <span>
               <a href={liveUrl()}>Open the live devnet app →</a>
-            ) : (
-              <a href={demoUrl()}>Explore with demo data →</a>
-            )}
-          </span>
+            </span>
+          )}
         </footer>
       </div>
     </div>
@@ -92,9 +90,6 @@ function Shell() {
 
 function liveUrl() {
   return `${import.meta.env.BASE_URL}events.html${window.location.hash}`
-}
-function demoUrl() {
-  return `${import.meta.env.BASE_URL}events-demo.html`
 }
 
 function Clock() {
@@ -110,7 +105,7 @@ function Clock() {
   )
 }
 
-function Nav({ route }: { route: Route }) {
+function Nav() {
   const account = useAccount()
   const backend = useBackend()
   return (
@@ -119,14 +114,6 @@ function Nav({ route }: { route: Route }) {
         <span className="os-brand-mark">O</span>
         OnSight
       </a>
-      <div className="os-navlinks">
-        <a className="os-navlink" href="#/" aria-current={route.name !== 'new' ? 'page' : undefined}>
-          <CalendarDays size={16} /> Events
-        </a>
-        <a className="os-navlink" href="#/new" aria-current={route.name === 'new' ? 'page' : undefined}>
-          <Plus size={16} /> New reward
-        </a>
-      </div>
       <div className="os-navright">
         <Clock />
         <span className="os-net" data-demo={backend.mode === 'demo'} title={backend.programId ? `Program ${backend.programId}` : undefined}>
@@ -182,9 +169,11 @@ function WalletMenu() {
               <Radio size={15} /> Get devnet SOL
             </a>
           )}
-          <a className="os-menu-item" href={backend.mode === 'demo' ? liveUrl() : demoUrl()}>
-            <FlaskConical size={15} /> {backend.mode === 'demo' ? 'Switch to live devnet' : 'Explore demo data'}
-          </a>
+          {backend.mode === 'demo' && (
+            <a className="os-menu-item" href={liveUrl()}>
+              <FlaskConical size={15} /> Switch to live devnet
+            </a>
+          )}
           <button type="button" className="os-menu-item" data-tone="danger" onClick={() => (setOpen(false), void account.signOut())}>
             <LogOut size={15} /> Sign out
           </button>
@@ -241,15 +230,7 @@ function SignIn() {
           sends no transaction.
         </p>
         <WalletButtons />
-        <p style={{ marginTop: 18, fontSize: 12.5 }}>
-          {backend.mode === 'live' ? (
-            <>
-              Just looking? <a href={demoUrl()} style={{ textDecoration: 'underline' }}>Explore with demo data</a>.
-            </>
-          ) : (
-            'Demo mode: nothing here touches a real wallet.'
-          )}
-        </p>
+        {backend.mode === 'demo' && <p style={{ marginTop: 18, fontSize: 12.5 }}>Demo mode: nothing here touches a real wallet.</p>}
       </div>
     </div>
   )
