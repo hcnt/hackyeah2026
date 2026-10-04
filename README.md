@@ -28,18 +28,24 @@ giveaway and the attendee who gets paid.
    now and ends in 15 minutes, 0.02 SOL for each of 10 attendees, 5 seconds on camera, and two oracles (OnSight
    and OnSight 2) that must both agree. Click **Save terms**, then **Launch event** and approve the transaction:
    about 0.222 SOL is now locked in the program (rewards, oracle fees and the account deposit).
-2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature),
-   then the QR icon next to **Add a camera**, and scan it with the phone. The phone now streams to the oracle.
-3. **Join as an attendee.** On the dashboard, click **Attendee page**. In the widget, connect MetaMask, take a
-   selfie, accept the consent and sign the join message. Joining is free: it's a signature, not a transaction.
-4. **Get seen.** Point the phone at your face. After 5 seconds on camera, the payout appears under **Payouts**
-   with an Explorer link, and 0.02 SOL arrives in the wallet you joined with. Nobody approved it: the program paid
-   because the oracle's reports met the terms you locked in step 1.
-5. **After the end**, open the event's settings (the cog) and withdraw what's left. While the event runs, the program
-   refuses.
+2. **Add the camera.** Click **Open dashboard**. Under **Cameras**, click **Pair cameras** (one free signature
+   that both oracles accept), then the QR icon next to **Add a camera**, and scan it with the phone. The phone
+   streams one feed to both oracles; the dashboard shows it as **Camera feed · Online · Streaming to OnSight,
+   OnSight 2**.
+3. **Join as an attendee.** On the dashboard, click **Attendee page**. The widget lists the event's oracles before
+   you join. Connect MetaMask, take a selfie, accept the consent and sign the join message; the widget sends it to
+   both oracles. Joining is free: it's a signature, not a transaction.
+4. **Get seen.** Point the phone at your face. Each oracle recognizes you and reports on its own. The program pays
+   only once both have seen you for 5 seconds: the payout appears under **Payouts** with an Explorer link, and 0.02
+   SOL arrives in the wallet you joined with. The paying transaction comes from whichever oracle completed the 2 of
+   2, and that oracle gets the 0.002 SOL fee. Nobody approved it: the program paid because the oracles' reports met
+   the terms you locked in step 1.
+5. **After the end** (15 minutes after the start), open the event's settings (the cog) and withdraw what's left.
+   While the event runs, the program refuses.
 
-**If something doesn't work:** the public devnet RPC sometimes rate-limits; wait a moment and retry. The oracle
-needs a clearly lit face looking at the camera.
+**If something doesn't work:** with 2 of 2, both oracles must see you. If the camera note says one is unreachable,
+nobody is paid until it's back (or create an event with threshold 1). The oracles need a clearly lit face looking
+at the camera. If a page says the Solana RPC is rate limiting, wait a moment and retry, or add `?rpc=<url>`.
 
 ## Design rationale
 
