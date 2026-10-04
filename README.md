@@ -15,7 +15,7 @@ footage of attendees to face-recognition **oracles**. The oracles only report "I
 who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see blockchain
 terms beyond "connect your wallet and sign".
 
-## Try it yourself (devnet, about 10 minutes)
+## Try it yourself (devnet, about 5 minutes)
 
 Everything runs on Solana devnet, so it costs nothing real. You play both sides: the organizer who funds the
 giveaway and the attendee who gets paid.

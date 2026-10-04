@@ -225,7 +225,7 @@ scenes.append(card(
     "intro",
     '<div class="mark" id="in-mark">O</div>'
     '<h1 class="big" id="in-title">Try OnSight yourself</h1>'
-    '<p class="sub" id="in-sub">Create an attendance giveaway, check in, get paid. On Solana devnet, about 10 minutes.</p>'
+    '<p class="sub" id="in-sub">Create an attendance giveaway, check in, get paid. On Solana devnet, about 5 minutes.</p>'
     '<div class="chips" id="in-chips">'
     '<div class="chip"><strong>MetaMask</strong>with Solana turned on, set to devnet</div>'
     '<div class="chip"><strong>~0.05 devnet SOL</strong>free at faucet.solana.com</div>'
