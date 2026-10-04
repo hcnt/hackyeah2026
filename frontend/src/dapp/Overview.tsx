@@ -77,7 +77,7 @@ export function Overview() {
             <RefreshCw size={16} style={loading ? { animation: 'os-spin 0.8s linear infinite' } : undefined} />
           </button>
           <button type="button" className="os-btn" onClick={() => navigate('/new')}>
-            <Plus size={16} /> Create attendance reward
+            <Plus size={16} /> Create event
           </button>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function Overview() {
           <h2>No events yet</h2>
           <p>Lock a reward pool for your next meetup. Attendees get paid to their wallets the moment the cameras see them.</p>
           <button type="button" className="os-btn" style={{ marginTop: 8 }} onClick={() => navigate('/new')}>
-            <Plus size={16} /> Create attendance reward
+            <Plus size={16} /> Create event
           </button>
         </div>
       ) : (

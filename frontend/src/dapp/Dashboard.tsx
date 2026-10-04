@@ -8,7 +8,6 @@ import {
   ExternalLink,
   Link2,
   MapPin,
-  MonitorPlay,
   Play,
   QrCode,
   Server,
@@ -150,9 +149,6 @@ export function Dashboard({ id }: { id: string }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a className="os-btn os-btn--secondary" href={links.stage} target="_blank" rel="noreferrer">
-            <MonitorPlay size={16} /> Stage screen
-          </a>
           <a className="os-btn os-btn--secondary" href={links.attendee} target="_blank" rel="noreferrer">
             <Users size={16} /> Attendee page
           </a>

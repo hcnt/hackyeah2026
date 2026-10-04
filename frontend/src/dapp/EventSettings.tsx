@@ -1,18 +1,17 @@
 // The cog: an event's frozen terms, its links, and withdrawing what's left (before the start or after the end).
 import { useState } from 'react'
-import { Copy, ExternalLink, MonitorPlay, UserRound } from 'lucide-react'
+import { Copy, ExternalLink, UserRound } from 'lucide-react'
 import { shortAddress } from '../widget/wallet'
 import { useAccount, useBackend, walletErrorText } from './account'
 import { fmtDate, fmtTime, remaining, sol, statusOf, type EventRow } from './model'
 import { Modal, Notice, Spinner, StatusPill, useCopy, useNow, useToast } from './ui'
 
-/** Links that keep ?rpc= and ?program=, so the attendee page and stage screen read the same deployment. */
+/** Links that keep ?rpc= and ?program=, so the attendee page reads the same deployment. */
 export function eventLinks(id: string) {
   const base = `${window.location.origin}${import.meta.env.BASE_URL}`
   const q = new URLSearchParams(window.location.search)
-  const stage = `${base}stage.html${q.size ? `?${q}` : ''}#${id}`
   q.set('event', id)
-  return { attendee: `${base}?${q}`, stage }
+  return { attendee: `${base}?${q}` }
 }
 
 export function EventSettings({ event, onClose, onChanged }: { event: EventRow; onClose: () => void; onChanged: (row: EventRow) => void }) {
@@ -84,9 +83,6 @@ export function EventSettings({ event, onClose, onChanged }: { event: EventRow; 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 20 }}>
         <a className="os-btn os-btn--secondary os-btn--sm" href={links.attendee} target="_blank" rel="noreferrer">
           <UserRound size={14} /> Attendee page
-        </a>
-        <a className="os-btn os-btn--secondary os-btn--sm" href={links.stage} target="_blank" rel="noreferrer">
-          <MonitorPlay size={14} /> Stage screen
         </a>
         <a className="os-btn os-btn--secondary os-btn--sm" href={backend.addressUrl(event.id)} target="_blank" rel="noreferrer">
           <ExternalLink size={14} /> Explorer
