@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from fakes import FakeClock, RecordingSink
+from fakes import DUMMY_PROOF, FakeClock, RecordingSink
 
 MODEL_DIR = Path.home() / ".insightface" / "models" / "buffalo_l"
 pytestmark = pytest.mark.skipif(not MODEL_DIR.exists(), reason="buffalo_l model not downloaded")
@@ -35,7 +35,7 @@ def test_t1_enrol_one_face_exactly_one_payout_others_unknown():
     state = OracleState(engine=engine, clock=clock, sink=lambda: sink)
     info = EventInfo(event_id="ev", organizer="org", start_ts=0, end_ts=4_000_000_000, min_seen_secs=1)
     rt = state.runtime_for(info)
-    state.guestlists.put("ev", info.end_ts, "W", enrolled)
+    state.guestlists.put("ev", info.end_ts, "W", enrolled, DUMMY_PROOF)
 
     async def run():
         outs = []

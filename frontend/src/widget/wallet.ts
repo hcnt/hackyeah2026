@@ -84,6 +84,15 @@ export async function signAction(
 }
 
 /**
+ * Asks the wallet to sign `text` (costs nothing). Right after connect this makes a wallet that remembered the site
+ * (MetaMask returns the account without a prompt, even while locked) open and unlock now, not at the first transaction.
+ */
+export async function signText({ wallet, account }: Connection, text: string): Promise<void> {
+  const { signMessage } = (wallet.features as SolanaSignMessageFeature)[SolanaSignMessage]
+  await signMessage({ account, message: new TextEncoder().encode(text) })
+}
+
+/**
  * True when a MetaMask call failed because the wallet isn't usable right now. Seen when MetaMask locked
  * itself after connecting: its keyrings are unloaded, so signing fails with "KeyringController - Keyring not
  * found." instead of asking to unlock. The connection itself is fine; unlocking and retrying works.

@@ -26,7 +26,7 @@ def code(verifier, **kw) -> str | None:
 
 def test_message_format_matches_contract():
     assert build_message("join", "E", "W", "T", "C") == "Attend Now\nAction: join\nEvent: E\nWallet: W\nConsent: C\nTime: T"
-    assert build_message("leave", "E", "W", "T") == "Attend Now\nAction: leave\nEvent: E\nWallet: W\nTime: T"
+    assert build_message("camera-token", "E", "W", "T") == "Attend Now\nAction: camera-token\nEvent: E\nWallet: W\nTime: T"
 
 
 def test_valid_then_reused():
@@ -55,7 +55,7 @@ def test_tampered_field(field):
     v = SignatureVerifier(wall_clock=FakeClock(T0))
     kw = make(Keypair())
     kw[field] = {"event_id": "OTHER", "consent_version": "1999", "signed_at": "2026-10-04T10:12:04Z",
-                 "action": "leave"}[field]
+                 "action": "camera-token"}[field]
     assert code(v, **kw) == "bad_signature"
 
 

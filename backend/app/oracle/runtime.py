@@ -203,8 +203,12 @@ class EventRuntime:
         task.add_done_callback(self._tasks.discard)
 
     async def _report(self, wallet: str, name: str, started: float) -> None:
+        proof = self.state.guestlists.join_proof(self.event_id, wallet)
+        if proof is None:  # the event ended between the match and this report
+            self.ledger.fail(wallet, started)
+            return
         try:
-            result = await self.state.sink().report(self.event_id, wallet)
+            result = await self.state.sink().report(self.event_id, wallet, proof)
         except SightingRejected as e:
             self.ledger.reject(wallet)
             log.warning("sighting event_id=%s wallet=%s status=rejected reason=%s", self.event_id, wallet, e)

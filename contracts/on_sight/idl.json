@@ -1,6 +1,6 @@
 {
   "version": "0.1.0",
-  "name": "presence_pay",
+  "name": "on_sight",
   "constants": [
     {
       "name": "MAX_ORACLES",
@@ -21,64 +21,24 @@
       "name": "MAX_ORACLE_URL",
       "type": "u64",
       "value": "128"
+    },
+    {
+      "name": "MAX_EVENT_NAME",
+      "type": "u64",
+      "value": "64"
+    },
+    {
+      "name": "MAX_EVENT_VENUE",
+      "type": "u64",
+      "value": "64"
+    },
+    {
+      "name": "FEE_LAMPORTS",
+      "type": "u64",
+      "value": "2_000_000"
     }
   ],
   "instructions": [
-    {
-      "name": "initConfig",
-      "accounts": [
-        {
-          "name": "admin",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "treasury",
-          "type": "publicKey"
-        },
-        {
-          "name": "fee",
-          "type": "u64"
-        }
-      ]
-    },
-    {
-      "name": "updateConfig",
-      "accounts": [
-        {
-          "name": "admin",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "treasury",
-          "type": "publicKey"
-        },
-        {
-          "name": "fee",
-          "type": "u64"
-        }
-      ]
-    },
     {
       "name": "createEvent",
       "accounts": [
@@ -86,11 +46,6 @@
           "name": "organizer",
           "isMut": true,
           "isSigner": true
-        },
-        {
-          "name": "config",
-          "isMut": false,
-          "isSigner": false
         },
         {
           "name": "event",
@@ -137,31 +92,14 @@
         {
           "name": "minSeenSecs",
           "type": "u32"
-        }
-      ]
-    },
-    {
-      "name": "updateEventTimes",
-      "accounts": [
-        {
-          "name": "organizer",
-          "isMut": false,
-          "isSigner": true
         },
         {
-          "name": "event",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "start",
-          "type": "i64"
+          "name": "name",
+          "type": "string"
         },
         {
-          "name": "end",
-          "type": "i64"
+          "name": "venue",
+          "type": "string"
         }
       ]
     },
@@ -179,7 +117,7 @@
           "isSigner": false
         },
         {
-          "name": "sighting",
+          "name": "attendance",
           "isMut": true,
           "isSigner": false
         },
@@ -189,12 +127,12 @@
           "isSigner": false
         },
         {
-          "name": "treasury",
-          "isMut": true,
+          "name": "systemProgram",
+          "isMut": false,
           "isSigner": false
         },
         {
-          "name": "systemProgram",
+          "name": "instructions",
           "isMut": false,
           "isSigner": false
         }
@@ -218,7 +156,7 @@
       "args": []
     },
     {
-      "name": "closeSighting",
+      "name": "closeAttendance",
       "accounts": [
         {
           "name": "payer",
@@ -226,7 +164,7 @@
           "isSigner": true
         },
         {
-          "name": "sighting",
+          "name": "attendance",
           "isMut": true,
           "isSigner": false
         }
@@ -262,74 +200,9 @@
           "type": "string"
         }
       ]
-    },
-    {
-      "name": "updateOracle",
-      "accounts": [
-        {
-          "name": "oracle",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "oracleInfo",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "name",
-          "type": "string"
-        },
-        {
-          "name": "url",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "closeOracle",
-      "accounts": [
-        {
-          "name": "oracle",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "oracleInfo",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": []
     }
   ],
   "accounts": [
-    {
-      "name": "Config",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "admin",
-            "type": "publicKey"
-          },
-          {
-            "name": "treasury",
-            "type": "publicKey"
-          },
-          {
-            "name": "fee",
-            "type": "u64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
     {
       "name": "Event",
       "type": {
@@ -355,10 +228,6 @@
           {
             "name": "threshold",
             "type": "u8"
-          },
-          {
-            "name": "treasury",
-            "type": "publicKey"
           },
           {
             "name": "eventId",
@@ -395,12 +264,20 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "venue",
+            "type": "string"
           }
         ]
       }
     },
     {
-      "name": "Sighting",
+      "name": "Attendance",
       "type": {
         "kind": "struct",
         "fields": [
@@ -500,53 +377,58 @@
     },
     {
       "code": 6003,
-      "name": "AlreadyStarted",
-      "msg": "Event already started"
-    },
-    {
-      "code": 6004,
       "name": "NotStarted",
       "msg": "Event has not started yet"
     },
     {
-      "code": 6005,
+      "code": 6004,
       "name": "Ended",
       "msg": "Event has ended"
     },
     {
-      "code": 6006,
+      "code": 6005,
       "name": "CapReached",
       "msg": "Max attendees already paid"
     },
     {
-      "code": 6007,
+      "code": 6006,
       "name": "EventRunning",
       "msg": "Not allowed while the event is running"
     },
     {
-      "code": 6008,
+      "code": 6007,
       "name": "BadOracles",
       "msg": "Oracles must be 1 to 3 distinct, non-default keys"
     },
     {
-      "code": 6009,
+      "code": 6008,
       "name": "BadThreshold",
       "msg": "Threshold must be between 1 and the number of oracles"
     },
     {
-      "code": 6010,
+      "code": 6009,
       "name": "NotOracle",
       "msg": "Signer is not one of this event's oracles"
     },
     {
-      "code": 6011,
+      "code": 6010,
       "name": "BadName",
       "msg": "Oracle name must be 1 to 32 bytes, no control characters"
     },
     {
-      "code": 6012,
+      "code": 6011,
       "name": "BadUrl",
       "msg": "Oracle url must start with https:// or http://, be at most 128 bytes, no spaces"
+    },
+    {
+      "code": 6012,
+      "name": "BadJoinProof",
+      "msg": "Report must follow an ed25519 check of the attendee's signed join message for this event"
+    },
+    {
+      "code": 6013,
+      "name": "BadEventText",
+      "msg": "Event name must be 1 to 64 bytes, venue at most 64, no control characters"
     }
   ],
   "metadata": {

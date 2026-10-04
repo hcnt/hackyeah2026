@@ -28,6 +28,7 @@ import {
   firstEvent,
   hostOf,
   toAll,
+  withChainTerms,
   type Attendance,
   type Oracle,
   type OracleSet,
@@ -74,7 +75,7 @@ export type WidgetProps = {
   apiBase?: string
   /** Solana JSON-RPC endpoint for reading the event's oracles. Default: devnet. */
   rpcUrl?: string
-  /** presence_pay program id. Default: DEFAULT_PROGRAM_ID in chain.ts. */
+  /** on_sight program id. Default: DEFAULT_PROGRAM_ID in chain.ts. */
   programId?: string
 }
 
@@ -83,7 +84,8 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
   const metamask = wallets.find(isMetaMask)
 
   const [oracleSet, setOracleSet] = useState<OracleSet | null>(null)
-  /** The oracle whose event details and consent text are shown (the first to answer); also tests selfies. */
+  /** The oracle whose consent text is shown (the first to answer); also tests selfies. Event terms come from the
+   *  chain when it could be read (withChainTerms), from this oracle only in single-oracle fallback mode. */
   const [primary, setPrimary] = useState<Oracle | null>(null)
   const [event, setEvent] = useState<EventDetails | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
         if (cancelled) return
         setOracleSet(set)
         setPrimary(first.oracle)
-        setEvent(first.event)
+        setEvent(withChainTerms(first.event, set.meta))
       })
       .catch((err: Error) => !cancelled && setLoadError(err.message))
     return () => {
@@ -160,7 +162,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     setStage({ name: 'signing', image })
     let body: SubmitRequest
     try {
-      const signed = await signAction(conn, 'join', event.event_id, event.consent.version)
+      const signed = await signAction(conn, 'join', eventId, event.consent.version) // the embedded id, never the oracle's
       body = { ...signed, consent: { version: event.consent.version, accepted: true }, image }
     } catch (err) {
       setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
@@ -183,7 +185,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     if (accepted >= set.need) {
       setStatus({ status: 'on_list', tx: null, onList: accepted })
       setStage({ name: 'done' })
-      primary.api.event().then(setEvent, () => {})
+      primary.api.event().then((e) => setEvent(withChainTerms(e, set.meta)), () => {})
       return
     }
     const failed = results.filter((r) => !r.ok)
@@ -197,24 +199,6 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     } else {
       setError(`${accepted} of ${set.need} needed oracles accepted. ${failureText(failed)}`)
       setStage({ name: 'consent', image })
-    }
-  }
-
-  async function leave() {
-    if (!conn || !event || !oracleSet || !primary) return
-    setError(null)
-    try {
-      const signed = await signAction(conn, 'leave', event.event_id)
-      const results = await toAll(oracleSet.oracles, (api) => api.leave(signed))
-      const failed = results.filter((r) => !r.ok)
-      if (failed.length === results.length && failed[0] && !failed[0].ok) throw failed[0].error
-      if (failed.length > 0) setError(`Could not leave at ${failureText(failed)}`)
-      setStatus({ status: 'not_joined', tx: null, onList: failed.length })
-      setProgress([])
-      setStage({ name: 'connected' })
-      primary.api.event().then(setEvent, () => {})
-    } catch (err) {
-      setError(isUserRejection(err) ? 'Signature cancelled in MetaMask.' : walletErrorMessage(err))
     }
   }
 
@@ -347,6 +331,7 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
               <Check size={32} />
             </div>
             <p className="an-display">{status?.status === 'paid' ? 'You got paid.' : "You're in."}</p>
+            {event.name && <p className="an-note">{event.name}</p>}
             {multi && status && status.status !== 'paid' && (
               <p className="an-note">
                 On the list with {status.onList} of {oracleSet.oracles.length} oracles
@@ -377,16 +362,6 @@ export default function Widget({ eventId, apiBase = '', rpcUrl, programId }: Wid
     <Card
       stepper={STEPPER[stage.name]}
       branded={stage.name === 'signup'}
-      footerExtra={
-        stage.name === 'done' && status?.status === 'on_list' ? (
-          <>
-            <span aria-hidden>·</span>
-            <button type="button" className="an-link" onClick={leave}>
-              Leave event
-            </button>
-          </>
-        ) : null
-      }
     >
       {body()}
     </Card>

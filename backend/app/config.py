@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     oracle_consent_versions: list[str] = ["2026-10-03"]
     # "cuda" needs onnxruntime-gpu[cuda,cudnn] installed instead of onnxruntime (see scripts/oracle-gpu.sh).
     oracle_device: Literal["cpu", "cuda"] = "cpu"
-    # Solana: the presence_pay program (contracts/presence_pay). Without oracle_keypair the oracle keeps the
+    # Solana: the on_sight program (contracts/on_sight). Without oracle_keypair the oracle keeps the
     # in-memory dev event source and sighting sink.
     solana_rpc_url: str = "https://api.devnet.solana.com"
     solana_cluster: str = "devnet"

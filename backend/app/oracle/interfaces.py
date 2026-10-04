@@ -18,6 +18,8 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field
 
+from app.oracle.signatures import JoinProof
+
 log = logging.getLogger("app.oracle")
 
 
@@ -60,9 +62,10 @@ class DevEventSource:
 
 # 2. Reporting sightings ----------------------------------------------------------------------------
 #
-# The oracle is a SENSOR, not a judge: it reports "I see wallet W at event E now" and the presence_pay program
+# The oracle is a SENSOR, not a judge: it reports "I see wallet W at event E now" and the on_sight program
 # decides whether that pays (dwell time on the chain clock, oracle threshold, window, cap, once per wallet). The
-# oracle keeps reporting a recognised wallet every few seconds until a report comes back paid.
+# oracle keeps reporting a recognised wallet every few seconds until a report comes back paid. Every report carries the
+# wallet's signed join message (JoinProof), which the program checks: an oracle cannot report someone who never joined.
 
 SIGHTING_GAP_SECS = 60  # as in lib.rs: a longer gap between two reports restarts the dwell time
 
@@ -82,8 +85,8 @@ class SightingSink(Protocol):
     """A sink may also carry `oracle_pubkey: str | None`, the base58 key it reports with. The join endpoint uses it
     to refuse joins for events that list other oracles; a sink without it (the dev stand-in) skips that check."""
 
-    async def report(self, event_id: str, wallet: str) -> SightingResult:
-        """Report that `wallet` is seen now. Idempotent: a wallet already paid returns paid=True with that payout's
+    async def report(self, event_id: str, wallet: str, proof: JoinProof) -> SightingResult:
+        """Report that `wallet` (who signed `proof` when joining) is seen now. Idempotent: a wallet already paid returns paid=True with that payout's
         tx. Raise SightingRejected when reporting again cannot help; any other exception means "retry later"."""
 
 
@@ -98,16 +101,18 @@ class _DevSighting:
 class DevSightingSink:
     """In-memory stand-in for the program (no oracle key): the same rules with one oracle (threshold 1): dwell
     `last_seen - first_seen >= min_seen_secs`, a gap over SIGHTING_GAP_SECS restarts it, only within the event's
-    window, at most `max_payouts` payouts, once per wallet."""
+    window, at most `max_payouts` payouts, once per wallet, and only with the wallet's signed join for this event."""
 
     clock: Callable[[], float] = time.time
     events: Callable[[str], Awaitable[EventInfo | None]] | None = None  # default: providers.event_source.get
     _seen: dict[tuple[str, str], _DevSighting] = field(default_factory=dict)
 
-    async def report(self, event_id: str, wallet: str) -> SightingResult:
+    async def report(self, event_id: str, wallet: str, proof: JoinProof) -> SightingResult:
         info = await (self.events or providers.event_source.get)(event_id)
         if info is None:
             raise SightingRejected("no such event")
+        if not proof.valid_for(event_id, wallet):
+            raise SightingRejected("BadJoinProof")
         now = self.clock()
         if now < info.start_ts:
             raise RuntimeError("NotStarted")  # retryable, as on chain

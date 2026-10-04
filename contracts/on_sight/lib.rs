@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::ed25519_program;
+use anchor_lang::solana_program::sysvar::instructions::{load_current_index_checked, load_instruction_at_checked};
 
-// Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy).
-// UWAGA: ta wersja zmienia układ kont Event (lista oracli + próg) i zastępuje Receipt kontem Sighting,
-// więc wymaga ŚWIEŻEGO deployu pod NOWYM program id.
-// Poniższy id to STARY program (4Yhph…), który zostaje na devnecie, ale jest zastąpiony.
-// TODO po deployu: wpisać tu nowy program id (oraz w idl.json, README.md i PRESENCE_PROGRAM_ID backendu).
+// Program ID na devnecie (musi się zgadzać z adresem, pod który deployujemy). Program jest aktualizowany (upgrade)
+// pod tym samym id. UWAGA: zmiana nazwy lub ziarna konta (np. Sighting -> Attendance) zmienia adresy i
+// dyskryminatory kont, więc upgrade wolno zrobić tylko wtedy, gdy żaden event nie trwa (inaczej możliwa
+// podwójna wypłata dla portfeli wypłaconych przed upgrade'em).
 declare_id!("4YhphZrWqUUdjnyT3c8r6Wre2e27BZvqoCQWbEmcQdmf");
 
 /// Maksymalna liczba oracli w evencie (M-of-N, N ≤ 3).
@@ -15,34 +16,24 @@ pub const SIGHTING_GAP_SECS: i64 = 60;
 /// Rejestr oracli: maksymalna długość nazwy i adresu API (w bajtach UTF-8).
 pub const MAX_ORACLE_NAME: usize = 32;
 pub const MAX_ORACLE_URL: usize = 128;
+/// Nazwa i miejsce eventu (w bajtach UTF-8), ustawiane przez organizatora; widget, scena i oracle czytają je stąd.
+pub const MAX_EVENT_NAME: usize = 64;
+pub const MAX_EVENT_VENUE: usize = 64;
+/// Opłata za każdego wypłaconego uczestnika (0.002 SOL). Dostaje ją oracle, którego zgłoszenie wywołało wypłatę:
+/// to on płaci za transakcje i depozyt konta Attendance. Nie ma osobnego treasury ani konta Config.
+pub const FEE_LAMPORTS: u64 = 2_000_000;
+/// Ed25519SigVerify: nagłówek (liczba podpisów + wypełnienie) i 7 offsetów u16 na każdy podpis.
+const ED25519_HEADER: usize = 2;
+const ED25519_OFFSETS: usize = 14;
 
 #[program]
-pub mod presence_pay {
+pub mod on_sight {
     use super::*;
-
-    /// Raz po deployu. Ustawia treasury i opłatę platformy dla przyszłych eventów.
-    /// Oracle nie są globalne: każdy event ma własną listę, wybraną przez organizatora.
-    pub fn init_config(ctx: Context<InitConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        cfg.admin = ctx.accounts.admin.key();
-        cfg.treasury = treasury;
-        cfg.fee = fee;
-        cfg.bump = ctx.bumps.config;
-        Ok(())
-    }
-
-    /// Admin może zmienić treasury / opłatę. Dotyczy to TYLKO eventów utworzonych później:
-    /// każdy event zamraża treasury i opłatę przy utworzeniu, więc trwające eventy się nie zmieniają.
-    pub fn update_config(ctx: Context<UpdateConfig>, treasury: Pubkey, fee: u64) -> Result<()> {
-        let cfg = &mut ctx.accounts.config;
-        cfg.treasury = treasury;
-        cfg.fee = fee;
-        Ok(())
-    }
 
     /// Organizator tworzy event z warunkami i wpłaca cały budżet do konta eventu (vault).
     /// Organizator wybiera 1..=3 oracli i próg `threshold` (ilu RÓŻNYCH oracli musi zgłosić portfel).
-    /// Oracle, próg, treasury, opłata, nagroda, limit i min_seen_secs są zamrożone na cały event.
+    /// Oracle, próg, opłata (FEE_LAMPORTS z chwili utworzenia), nagroda, limit, czasy, min_seen_secs, nazwa i miejsce są
+    /// zamrożone na cały event; zmiana = anulowanie (withdraw_remaining przed startem) i nowy event.
     #[allow(clippy::too_many_arguments)]
     pub fn create_event(
         ctx: Context<CreateEvent>,
@@ -54,8 +45,11 @@ pub mod presence_pay {
         reward: u64,
         max_paid: u32,
         min_seen_secs: u32,
+        name: String,
+        venue: String,
     ) -> Result<()> {
         require!(end > start, PresenceError::BadTimes);
+        check_event_text(&name, &venue)?;
         require!(reward > 0 && max_paid > 0, PresenceError::BadAmounts);
         require!(!oracles.is_empty() && oracles.len() <= MAX_ORACLES, PresenceError::BadOracles);
         for (i, o) in oracles.iter().enumerate() {
@@ -64,7 +58,7 @@ pub mod presence_pay {
         }
         require!(threshold >= 1 && threshold as usize <= oracles.len(), PresenceError::BadThreshold);
 
-        let fee = ctx.accounts.config.fee;
+        let fee = FEE_LAMPORTS;
         let budget = reward
             .checked_add(fee)
             .and_then(|per| per.checked_mul(max_paid as u64))
@@ -91,27 +85,17 @@ pub mod presence_pay {
         ev.oracles[..oracles.len()].copy_from_slice(&oracles);
         ev.oracle_count = oracles.len() as u8;
         ev.threshold = threshold;
-        ev.treasury = ctx.accounts.config.treasury; // zamrożone jak fee
         ev.event_id = event_id;
         ev.start = start;
         ev.end = end;
         ev.reward = reward;
-        ev.fee = fee; // zamrożona opłata, późniejsza zmiana w config jej nie dotyczy
+        ev.fee = fee; // zamrożona: ewentualny upgrade programu ze zmienioną opłatą nie dotyczy trwających eventów
         ev.max_paid = max_paid;
         ev.paid_count = 0;
         ev.min_seen_secs = min_seen_secs;
         ev.bump = ctx.bumps.event;
-        Ok(())
-    }
-
-    /// Przed startem organizator może przesunąć czasy (kwoty są zablokowane).
-    pub fn update_event_times(ctx: Context<OrganizerEvent>, start: i64, end: i64) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
-        let ev = &mut ctx.accounts.event;
-        require!(now < ev.start, PresenceError::AlreadyStarted);
-        require!(end > start, PresenceError::BadTimes);
-        ev.start = start;
-        ev.end = end;
+        ev.name = name;
+        ev.venue = venue;
         Ok(())
     }
 
@@ -122,6 +106,10 @@ pub mod presence_pay {
     ///   - okno `start <= now <= end`, limit `max_paid`, jedna wypłata na portfel (flaga `paid`).
     /// `min_seen_secs = 0` przy `threshold = 1` wypłaca już przy pierwszym zgłoszeniu.
     /// Zgłoszenia po wypłacie są niczym (Ok, bez zmian), więc oracle może je bezpiecznie ponawiać.
+    ///
+    /// Każde zgłoszenie musi nieść zgodę uczestnika: instrukcja tuż PRZED nią w tej samej transakcji to weryfikacja
+    /// ed25519 (natywny program Solany) podpisu portfela uczestnika pod wiadomością dołączenia do TEGO eventu
+    /// (zob. check_join_proof). Oracle nie może więc zgłosić portfela, który się nie zapisał: nie podrobi podpisu.
     pub fn report_sighting(ctx: Context<ReportSighting>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let ev = &ctx.accounts.event;
@@ -130,6 +118,11 @@ pub mod presence_pay {
             .iter()
             .position(|o| *o == oracle)
             .ok_or(PresenceError::NotOracle)?;
+        check_join_proof(
+            &ctx.accounts.instructions.to_account_info(),
+            &ctx.accounts.event.key(),
+            &ctx.accounts.attendee.key(),
+        )?;
         require!(now >= ev.start, PresenceError::NotStarted);
         require!(now <= ev.end, PresenceError::Ended);
 
@@ -137,7 +130,7 @@ pub mod presence_pay {
         let min_seen = ev.min_seen_secs as i64;
         let event_end = ev.end;
 
-        let s = &mut ctx.accounts.sighting;
+        let s = &mut ctx.accounts.attendance;
         if s.paid {
             return Ok(());
         }
@@ -145,8 +138,8 @@ pub mod presence_pay {
         let is_new = s.payer == Pubkey::default();
         if is_new {
             s.payer = oracle;
-            s.event_end = event_end; // `end` nie zmieni się już: update_event_times działa tylko przed startem
-            s.bump = ctx.bumps.sighting;
+            s.event_end = event_end; // czasy eventu są niezmienne
+            s.bump = ctx.bumps.attendance;
         }
         if is_new || now - s.last_seen > SIGHTING_GAP_SECS {
             s.first_seen = now;
@@ -168,13 +161,13 @@ pub mod presence_pay {
         let fee = ev.fee;
         ev.paid_count += 1;
         // Flaga ustawiona PRZED przelewem i sprawdzana na początku: ochrona przed podwójną wypłatą.
-        ctx.accounts.sighting.paid = true;
+        ctx.accounts.attendance.paid = true;
 
         // Konto eventu ma dane, więc lamporty przesuwamy bezpośrednio (nie przez System Program).
         let total = reward.checked_add(fee).ok_or(PresenceError::Overflow)?;
         ctx.accounts.event.sub_lamports(total)?;
         ctx.accounts.attendee.add_lamports(reward)?;
-        ctx.accounts.treasury.add_lamports(fee)?;
+        ctx.accounts.oracle.add_lamports(fee)?; // opłata dla oracla, którego zgłoszenie wypłaciło
 
         emit!(AttendeePaid {
             event: ctx.accounts.event.key(),
@@ -193,11 +186,11 @@ pub mod presence_pay {
         Ok(())
     }
 
-    /// Po końcu eventu oracle, który zapłacił rent konta Sighting, zamyka je i odzyskuje rent.
-    /// Koniec eventu jest zapisany w Sighting, więc działa też po withdraw_remaining (konto Event już nie istnieje).
-    pub fn close_sighting(ctx: Context<CloseSighting>) -> Result<()> {
+    /// Po końcu eventu oracle, który zapłacił rent konta Attendance, zamyka je i odzyskuje rent.
+    /// Koniec eventu jest zapisany w Attendance, więc działa też po withdraw_remaining (konto Event już nie istnieje).
+    pub fn close_attendance(ctx: Context<CloseAttendance>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        require!(now > ctx.accounts.sighting.event_end, PresenceError::EventRunning);
+        require!(now > ctx.accounts.attendance.event_end, PresenceError::EventRunning);
         Ok(())
     }
 
@@ -206,7 +199,8 @@ pub mod presence_pay {
     // Widget uczestnika czyta stąd adresy WSZYSTKICH oracli eventu i wysyła zgłoszenie (selfie) do każdego z nich,
     // więc to nie nasze API decyduje, z którymi oraclami rozmawia uczestnik. Rejestr nie wpływa na wypłaty.
 
-    /// Oracle rejestruje się raz (sam płaci rent): nazwa 1..=32 bajtów, url do 128 bajtów, http(s)://.
+    /// Oracle publikuje albo zmienia swój wpis (pierwszy raz sam płaci depozyt): nazwa 1..=32 bajtów, url do
+    /// 128 bajtów, http(s)://. Wpis jest pod adresem z klucza oracla, więc tylko on może go zmienić.
     pub fn register_oracle(ctx: Context<RegisterOracle>, name: String, url: String) -> Result<()> {
         check_oracle_info(&name, &url)?;
         let info = &mut ctx.accounts.oracle_info;
@@ -217,19 +211,44 @@ pub mod presence_pay {
         Ok(())
     }
 
-    /// Tylko sam oracle może zmienić swoją nazwę i adres.
-    pub fn update_oracle(ctx: Context<UpdateOracle>, name: String, url: String) -> Result<()> {
-        check_oracle_info(&name, &url)?;
-        let info = &mut ctx.accounts.oracle_info;
-        info.name = name;
-        info.url = url;
-        Ok(())
-    }
+}
 
-    /// Oracle usuwa swój wpis; rent wraca do niego.
-    pub fn close_oracle(_ctx: Context<CloseOracle>) -> Result<()> {
-        Ok(())
-    }
+/// Zgoda uczestnika na łańcuchu. Instrukcja tuż przed bieżącą musi być Ed25519SigVerify z jednym podpisem, którego
+/// klucz, podpis i wiadomość leżą w danych TEJ instrukcji (indeksy u16::MAX), bo tylko wtedy bajty czytane tutaj są
+/// tymi, które natywny program zweryfikował (inaczej offsety mogłyby wskazać dane z innej instrukcji).
+/// Klucz = portfel uczestnika, a wiadomość zaczyna się od nagłówka dołączenia z widgetu (signatures.py w backendzie):
+///   "Attend Now\nAction: join\nEvent: <event>\nWallet: <attendee>\n"  (dalej Consent i Time, nie sprawdzane).
+/// Podpis innej akcji (np. camera-token) albo dla innego eventu/portfela się nie zgadza. Dołączenia nie da się
+/// wycofać, więc podpis jest ważny do końca eventu.
+fn check_join_proof(instructions: &AccountInfo, event: &Pubkey, attendee: &Pubkey) -> Result<()> {
+    let current = load_current_index_checked(instructions)? as usize;
+    require!(current > 0, PresenceError::BadJoinProof);
+    let ix = load_instruction_at_checked(current - 1, instructions)?;
+    require!(ix.program_id == ed25519_program::ID, PresenceError::BadJoinProof);
+    let data = &ix.data;
+    require!(data.len() >= ED25519_HEADER + ED25519_OFFSETS && data[0] == 1, PresenceError::BadJoinProof);
+
+    let u16_at = |i: usize| u16::from_le_bytes([data[ED25519_HEADER + 2 * i], data[ED25519_HEADER + 2 * i + 1]]);
+    // signature_offset, signature_ix, pubkey_offset, pubkey_ix, message_offset, message_size, message_ix
+    let (pubkey_off, msg_off, msg_len) = (u16_at(2) as usize, u16_at(4) as usize, u16_at(5) as usize);
+    require!(
+        u16_at(1) == u16::MAX && u16_at(3) == u16::MAX && u16_at(6) == u16::MAX,
+        PresenceError::BadJoinProof
+    );
+    let signer = data.get(pubkey_off..pubkey_off + 32).ok_or(PresenceError::BadJoinProof)?;
+    let message = data.get(msg_off..msg_off + msg_len).ok_or(PresenceError::BadJoinProof)?;
+    require!(signer == attendee.as_ref(), PresenceError::BadJoinProof);
+
+    let expected = format!("Attend Now\nAction: join\nEvent: {event}\nWallet: {attendee}\n");
+    require!(message.starts_with(expected.as_bytes()), PresenceError::BadJoinProof);
+    Ok(())
+}
+
+fn check_event_text(name: &str, venue: &str) -> Result<()> {
+    require!(!name.is_empty() && name.len() <= MAX_EVENT_NAME, PresenceError::BadEventText);
+    require!(venue.len() <= MAX_EVENT_VENUE, PresenceError::BadEventText);
+    require!(!name.chars().chain(venue.chars()).any(char::is_control), PresenceError::BadEventText);
+    Ok(())
 }
 
 fn check_oracle_info(name: &str, url: &str) -> Result<()> {
@@ -249,21 +268,11 @@ fn check_oracle_info(name: &str, url: &str) -> Result<()> {
 
 #[account]
 #[derive(InitSpace)]
-pub struct Config {
-    pub admin: Pubkey,
-    pub treasury: Pubkey,
-    pub fee: u64,
-    pub bump: u8,
-}
-
-#[account]
-#[derive(InitSpace)]
 pub struct Event {
     pub organizer: Pubkey,
     pub oracles: [Pubkey; MAX_ORACLES], // klucze, które mogą zgłaszać obecność; nieużyte = Pubkey::default()
     pub oracle_count: u8,
     pub threshold: u8,    // ilu różnych oracli musi zgłosić portfel, zanim program wypłaci
-    pub treasury: Pubkey, // odbiorca opłaty, zamrożony z Config przy utworzeniu
     pub event_id: u64,
     pub start: i64,
     pub end: i64,
@@ -273,18 +282,23 @@ pub struct Event {
     pub paid_count: u32,
     pub min_seen_secs: u32, // wymagany czas obecności, liczony przez program na zegarze łańcucha
     pub bump: u8,
+    // Teksty na końcu, żeby pola o stałej długości miały stałe offsety (filtry memcmp, dekodery w backendzie i widgecie).
+    #[max_len(MAX_EVENT_NAME)]
+    pub name: String, // 1..=64 bajtów, np. "HackYeah 2026"
+    #[max_len(MAX_EVENT_VENUE)]
+    pub venue: String, // 0..=64 bajtów, pusty = brak
 }
 
 /// Obecność jednego portfela na jednym evencie. `paid` = ochrona przed podwójną wypłatą.
 #[account]
 #[derive(InitSpace)]
-pub struct Sighting {
+pub struct Attendance {
     pub first_seen: i64, // początek bieżącego ciągu zgłoszeń (zegar łańcucha)
     pub last_seen: i64,
     pub reporters: u8, // maska bitowa po indeksie oracla w event.oracles
     pub paid: bool,
     pub payer: Pubkey, // oracle, który zapłacił rent; tylko on może zamknąć konto
-    pub event_end: i64, // kopia event.end, żeby close_sighting działał po zamknięciu eventu
+    pub event_end: i64, // kopia event.end, żeby close_attendance działał po zamknięciu eventu
     pub bump: u8,
 }
 
@@ -303,28 +317,10 @@ pub struct OracleInfo {
 // ---------- Listy kont dla instrukcji ----------
 
 #[derive(Accounts)]
-pub struct InitConfig<'info> {
-    #[account(mut)]
-    pub admin: Signer<'info>,
-    #[account(init, payer = admin, space = 8 + Config::INIT_SPACE, seeds = [b"config"], bump)]
-    pub config: Account<'info, Config>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateConfig<'info> {
-    pub admin: Signer<'info>,
-    #[account(mut, seeds = [b"config"], bump = config.bump, has_one = admin)]
-    pub config: Account<'info, Config>,
-}
-
-#[derive(Accounts)]
 #[instruction(event_id: u64)]
 pub struct CreateEvent<'info> {
     #[account(mut)]
     pub organizer: Signer<'info>,
-    #[account(seeds = [b"config"], bump = config.bump)]
-    pub config: Account<'info, Config>,
     #[account(
         init,
         payer = organizer,
@@ -337,36 +333,30 @@ pub struct CreateEvent<'info> {
 }
 
 #[derive(Accounts)]
-pub struct OrganizerEvent<'info> {
-    pub organizer: Signer<'info>,
-    #[account(mut, has_one = organizer)]
-    pub event: Account<'info, Event>,
-}
-
-#[derive(Accounts)]
 pub struct ReportSighting<'info> {
-    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci rent konta Sighting.
+    /// Musi być jednym z event.oracles (sprawdzane w instrukcji: NotOracle). Płaci depozyt konta Attendance i dostaje
+    /// opłatę, gdy jego zgłoszenie wypłaca.
     #[account(mut)]
     pub oracle: Signer<'info>,
-    #[account(mut, has_one = treasury)]
+    #[account(mut)]
     pub event: Account<'info, Event>,
-    // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml). Ponowne utworzenie po close_sighting
+    // Wymaga funkcji `init-if-needed` w anchor-lang (Cargo.toml). Ponowne utworzenie po close_attendance
     // jest niemożliwe: close działa dopiero po końcu eventu, a zgłoszenia tylko do końca.
     #[account(
         init_if_needed,
         payer = oracle,
-        space = 8 + Sighting::INIT_SPACE,
-        seeds = [b"sighting", event.key().as_ref(), attendee.key().as_ref()],
+        space = 8 + Attendance::INIT_SPACE,
+        seeds = [b"attendance", event.key().as_ref(), attendee.key().as_ref()],
         bump
     )]
-    pub sighting: Account<'info, Sighting>,
+    pub attendance: Account<'info, Attendance>,
     /// CHECK: tylko odbiorca SOL, dowolny portfel
     #[account(mut)]
     pub attendee: UncheckedAccount<'info>,
-    /// CHECK: sprawdzany przez has_one na event
-    #[account(mut)]
-    pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
+    /// CHECK: sysvar Instructions (adres sprawdzany); stąd czytamy weryfikację podpisu uczestnika
+    #[account(address = anchor_lang::solana_program::sysvar::instructions::ID)]
+    pub instructions: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -378,11 +368,11 @@ pub struct WithdrawRemaining<'info> {
 }
 
 #[derive(Accounts)]
-pub struct CloseSighting<'info> {
+pub struct CloseAttendance<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(mut, close = payer, has_one = payer)]
-    pub sighting: Account<'info, Sighting>,
+    pub attendance: Account<'info, Attendance>,
 }
 
 #[derive(Accounts)]
@@ -390,7 +380,7 @@ pub struct RegisterOracle<'info> {
     #[account(mut)]
     pub oracle: Signer<'info>,
     #[account(
-        init,
+        init_if_needed,
         payer = oracle,
         space = 8 + OracleInfo::INIT_SPACE,
         seeds = [b"oracle", oracle.key().as_ref()],
@@ -398,21 +388,6 @@ pub struct RegisterOracle<'info> {
     )]
     pub oracle_info: Account<'info, OracleInfo>,
     pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
-pub struct UpdateOracle<'info> {
-    pub oracle: Signer<'info>,
-    #[account(mut, has_one = oracle)]
-    pub oracle_info: Account<'info, OracleInfo>,
-}
-
-#[derive(Accounts)]
-pub struct CloseOracle<'info> {
-    #[account(mut)]
-    pub oracle: Signer<'info>,
-    #[account(mut, has_one = oracle, close = oracle)]
-    pub oracle_info: Account<'info, OracleInfo>,
 }
 
 // ---------- Eventy i błędy ----------
@@ -424,7 +399,7 @@ pub struct AttendeePaid {
     pub reward: u64,
 }
 
-// Nowe błędy dopisujemy NA KOŃCU: kody (6000 + indeks) istniejących wariantów nie mogą się zmienić.
+// Po deployu nowe błędy dopisujemy NA KOŃCU: kody (6000 + indeks) istniejących wariantów nie mogą się zmienić.
 #[error_code]
 pub enum PresenceError {
     #[msg("End must be after start")]
@@ -433,8 +408,6 @@ pub enum PresenceError {
     BadAmounts,
     #[msg("Math overflow")]
     Overflow,
-    #[msg("Event already started")]
-    AlreadyStarted,
     #[msg("Event has not started yet")]
     NotStarted,
     #[msg("Event has ended")]
@@ -453,4 +426,8 @@ pub enum PresenceError {
     BadName,
     #[msg("Oracle url must start with https:// or http://, be at most 128 bytes, no spaces")]
     BadUrl,
+    #[msg("Report must follow an ed25519 check of the attendee's signed join message for this event")]
+    BadJoinProof,
+    #[msg("Event name must be 1 to 64 bytes, venue at most 64, no control characters")]
+    BadEventText,
 }

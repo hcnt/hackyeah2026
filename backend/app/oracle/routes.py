@@ -178,7 +178,7 @@ async def attendance_test(event_id: str, request: Request) -> dict:
     return await asyncio.to_thread(_test_photo, _b64(body.image))
 
 
-# Submit / leave / status ---------------------------------------------------------------------------
+# Submit / status ---------------------------------------------------------------------------------
 
 
 def _analyze_submit(data: bytes) -> np.ndarray:
@@ -198,7 +198,7 @@ async def attendance_submit(
     body = await _body(request, SubmitRequest)
     image = _b64(body.image)
     state = get_state()
-    state.signatures.verify(
+    proof = state.signatures.verify(
         action="join", event_id=event_id, wallet=body.wallet, signed_at=body.signed_at,
         signature=body.signature, consent_version=body.consent.version,
     )
@@ -214,22 +214,9 @@ async def attendance_submit(
     if other is not None and score >= DUPLICATE_FACE_COSINE:
         log.info("join event_id=%s wallet=%s status=duplicate_face", event_id, body.wallet)
         raise OracleError(409, "face_already_registered", "This face is already registered for this event.")
-    state.guestlists.put(event_id, info.end_ts, body.wallet, emb)
+    state.guestlists.put(event_id, info.end_ts, body.wallet, emb, proof)
     log.info("join event_id=%s wallet=%s status=on_list", event_id, body.wallet)
     return JSONResponse({"status": "on_list", "event_id": event_id, "wallet": body.wallet}, status_code=201)
-
-
-@v1.post("/events/{event_id}/attendance/leave")
-async def attendance_leave(event_id: str, request: Request) -> dict:
-    body = await _body(request, Signed)
-    get_state().signatures.verify(
-        action="leave", event_id=event_id, wallet=body.wallet, signed_at=body.signed_at, signature=body.signature
-    )
-    info = await _event(event_id)
-    _not_ended(info)
-    get_state().guestlists.remove(event_id, body.wallet)
-    log.info("leave event_id=%s wallet=%s status=not_joined", event_id, body.wallet)
-    return {"status": "not_joined", "event_id": event_id, "wallet": body.wallet}
 
 
 def _iso(ts: float) -> str:

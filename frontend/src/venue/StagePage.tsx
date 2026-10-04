@@ -4,7 +4,6 @@ import QRCode from 'qrcode'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Wallet } from '@wallet-standard/base'
 import { cn } from '@/lib/utils'
-import { ApiError } from '../widget/api'
 import { ChainError, DEFAULT_PROGRAM_ID, DEFAULT_RPC_URL, readEventOracles, type EventOracles, type OracleEntry } from '../widget/chain'
 import {
   connect,
@@ -13,11 +12,11 @@ import {
   isUserRejection,
   METAMASK_DOWNLOAD_URL,
   shortAddress,
-  signAction,
   useSolanaWallets,
   type Connection,
 } from '../widget/wallet'
-import { parseJson, requestCameraToken, type CameraTokenResponse, type LiveFace, type LiveMessage } from './api'
+import { parseJson, type CameraTokenResponse, type LiveFace, type LiveMessage } from './api'
+import { clearPairing, loadPairing, pairWithOracles, savePairing, type PairResult } from './pairing'
 import { base64ToBlob, drawFrame } from './draw'
 import {
   backoffMs,
@@ -29,6 +28,7 @@ import {
   stageWsUrl,
 } from './payload'
 import { Button, Chip, CopyButton, Notice, Spinner, type Tone } from './ui'
+import { eventLamports, eventRent, formatSol, withdrawRemaining } from '../organizer/program'
 
 /** Wall clock for status labels, refreshed every 30 s (kept out of render for purity). */
 function useNow(): number {
@@ -76,9 +76,6 @@ export function StagePage() {
 
 type ChainState = { kind: 'loading' } | { kind: 'error'; message: string } | { kind: 'ready'; event: EventOracles }
 
-type PairResult =
-  | { oracle: OracleEntry; ok: true; tokens: CameraTokenResponse }
-  | { oracle: OracleEntry; ok: false; message: string }
 
 type Pairing = { kind: 'idle' } | { kind: 'busy'; step: string } | { kind: 'error'; message: string }
 
@@ -106,7 +103,13 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
   useEffect(() => {
     let cancelled = false
     readEventOracles(rpcUrl, programId, eventId).then(
-      (event) => !cancelled && setChain({ kind: 'ready', event }),
+      (event) => {
+        if (cancelled) return
+        setChain({ kind: 'ready', event })
+        // Tokens saved by an earlier pairing in this browser (a refresh, or the organizer page): no wallet needed.
+        const saved = loadPairing(eventId, event.oracles)
+        if (saved) setResults((current) => current ?? saved)
+      },
       (err: unknown) =>
         !cancelled &&
         setChain({
@@ -130,21 +133,9 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
       busy.current = true
       try {
         setPairing({ kind: 'busy', step: 'Approve the signature in your wallet…' })
-        const signed = await signAction(c, 'camera-token', eventId)
-        setPairing({ kind: 'busy', step: 'Pairing cameras with the oracles…' })
-        const results = await Promise.all(
-          event.oracles.map((oracle): Promise<PairResult> =>
-            requestCameraToken(oracle.url, eventId, signed, oracle.name || shortAddress(oracle.key)).then(
-              (tokens) => ({ oracle, ok: true, tokens }),
-              (err: unknown) => ({
-                oracle,
-                ok: false,
-                message: err instanceof ApiError ? err.message : 'Request failed',
-              }),
-            ),
-          ),
-        )
+        const results = await pairWithOracles(c, eventId, event.oracles)
         setResults(results)
+        if (event.meta) savePairing(eventId, event.meta.end, results)
         setPairing({ kind: 'idle' })
       } catch (err) {
         setPairing({ kind: 'error', message: walletErrorText(err) })
@@ -170,13 +161,32 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
     }
     setConn(c)
     setPairing({ kind: 'idle' })
-    if (!organizer || c.account.address === organizer) void pair(c)
+    // Already paired from saved tokens: connecting is only for withdrawing, so don't ask for another signature.
+    if ((!organizer || c.account.address === organizer) && paired.length === 0) void pair(c)
   }
+
+  /** A token an oracle no longer accepts: sign again with the wallet, connecting it first if needed. */
+  const repair = () => {
+    if (conn) return void pair(conn)
+    clearPairing(eventId)
+    setResults(null)
+  }
+
+  const walletButtons =
+    !conn && wallets.length > 0 ? (
+      <div className="flex flex-wrap gap-2">
+        {wallets.map((w) => (
+          <Button key={w.name} variant="ghost" disabled={pairing.kind === 'busy'} onClick={() => void onConnect(w)}>
+            {w.icon && <img src={w.icon} alt="" className="size-5" />}
+            Connect {w.name}
+          </Button>
+        ))}
+      </div>
+    ) : null
 
   const onDisconnect = async () => {
     if (conn) await disconnect(conn)
     setConn(null)
-    setResults(null)
     setPairing({ kind: 'idle' })
   }
 
@@ -203,6 +213,19 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
   }
 
   const ev = chain.event
+  const depositPanel = (refreshKey = 0) =>
+    ev.meta && (
+      <DepositPanel
+        eventId={eventId}
+        rpcUrl={rpcUrl}
+        programId={programId}
+        conn={isOrganizer ? conn : null}
+        walletButtons={walletButtons}
+        end={ev.meta.end}
+        now={now}
+        refreshKey={refreshKey}
+      />
+    )
 
   return (
     <>
@@ -223,7 +246,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
         <Notice tone="bad" title="This event has ended">Cameras can no longer be paired. Payouts already sent are final.</Notice>
       )}
 
-      {conn && results && paired.length > 0 ? (
+      {results && paired.length > 0 ? (
         <>
           {pairing.kind === 'busy' && <Spinner label={pairing.step} />}
           {pairing.kind === 'error' && <Notice tone="bad" title={pairing.message} />}
@@ -234,7 +257,8 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
             failed={results.filter((r) => !r.ok)}
             threshold={ev.threshold}
             busy={pairing.kind === 'busy'}
-            onRepair={() => void pair(conn)}
+            onRepair={repair}
+            deposit={(refreshKey) => depositPanel(refreshKey)}
           />
         </>
       ) : (
@@ -295,6 +319,7 @@ function Stage({ eventId, rpcUrl, programId }: { eventId: string; rpcUrl: string
               <PairList results={results} />
             </>
           )}
+          {conn && isOrganizer && <div className="text-left">{depositPanel()}</div>}
         </Centered>
       )}
     </>
@@ -330,10 +355,17 @@ function Header({
     <header className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
       <div className="grid gap-1">
         <p className="text-xs font-semibold tracking-widest text-sky-300 uppercase">Stage screen</p>
-        <h1 className="text-2xl font-bold sm:text-3xl">
-          Event <span className="font-mono text-xl sm:text-2xl">{shortAddress(eventId)}</span>
+        <h1 className="text-2xl font-bold break-words sm:text-3xl">
+          {meta ? (
+            meta.name
+          ) : (
+            <>
+              Event <span className="font-mono text-xl sm:text-2xl">{shortAddress(eventId)}</span>
+            </>
+          )}
         </h1>
         <p className="text-sm text-neutral-400">
+          {meta?.venue ? `${meta.venue} · ` : ''}
           {meta ? `${fmtTime(meta.start)} – ${fmtTime(meta.end)} · ${eventStatus(meta, now)} · ` : ''}
           pays when {event.threshold} of {event.oracles.length + event.unregistered.length} oracles agree
           {meta ? ` · organizer ${shortAddress(meta.organizer)}` : ''}
@@ -406,6 +438,7 @@ function Live({
   threshold,
   busy,
   onRepair,
+  deposit,
 }: {
   eventId: string
   paired: { oracle: OracleEntry; tokens: CameraTokenResponse }[]
@@ -413,6 +446,8 @@ function Live({
   threshold: number
   busy: boolean
   onRepair: () => void
+  /** The deposit panel; `refreshKey` changes with every payout so the balance is re-read. */
+  deposit: (refreshKey: number) => ReactNode
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [oracles, setOracles] = useState<OracleLive[]>(() =>
@@ -593,15 +628,17 @@ function Live({
             </div>
           </Notice>
         )}
-        <div className="relative overflow-hidden rounded-2xl bg-black">
+        <div className="relative flex justify-center overflow-hidden rounded-2xl bg-black">
+          {/* Fit the frame inside the window whatever its shape: a portrait phone frame is capped by height, a
+              landscape one by width, both keeping their aspect ratio. */}
           <canvas
             ref={canvasRef}
             role="img"
             aria-label="Live camera view with recognised attendees marked"
-            className={cn('block h-auto w-full', !hasFrame && 'hidden')}
+            className={cn('block h-auto max-h-[calc(100svh-10rem)] w-auto max-w-full', !hasFrame && 'hidden')}
           />
           {!hasFrame && (
-            <div className="flex aspect-video flex-col items-center justify-center gap-2 p-6 text-center">
+            <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 p-6 text-center">
               <p className="text-xl font-semibold">Waiting for the event camera</p>
               <p className="max-w-sm text-sm text-neutral-400">
                 Scan the QR code with a phone and point it at the room. The video appears here.
@@ -635,6 +672,8 @@ function Live({
           <Counter label="going" value={going} />
           <Counter label="paid" value={paid} money />
         </div>
+
+        {deposit(payouts.length)}
 
         <Panel title={`Oracles · ${liveCount} of ${paired.length} connected · ${threshold} needed to pay`}>
           <ul className="grid gap-2">
@@ -737,6 +776,116 @@ function ConnChip({ o }: { o: OracleLive }) {
     <Chip tone={tone} pulse={o.conn === 'live'}>
       {text}
     </Chip>
+  )
+}
+
+/** How often the deposit balance is re-read besides after each payout (the public RPC is rate limited). */
+const DEPOSIT_POLL_MS = 20_000
+
+type Withdraw = { kind: 'idle' } | { kind: 'busy'; step: string } | { kind: 'error'; message: string } | { kind: 'done'; tx: string; lamports: bigint | null }
+
+/**
+ * What is left of the event's deposit (the Event account's lamports minus its rent) and the organizer's
+ * withdraw_remaining button, which unlocks once the event has ended. Withdrawing closes the account.
+ */
+function DepositPanel({
+  eventId,
+  rpcUrl,
+  programId,
+  conn,
+  walletButtons,
+  end,
+  now,
+  refreshKey,
+}: {
+  eventId: string
+  rpcUrl: string
+  programId: string
+  /** The organizer's connection, or null when no organizer wallet is connected. */
+  conn: Connection | null
+  /** Connect buttons, shown when withdrawing needs a wallet that isn't connected (null when one is). */
+  walletButtons: ReactNode
+  /** Unix seconds. */
+  end: number
+  now: number
+  refreshKey: number
+}) {
+  const [balance, setBalance] = useState<{ lamports: bigint | null; rent: bigint } | null>(null)
+  const [readTry, setReadTry] = useState(0)
+  const [withdraw, setWithdraw] = useState<Withdraw>({ kind: 'idle' })
+
+  useEffect(() => {
+    let cancelled = false
+    const read = () =>
+      Promise.all([eventLamports(rpcUrl, eventId), eventRent(rpcUrl)]).then(
+        ([lamports, rent]) => !cancelled && setBalance({ lamports, rent }),
+        () => {},
+      )
+    void read()
+    const id = window.setInterval(read, DEPOSIT_POLL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [eventId, rpcUrl, refreshKey, readTry])
+
+  const closed = balance !== null && balance.lamports === null
+  const left = balance?.lamports != null ? (balance.lamports > balance.rent ? balance.lamports - balance.rent : 0n) : null
+  const ended = now > end * 1000
+
+  async function onWithdraw() {
+    if (!conn || withdraw.kind === 'busy') return
+    const returned = balance?.lamports ?? null
+    setWithdraw({ kind: 'busy', step: 'Preparing the transaction…' })
+    try {
+      const tx = await withdrawRemaining(conn, rpcUrl, programId, eventId, (step) => setWithdraw({ kind: 'busy', step }))
+      setWithdraw({ kind: 'done', tx, lamports: returned })
+      setReadTry((n) => n + 1)
+    } catch (err) {
+      setWithdraw({ kind: 'error', message: walletErrorText(err) })
+    }
+  }
+
+  return (
+    <Panel title="Deposit">
+      <div className="grid gap-0.5">
+        <span className="text-4xl font-bold text-emerald-300 tabular-nums">
+          {closed ? '0' : left === null ? '–' : formatSol(left)} <span className="text-xl font-semibold">SOL</span>
+        </span>
+        <span className="text-sm text-neutral-400">
+          {closed ? 'withdrawn, the event account is closed' : 'left for rewards and oracle fees'}
+        </span>
+      </div>
+      {withdraw.kind === 'done' ? (
+        <Notice tone="ok" title="Deposit withdrawn">
+          {withdraw.lamports !== null && <>{formatSol(withdraw.lamports)} SOL (with the account rent) went back to your wallet. </>}
+          <a className="underline" href={explorerTxUrl(withdraw.tx)} target="_blank" rel="noreferrer">
+            View transaction ↗
+          </a>
+        </Notice>
+      ) : (
+        !closed && (
+          <>
+            <Button
+              variant={ended ? 'primary' : 'ghost'}
+              disabled={!ended || !conn || withdraw.kind === 'busy' || balance === null}
+              onClick={() => void onWithdraw()}
+            >
+              {withdraw.kind === 'busy' ? <Spinner label={withdraw.step} /> : 'Withdraw remaining deposit'}
+            </Button>
+            <p className="text-xs text-neutral-400">
+              {!ended
+                ? `Unlocks when the event ends (${fmtTime(end)}).`
+                : !conn
+                  ? 'Connect the organizer wallet to withdraw.'
+                  : 'Returns what wasn’t paid out, plus the account rent, to your wallet.'}
+            </p>
+            {ended && !conn && walletButtons}
+          </>
+        )
+      )}
+      {withdraw.kind === 'error' && <Notice tone="bad" title="Withdraw failed">{withdraw.message}</Notice>}
+    </Panel>
   )
 }
 

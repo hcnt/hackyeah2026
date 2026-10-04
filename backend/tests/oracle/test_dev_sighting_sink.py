@@ -3,9 +3,12 @@
 import asyncio
 
 import pytest
-from fakes import FakeClock
+from fakes import FakeClock, signed_join
+from solders.keypair import Keypair
 
 from app.oracle.interfaces import DevSightingSink, EventInfo, SightingRejected
+
+KEYS = {"A": Keypair(), "B": Keypair()}
 
 
 def make(min_seen: int = 3, max_payouts: int | None = 2, start: int = 1_000, end: int = 2_000):
@@ -19,8 +22,9 @@ def make(min_seen: int = 3, max_payouts: int | None = 2, start: int = 1_000, end
     return DevSightingSink(clock=clock, events=events), clock
 
 
-def report(sink, wallet="A", event_id="ev"):
-    return asyncio.run(sink.report(event_id, wallet))
+def report(sink, wallet="A", event_id="ev", proof=None):
+    kp = KEYS[wallet]
+    return asyncio.run(sink.report(event_id, str(kp.pubkey()), proof or signed_join(event_id, kp)))
 
 
 def test_no_payout_before_dwell_then_exactly_one():
@@ -68,3 +72,19 @@ def test_window():
         report(sink)
     with pytest.raises(SightingRejected):
         report(sink, event_id="nope")
+
+
+def test_only_with_the_wallets_signed_join_for_this_event():
+    sink, _ = make(min_seen=0)
+    a, b = KEYS["A"], KEYS["B"]
+    bad = {
+        "other event": signed_join("other", a),
+        "signed by another wallet": signed_join("ev", b, wallet=str(a.pubkey())),
+        "another wallet's join": signed_join("ev", b),
+        "not a join": signed_join("ev", a, action="camera-token"),
+    }
+    for why, proof in bad.items():
+        with pytest.raises(SightingRejected, match="BadJoinProof"):
+            report(sink, "A", proof=proof)
+        assert why
+    assert report(sink, "A").paid

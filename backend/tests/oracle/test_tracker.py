@@ -2,7 +2,7 @@ import asyncio
 import itertools
 
 import numpy as np
-from fakes import FakeClock, FakeEngine, RecordingSink, near, unit
+from fakes import DUMMY_PROOF, FakeClock, FakeEngine, RecordingSink, near, unit
 
 from app.oracle.interfaces import EventInfo, SightingRejected, SightingResult
 from app.oracle.runtime import SIGHTING_INTERVAL_SECS, OracleState
@@ -30,7 +30,7 @@ class Scenario:
         self.rt = self.state.runtime_for(info)
         self.a = unit(self.rng)  # enrolled
         self.b = unit(self.rng)  # NOT enrolled
-        self.state.guestlists.put("ev", info.end_ts, "A", self.a)
+        self.state.guestlists.put("ev", info.end_ts, "A", self.a, DUMMY_PROOF)
         self.n = 0
         self.outputs: list[list[dict]] = []
 
@@ -78,6 +78,7 @@ def test_walking_one_track_one_payment_b_never_paid():
     # identified on frame 3 (t=101.0): reported at once (not paid, dwell 0), again 2 s later at t=103.0, when the
     # program's dwell of 2 s is met -> paid; no reports after the payout.
     assert s.sink.calls == [("ev", "A", 101.0), ("ev", "A", 103.0)]
+    assert s.sink.proofs == [DUMMY_PROOF, DUMMY_PROOF]  # the join proof stored with A goes with every report
     assert s.sink.successes == [("ev", "A")]
     assert s.sink.paid_at == [103.0]
     # B is always unknown, with no name, and never reported
@@ -210,7 +211,7 @@ def test_rejected_sighting_is_never_retried():
         calls = []
 
         class CapSink:
-            async def report(self, event_id, wallet):
+            async def report(self, event_id, wallet, proof):
                 calls.append(wallet)
                 raise SightingRejected("CapReached")
 
@@ -235,7 +236,7 @@ def test_many_frames_in_flight_still_one_report_at_a_time():
         calls = []
 
         class SlowSink:
-            async def report(self, event_id, wallet):
+            async def report(self, event_id, wallet, proof):
                 calls.append(wallet)
                 await gate.wait()
                 return SightingResult(paid=True, tx="tx-slow")
