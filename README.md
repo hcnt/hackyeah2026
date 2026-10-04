@@ -1,8 +1,163 @@
-# hackyeah2026
+# OnSight: seen on site, paid on chain
 
-FastAPI (`backend/`) + React/Vite/Tailwind/shadcn (`frontend/`) behind Caddy.
+Superteam Poland challenge "Finance Without Intermediaries", HackYeah 2026.
 
-## Architecture
+**Attendance giveaways without a middleman.** An attendance giveaway is a sponsor's promise to reward the people
+who actually come to an event: "the first 100 people at the venue get 0.01 SOL", a coffee, a T-shirt. It's how
+events fight no-shows, and today it only works if everyone trusts whoever holds the prizes and the guest list.
+
+With OnSight, an organizer or sponsor locks the giveaway budget in a Solana program. Attendees opt in with their
+wallet and one selfie, through a widget on the event's own page. At the venue, a camera at a check-in point streams
+footage of attendees to face-recognition **oracles**. The oracles only report "I see this wallet now". The
+**program** decides who gets paid, and pays each attendee once, straight from the escrow to their wallet.
+
+**Who it's for:** organizers and sponsors of events (meetups, hackathons, product launches, conference side events)
+who run attendance giveaways to make sign-ups actually come, and their attendees. Attendees never see blockchain
+terms beyond "connect your wallet and sign".
+
+## Design rationale
+
+### The financial relationship: an attendance giveaway
+
+A sponsor wants people in the room and is willing to pay for it, so the event announces an attendance giveaway:
+"the first 100 people who come get 0.01 SOL". Today that promise runs through intermediaries:
+
+- **The attendee trusts the organizer** to really pay out after the event, to the people who really came, and
+  not to change the terms ("we ran out", "only the first 50").
+- **The sponsor trusts the organizer**, or a check-in agency or ticketing platform, that the claimed attendance is
+  real and that their budget went to real attendees and not to friends or to nobody.
+- **Someone in the middle holds the money and keeps the list**: checks people in at the door, decides who
+  counts, and pays out by hand. That person can be wrong, slow or dishonest, and nobody outside can verify them.
+
+### What changes when the intermediary is removed
+
+| Before | With OnSight |
+|---|---|
+| The organizer holds the reward budget. | The budget is **locked in the program's escrow** when the event is created. Nobody, us included, can take it while the event runs; what is not paid out goes back to the organizer after the end. |
+| Rules live in a promise ("first 100, arrive before 18:00"). | Rules are **frozen in the Event account**: reward, cap, time window, how long a person must be seen, which oracles count and how many must agree. |
+| Staff decide who came. | Independent **oracles report sightings**; the **program** checks them against the frozen rules on the chain's clock and pays. |
+| Payouts happen later, by hand, if at all. | The payout is **in the same transaction** as the report that satisfies the rules: seconds after the person is seen. |
+| Nobody can audit the list. | Every payout is a **public transaction**. A sponsor can count them on Solana Explorer. |
+| The organizer can add their own friends. | A report is only accepted with the **attendee's own wallet signature** over the join message for this event, checked on chain. An oracle cannot report someone who never signed up. |
+
+The oracles are the one part that stays off chain, because a program can't see faces. They work like price
+oracles (Pyth, Switchboard): they supply facts, and the program decides. Their power is narrow by construction:
+
+- they can only report wallets that signed up for this event themselves;
+- an event can require several oracles to agree (M-of-N);
+- the time spent on camera is measured on the chain's clock, not taken from the oracle;
+- they can't pay anyone, change an amount, or touch the budget.
+
+Running an oracle is a business anyone can enter: the program pays the oracle 0.002 SOL for each attendee its
+report pays, which covers its transaction fees and deposits.
+
+### Why a blockchain and not a database
+
+- The sponsor's money sits under rules that neither the organizer nor we can change after creation.
+- Attendees don't have to trust the organizer to pay; the payout is automatic.
+- Payouts are public and auditable by the sponsor without asking anyone.
+- Several independent oracles can check each other only if the decision lives somewhere none of them controls.
+- Paying 0.01 SOL costs about 0.00001 SOL in fees, so small per-person rewards make sense.
+
+### Where exactly the intermediary disappears
+
+In `report_sighting` (`contracts/on_sight/lib.rs`). An oracle can only *report* that it sees a wallet; this
+instruction decides whether that pays. It accepts the report only from one of the event's oracles, only with the
+attendee's own signed join (`check_join_proof`), and only during the event. It pays only once enough different
+oracles have seen the person for long enough on the chain's clock, and only while the cap isn't reached. Then
+the reward goes straight from the escrow to the attendee in the same transaction. No person approves anything.
+
+The money side: `create_event` locks the whole budget and freezes the rules, and `withdraw_remaining` returns the
+rest to the organizer only before the start or after the end.
+
+## How it works
+
+1. **Organizer creates the event on chain** on the organizer page (`create_event`): name, venue, reward, cap,
+   window, minimum time on camera, oracles, threshold. The budget moves into escrow.
+2. **Attendee joins** on the event's page through the widget: connects MetaMask (Solana), takes one selfie,
+   accepts the consent and signs one message. Free, no transaction. The widget reads the event's terms and
+   oracles from the chain and sends the join to every oracle.
+3. **At the venue**, the organizer opens the stage screen, signs once, and a phone scans a QR code to become the
+   camera. It streams to every oracle.
+4. **Oracles recognize** guests (only people on the guest list can be matched) and report each recognized wallet
+   every 2 s: one transaction with the attendee's signature check followed by `report_sighting`.
+5. **The program pays** when the rules hold. The stage shows the payout with an Explorer link.
+6. **After the end**, oracles destroy the guest list, and the organizer withdraws what's left.
+
+## What is where
+
+| Path | What |
+|---|---|
+| `contracts/on_sight/` | The Anchor program (`lib.rs`), its IDL, a Solana Playground test, and a README with accounts, instructions, rules and error codes. |
+| `backend/app/oracle/` | The oracle: join API (signature and photo checks), encrypted in-memory guest lists, face recognition (InsightFace), tracking, camera and stage WebSockets. |
+| `backend/app/chain/` | Solana client for the program: reads events, sends reports with the join proof, finds payout transactions. |
+| `backend/tests/` | Tests, including the compiled program run in LiteSVM (`tests/chain/test_program_litesvm.py`). |
+| `frontend/src/widget/` | The embeddable widget (`<attend-now-widget>`, built to `widget.js`): wallet, selfie, consent, join to every oracle. |
+| `frontend/src/organizer/` | Organizer page (`organizer.html`): create and fund an event from the organizer's wallet. |
+| `frontend/src/venue/` | Stage screen (`stage.html#<event>`, with the deposit and withdrawal) and camera page (`camera.html`). |
+| `frontend/src/event-page/` | An example host page with the widget embedded. |
+| `scripts/` | `devnet_event.py` creates a devnet event; `register_oracle.py` publishes an oracle's name and URL on chain. |
+| `docs/` | The oracle API (`oracle-api.md`) and architecture pages. |
+
+Embedding the widget on any page:
+
+```html
+<script src="https://hackyeah.kindhome.io/widget.js"></script>
+<attend-now-widget event-id="<Event address>"></attend-now-widget>
+```
+
+## Trust and permissions
+
+| Operation | Who may do it | When |
+|---|---|---|
+| `create_event` | anyone (they become the organizer and fund it) | any time |
+| `report_sighting` | an oracle listed on the event, with the attendee's signed join | during the event |
+| `withdraw_remaining` | that event's organizer | before the start or after the end |
+| `close_attendance` | the oracle that paid the Attendance account's deposit | after the end |
+| `register_oracle` | any key, for its own entry | any time |
+
+There's no admin and no other operation: nobody, us included, can change an event's terms or touch its budget.
+Until the program is made final, whoever deployed it can still upgrade the code.
+
+**If a party disappears halfway:** if the organizer vanishes, the budget stays in escrow and payouts keep working;
+after the end, only the organizer can take back what's left, so it stays in the escrow until they return. If the
+oracles stop, nobody is paid and the organizer withdraws everything after the end.
+
+## Limitations (known, deliberate for the hackathon)
+
+- **The program is upgradeable** by whoever deployed it, until the upgrade authority is set to final
+  (`solana program set-upgrade-authority <PROGRAM_ID> --final`). We plan to do that once the code is final.
+- **Oracle trust.** With threshold 1 (our demo), one oracle can report a registered person who didn't come.
+  M-of-N reduces this; it doesn't remove it.
+- **The organizer picks the oracles.** An organizer running their own oracle could simply never report anyone and
+  withdraw the budget after the end. The oracle list is public and the widget shows it before joining, so
+  attendees can see who they're trusting. Next step: oracles assigned at random from an open pool, each with a
+  deposit (stake) locked in the program; after the event, an oracle that consistently disagrees with the others
+  on who was there loses part of it.
+- **A photo held up to the camera isn't caught**, so someone could collect the reward for a registered friend who
+  didn't come. Production needs liveness detection.
+- **Biometrics and GDPR.** The lawful setting is a check-in point people step up to after explicit, separate
+  consent, with a non-biometric alternative; scanning a whole room isn't.
+
+## Run it
+
+Devnet only. The program ID lives in `contracts/on_sight/lib.rs` (`declare_id!`), the backend's
+`PRESENCE_PROGRAM_ID` and the widget's `DEFAULT_PROGRAM_ID` (`frontend/src/widget/chain.ts`).
+
+```sh
+# backend (oracle) on :8000; without ORACLE_KEYPAIR it uses an in-memory stand-in for the program
+cd backend && uv run uvicorn app.main:app --reload
+# frontend on :5173, proxies /api -> :8000
+cd frontend && npm run dev
+# tests (add PRESENCE_SO=<built on_sight.so> to run the program itself in LiteSVM)
+cd backend && uv run pytest -q
+# a devnet event
+cd backend && uv run python ../scripts/devnet_event.py --name "HackYeah 2026" --venue "Tauron Arena"
+```
+
+Building and deploying the program: [`contracts/on_sight/README.md`](contracts/on_sight/README.md).
+
+## Deployment
 
 ```
 hackyeah.kindhome.io ───────┐
@@ -18,16 +173,6 @@ pr-15-hackyeah.kindhome.io ─┘                                               
 - The edge router is the only thing published on the host (`127.0.0.1:8080`). Each stack's caddy joins
   the shared `edge` network under the alias `prod` or `pr-<N>`; inside a stack, caddy serves the React
   build and proxies `/api/*` to FastAPI.
-- Cloudflare tunnel routes: `hackyeah.kindhome.io` and `*.kindhome.io` -> `http://localhost:8080`.
-
-## Run locally (Docker)
-
-```sh
-docker compose -f edge/compose.yaml up -d --build   # once; owns :8080 and the "edge" network
-docker compose -p prod up -d --build                # http://localhost:8080
-```
-
-## Deployment (GitHub Actions -> VPS)
 
 | Workflow | Trigger | Does |
 |---|---|---|
@@ -36,23 +181,17 @@ docker compose -p prod up -d --build                # http://localhost:8080
 | `preview.yml` | PR closed/merged | `scripts/teardown-preview.sh N` (containers, volumes, images, checkout) |
 | `preview-cleanup.yml` | daily 03:00 UTC | removes previews of PRs that are no longer open |
 
-Each PR gets `https://pr-<N>-hackyeah.kindhome.io` and a "View deployment" link on the PR.
+Each PR gets `https://pr-<N>-hackyeah.kindhome.io`. Repo secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY`,
+`DEPLOY_KNOWN_HOSTS`. Every other repo variable and secret (e.g. `ORACLE_KEYPAIR`, `PRESENCE_PROGRAM_ID`, see
+`.env.example`) is written to prod's `.env` on every deploy; previews get no `.env` and use the in-memory stand-in.
 
-Repo secrets: `DEPLOY_HOST`, `DEPLOY_SSH_KEY` (dedicated key, `restrict`ed in `authorized_keys`),
-`DEPLOY_KNOWN_HOSTS` (pinned host key). Every other repo variable and secret (e.g. `ORACLE_KEYPAIR`, see
-`.env.example`) is written to prod's `.env` on every deploy and passed to the backend; previews get no `.env`,
-so they pay with in-memory stubs.
-Fork and Dependabot PRs do not get previews.
-
-If the site breaks, test the origin first on the VPS:
-`curl -H 'Host: hackyeah.kindhome.io' http://127.0.0.1:8080/api/health` (or `pr-N-hackyeah...`).
-Origin OK -> the problem is in the tunnel/Cloudflare config, not the app.
-
-## Local dev (hot reload)
+Run the full stack locally with Docker:
 
 ```sh
-cd backend && uv run uvicorn app.main:app --reload  # :8000
-cd frontend && npm run dev                     # :5173, proxies /api -> :8000
+docker compose -f edge/compose.yaml up -d --build   # once; owns :8080 and the "edge" network
+docker compose -p prod up -d --build                # http://localhost:8080
 ```
 
-Add shadcn components: `cd frontend && npx shadcn@latest add <component>`.
+If the site breaks, test the origin first on the VPS:
+`curl -H 'Host: hackyeah.kindhome.io' http://127.0.0.1:8080/api/health`. Origin OK means the problem is in the
+tunnel or Cloudflare, not the app.
