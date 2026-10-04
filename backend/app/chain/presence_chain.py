@@ -67,7 +67,7 @@ def _disc(namespace: str, name: str) -> bytes:
 
 
 EVENT_DISC = _disc("account", "Event")
-SIGHTING_DISC = _disc("account", "Sighting")
+ATTENDANCE_DISC = _disc("account", "Attendance")
 ORACLE_INFO_DISC = _disc("account", "OracleInfo")
 ATTENDEE_PAID_DISC = _disc("event", "AttendeePaid")
 
@@ -76,7 +76,7 @@ ATTENDEE_PAID_DISC = _disc("event", "AttendeePaid")
 # the tail is zero padding: read the length prefixes, never assume the full width)
 _EVENT_FMT = "<32s96sBBQqqQQIIIB"
 EVENT_NAME_OFFSET = 8 + struct.calcsize(_EVENT_FMT)  # every fixed-size field keeps its offset
-_SIGHTING_FMT = "<qqB?32sqB"  # first_seen, last_seen, reporters, paid, payer, event_end, bump
+_ATTENDANCE_FMT = "<qqB?32sqB"  # first_seen, last_seen, reporters, paid, payer, event_end, bump
 EVENT_ORGANIZER_OFFSET = 8
 EVENT_ORACLES_OFFSET = 8 + 32  # slot i at EVENT_ORACLES_OFFSET + 32 * i
 DEFAULT_PUBKEY = Pubkey.default()
@@ -107,8 +107,8 @@ def event_pda(organizer: Pubkey, event_id: int, program_id: Pubkey = PROGRAM_ID)
     return Pubkey.find_program_address([b"event", bytes(organizer), event_id.to_bytes(8, "little")], program_id)[0]
 
 
-def sighting_pda(event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
-    return Pubkey.find_program_address([b"sighting", bytes(event), bytes(attendee)], program_id)[0]
+def attendance_pda(event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
+    return Pubkey.find_program_address([b"attendance", bytes(event), bytes(attendee)], program_id)[0]
 
 
 def oracle_info_pda(oracle: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Pubkey:
@@ -158,7 +158,7 @@ class Event:
 
 
 @dataclass
-class Sighting:
+class Attendance:
     """One wallet's presence at one event, as the program records it from the oracles' reports."""
 
     first_seen: int  # start of the current run of reports (chain clock)
@@ -169,10 +169,10 @@ class Sighting:
     event_end: int
 
     @classmethod
-    def decode(cls, data: bytes) -> Sighting:
-        if data[:8] != SIGHTING_DISC or len(data) < 8 + struct.calcsize(_SIGHTING_FMT):
-            raise ValueError("not a Sighting account")
-        first, last, reporters, paid, payer, event_end, _ = struct.unpack_from(_SIGHTING_FMT, data, 8)
+    def decode(cls, data: bytes) -> Attendance:
+        if data[:8] != ATTENDANCE_DISC or len(data) < 8 + struct.calcsize(_ATTENDANCE_FMT):
+            raise ValueError("not an Attendance account")
+        first, last, reporters, paid, payer, event_end, _ = struct.unpack_from(_ATTENDANCE_FMT, data, 8)
         return cls(first, last, reporters, paid, Pubkey(payer), event_end)
 
 
@@ -254,7 +254,7 @@ def report_sighting_ix(oracle: Pubkey, ev: Event, attendee: Pubkey, program_id: 
         [
             AccountMeta(oracle, is_signer=True, is_writable=True),
             AccountMeta(ev.address, is_signer=False, is_writable=True),
-            AccountMeta(sighting_pda(ev.address, attendee, program_id), is_signer=False, is_writable=True),
+            AccountMeta(attendance_pda(ev.address, attendee, program_id), is_signer=False, is_writable=True),
             AccountMeta(attendee, is_signer=False, is_writable=True),
             AccountMeta(SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
             AccountMeta(INSTRUCTIONS_SYSVAR, is_signer=False, is_writable=False),
@@ -272,13 +272,13 @@ def report_sighting_ixs(
     ]
 
 
-def close_sighting_ix(payer: Pubkey, event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
+def close_attendance_ix(payer: Pubkey, event: Pubkey, attendee: Pubkey, program_id: Pubkey = PROGRAM_ID) -> Instruction:
     return Instruction(
         program_id,
-        _disc("global", "close_sighting"),
+        _disc("global", "close_attendance"),
         [
             AccountMeta(payer, is_signer=True, is_writable=True),
-            AccountMeta(sighting_pda(event, attendee, program_id), is_signer=False, is_writable=True),
+            AccountMeta(attendance_pda(event, attendee, program_id), is_signer=False, is_writable=True),
         ],
     )
 
@@ -347,7 +347,7 @@ class PresenceError(Exception):
 
 def _program_error(text: str) -> PresenceError:
     if "ConstraintHasOne" in text or "Custom(2001)" in text:
-        return PresenceError("Unauthorized", "the signer is not the one stored in the Event/Sighting")
+        return PresenceError("Unauthorized", "the signer is not the one stored in the Event/Attendance")
     for i, name in enumerate(PROGRAM_ERRORS):
         code = 6000 + i
         if f"custom program error: {hex(code)}" in text or f"Custom({code})" in text or f"Error Code: {name}" in text:
@@ -357,7 +357,7 @@ def _program_error(text: str) -> PresenceError:
 
 # Client ---------------------------------------------------------------------------------------------
 
-PAYOUT_TX_SCAN = 25  # at most this many transactions on a Sighting are inspected to find the payout
+PAYOUT_TX_SCAN = 25  # at most this many transactions on an Attendance are inspected to find the payout
 
 
 class PresenceChain:
@@ -405,14 +405,14 @@ class PresenceChain:
                     found[a.pubkey] = ev
         return list(found.values())
 
-    async def get_sighting(self, event: Pubkey, attendee: Pubkey) -> Sighting | None:
-        acc = (await self.client.get_account_info(sighting_pda(event, attendee))).value
+    async def get_attendance(self, event: Pubkey, attendee: Pubkey) -> Attendance | None:
+        acc = (await self.client.get_account_info(attendance_pda(event, attendee))).value
         if acc is None or acc.owner != PROGRAM_ID:
             return None
-        return Sighting.decode(bytes(acc.data))
+        return Attendance.decode(bytes(acc.data))
 
     async def is_paid(self, event: Pubkey, attendee: Pubkey) -> bool:
-        s = await self.get_sighting(event, attendee)
+        s = await self.get_attendance(event, attendee)
         return s is not None and s.paid
 
     async def tx_paid(self, sig: Signature, event: Pubkey, attendee: Pubkey) -> bool:
@@ -427,7 +427,7 @@ class PresenceChain:
         AttendeePaid), if paid and visible. Reports after the payout are no-ops, so it is among the oldest."""
         if not await self.is_paid(event, attendee):
             return None
-        sigs = (await self.client.get_signatures_for_address(sighting_pda(event, attendee), limit=1000)).value
+        sigs = (await self.client.get_signatures_for_address(attendance_pda(event, attendee), limit=1000)).value
         ok = [s.signature for s in reversed(sigs) if s.err is None]  # oldest first
         for sig in ok[:PAYOUT_TX_SCAN]:
             if await self.tx_paid(sig, event, attendee):
@@ -493,11 +493,11 @@ class PresenceChain:
             raise PresenceError("NotOracle", f"{oracle.pubkey()} is not one of the event's oracles")
         return await self._send(report_sighting_ixs(oracle.pubkey(), ev, attendee, proof), oracle)
 
-    async def close_sightings(self, payer: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
-        """After the event's end: close Sightings whose rent `payer` paid (rent back to it), 10 per transaction."""
+    async def close_attendances(self, payer: Keypair, event: Pubkey, attendees: list[Pubkey]) -> list[Signature]:
+        """After the event's end: close Attendance accounts whose rent `payer` paid (rent back to it), 10 per transaction."""
         sigs = []
         for i in range(0, len(attendees), 10):
-            ixs = [close_sighting_ix(payer.pubkey(), event, a) for a in attendees[i : i + 10]]
+            ixs = [close_attendance_ix(payer.pubkey(), event, a) for a in attendees[i : i + 10]]
             sigs.append(await self._send(ixs, payer))
         return sigs
 

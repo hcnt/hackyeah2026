@@ -14,8 +14,8 @@ describe("on_sight", () => {
     web3.PublicKey.findProgramAddressSync(seeds, program.programId)[0];
   const eventPda = (id: BN) =>
     pda([Buffer.from("event"), me.toBuffer(), id.toArrayLike(Buffer, "le", 8)]);
-  const sightingPda = (event: web3.PublicKey, attendee: web3.PublicKey) =>
-    pda([Buffer.from("sighting"), event.toBuffer(), attendee.toBuffer()]);
+  const attendancePda = (event: web3.PublicKey, attendee: web3.PublicKey) =>
+    pda([Buffer.from("attendance"), event.toBuffer(), attendee.toBuffer()]);
 
   const oracleInfoPda = (oracle: web3.PublicKey) => pda([Buffer.from("oracle"), oracle.toBuffer()]);
 
@@ -62,7 +62,7 @@ describe("on_sight", () => {
 
   const reportAccounts = (ev: web3.PublicKey, who: web3.PublicKey) =>
     ({
-      oracle: me, event: ev, sighting: sightingPda(ev, who), attendee: who, systemProgram: sys,
+      oracle: me, event: ev, attendance: attendancePda(ev, who), attendee: who, systemProgram: sys,
       instructions: web3.SYSVAR_INSTRUCTIONS_PUBKEY,
     }) as any;
   // Podpis dołączenia, jak w widgecie (wallet signMessage), sprawdzany natywnym programem Ed25519 w tej samej transakcji.
@@ -138,9 +138,9 @@ describe("on_sight", () => {
 
   it("pierwsze zgłoszenie nie wypłaca; po min_seen_secs program wypłaca (opłata dla oracla)", async () => {
     await report();
-    let before = 0; // saldo oracla (me) po pierwszym zgłoszeniu, które zapłaciło też depozyt Sighting
+    let before = 0; // saldo oracla (me) po pierwszym zgłoszeniu, które zapłaciło też depozyt Attendance
     await eventually(async () => {
-      const s = await program.account.sighting.fetch(sightingPda(event, attendee), "confirmed");
+      const s = await program.account.attendance.fetch(attendancePda(event, attendee), "confirmed");
       assert.equal(s.paid, false);
       assert.equal(await conn.getBalance(attendee, "confirmed"), 0);
       before = await conn.getBalance(me, "confirmed");
@@ -150,7 +150,7 @@ describe("on_sight", () => {
     await eventually(async () => {
       await report();
       reports += 1;
-      const s = await program.account.sighting.fetch(sightingPda(event, attendee), "confirmed");
+      const s = await program.account.attendance.fetch(attendancePda(event, attendee), "confirmed");
       assert.equal(s.paid, true);
     }, 60000);
     await eventually(async () => {
@@ -209,7 +209,7 @@ describe("on_sight", () => {
     await sleep(2000);
     await report(ev5, who);
     await eventually(async () => {
-      const s = await program.account.sighting.fetch(sightingPda(ev5, who.publicKey), "confirmed");
+      const s = await program.account.attendance.fetch(attendancePda(ev5, who.publicKey), "confirmed");
       assert.equal(s.paid, false);
       assert.equal(s.reporters, 1);
       assert.equal(await conn.getBalance(who.publicKey, "confirmed"), 0);
@@ -223,9 +223,9 @@ describe("on_sight", () => {
     );
   });
 
-  it("sighting można zamknąć dopiero po końcu eventu", async () => {
+  it("attendance można zamknąć dopiero po końcu eventu", async () => {
     await expectFail(
-      send(program.methods.closeSighting().accounts({ payer: me, sighting: sightingPda(event, attendee) } as any)),
+      send(program.methods.closeAttendance().accounts({ payer: me, attendance: attendancePda(event, attendee) } as any)),
       "EventRunning"
     );
   });

@@ -103,7 +103,7 @@ class SolanaSightingSink:
         return await self._paid(event, attendee, sig)
 
     async def _paid(self, event: Pubkey, attendee: Pubkey, ours: Signature | None) -> SightingResult:
-        """The payout tx: ours when its logs carry AttendeePaid, else found on the Sighting's history."""
+        """The payout tx: ours when its logs carry AttendeePaid, else found on the Attendance's history."""
         if ours is not None and await self.chain.tx_paid(ours, event, attendee):
             return SightingResult(paid=True, tx=str(ours))
         tx = await self.chain.payout_tx(event, attendee)
